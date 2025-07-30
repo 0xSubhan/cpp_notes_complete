@@ -587,4 +587,72 @@ If you’re having trouble deciphering how the boolean expression in `hasUnextr
 
 [Read](https://www.learncpp.com/cpp-tutorial/stdcin-and-handling-invalid-input/#:~:text=3%3A%20Extraction%20fails-,Extraction%20fails%20when%20no%20input%20can%20be%20extracted%20to%20the%20specified,COPY,-Checking%20for%20EOF)
 
-git remote add origin https://github.com/subhanisthebestname/C-_Notes_Complete.git
+```cpp
+if (std::cin.fail()) // If the previous extraction failed
+{
+    // Let's handle the failure
+    std::cin.clear(); // Put us back in 'normal' operation mode
+    ignoreLine();     // And remove the bad input
+}
+```
+
+Because `std::cin` has a Boolean conversion indicating whether the last input succeeded, it’s more idiomatic to write the above as following:
+
+```cpp
+if (!std::cin) // If the previous extraction failed
+{
+    // Let's handle the failure
+    std::cin.clear(); // Put us back in 'normal' operation mode
+    ignoreLine();     // And remove the bad input
+}
+```
+
+>[!Key Insight]
+>Once an extraction has failed, future requests for input extraction (including calls to `ignore()`) will silently fail until the `clear()` function is called. Thus, after detecting a failed extraction, calling `clear()` is usually the first thing you should do.
+
+```cpp
+double getDouble()
+{
+    while (true) // Loop until user enters a valid input
+    {
+        std::cout << "Enter a decimal number: ";
+        double x{};
+        std::cin >> x;
+
+        if (!std::cin) // If the previous extraction failed
+        {
+            // Let's handle the failure
+            std::cin.clear(); // Put us back in 'normal' operation mode
+            ignoreLine();     // And remove the bad input
+            continue;
+        }
+
+        // Our extraction succeeded
+        ignoreLine(); // Ignore any additional input on this line
+        return x;     // Return the value we extracted
+    }
+}
+```
+
+It is fine to call `clear()` even when extraction hasn’t failed -- it won’t do anything. In cases where we are going to call `ignoreLine()` regardless of whether we succeeded or failed, we can essentially combine the two cases:
+
+```cpp
+double getDouble()
+{
+    while (true) // Loop until user enters a valid input
+    {
+        std::cout << "Enter a decimal number: ";
+        double x{};
+        std::cin >> x;
+
+        bool success { std::cin }; // Remember whether we had a successful extraction
+        std::cin.clear();          // Put us back in 'normal' operation mode (in case we failed)
+        ignoreLine();              // Ignore any additional input on this line (regardless)
+
+        if (success)               // If we actually extracted a value
+            return x;              // Return it (otherwise, we go back to top of loop)
+    }
+}
+```
+
+Checking Git 
