@@ -11,10 +11,14 @@
             "id": "b4f7d2bba43a3ed4",
             "type": "leaf",
             "state": {
-              "type": "empty",
-              "state": {},
+              "type": "markdown",
+              "state": {
+                "file": "Chapter 10 - Type Conversion, Type Aliases, and Type Deduction.md",
+                "mode": "source",
+                "source": false
+              },
               "icon": "lucide-file",
-              "title": "New tab"
+              "title": "Chapter 10 - Type Conversion, Type Aliases, and Type Deduction"
             }
           }
         ]
@@ -168,6 +172,7 @@
   },
   "active": "b4f7d2bba43a3ed4",
   "lastOpenFiles": [
+    "Chapter 10 - Type Conversion, Type Aliases, and Type Deduction.md",
     "learncpp.com/Chapter 9 - Error Detection and Handling.md",
     "Untitled.md",
     "learncpp.com/Chapter 8 - Control Flow.md",
@@ -210,7 +215,6 @@
     "hello.md",
     "Untitled/subhan.md",
     "Subhan.md",
-    "Untitled 1.md",
     "learncpp.com"
   ]
 }
