@@ -11,10 +11,14 @@
             "id": "8bfd4ba0db4db947",
             "type": "leaf",
             "state": {
-              "type": "empty",
-              "state": {},
+              "type": "markdown",
+              "state": {
+                "file": "C++_Complete_Notes/Chapter 10 - Type Conversion, Type Aliases, and Type Deduction.md",
+                "mode": "source",
+                "source": false
+              },
               "icon": "lucide-file",
-              "title": "New tab"
+              "title": "Chapter 10 - Type Conversion, Type Aliases, and Type Deduction"
             }
           }
         ]
