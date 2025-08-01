@@ -1326,3 +1326,166 @@ For all these reasons, we generally prefer `static_cast` over direct-list-init
 Prefer `static_cast` over initializing a temporary object when a conversion is desired.
 
 ---
+### Type aliases
+
+>n C++, **using** is a keyword that creates an alias for an existing data type. To create such a type alias, we use the `using` keyword, followed by a name for the type alias, followed by an equals sign and an existing data type.
+
+```cpp
+#include <iostream>
+
+int main()
+{
+    using Distance = double; // define Distance as an alias for type double
+
+    Distance milesToDestination{ 3.4 }; // defines a variable of type double
+
+    std::cout << milesToDestination << '\n'; // prints a double value
+
+    return 0;
+}
+```
+
+>[!Best Practice]
+>Name your type aliases starting with a capital letter and do not use a suffix (unless you have a specific reason to do otherwise).
+
+---
+
+>An alias does not actually define a new, distinct type (one that is considered separate from other types) -- it just introduces a new identifier for an existing type. A type alias is completely interchangeable with the aliased type.
+
+>[!Warning]
+>Care must be taken not to mix values of aliases that are intended to be semantically distinct.
+
+>[!Tip]
+>type alias identifiers follow the same scoping rules as variable identifiers
+
+---
+
+>[!Best Practice]
+>Prefer type aliases over typedefs.
+
+### Using type aliases for platform independent coding
+
+One of the primary uses for type aliases is to hide platform specific details. On some platforms, an `int` is 2 bytes, and on others, it is 4 bytes. Thus, using `int` to store more than 2 bytes of information can be potentially dangerous when writing platform independent code.
+
+Because `char`, `short`, `int`, and `long` give no indication of their size, it is fairly common for cross-platform programs to use type aliases to define aliases that include the type’s size in bits. For example, `int8_t` would be an 8-bit signed integer, `int16_t` a 16-bit signed integer, and `int32_t` a 32-bit signed integer. Using type aliases in this manner helps prevent mistakes and makes it more clear about what kind of assumptions have been made about the size of the variable.
+
+In order to make sure each aliased type resolves to a type of the right size, type aliases of this kind are typically used in conjunction with preprocessor directives:
+
+```cpp
+#ifdef INT_2_BYTES
+using int8_t = char;
+using int16_t = int;
+using int32_t = long;
+#else
+using int8_t = char;
+using int16_t = short;
+using int32_t = int;
+#endif
+```
+
+On machines where integers are only 2 bytes, `INT_2_BYTES` can be #defined (as a compiler/preprocessor setting), and the program will be compiled with the top set of type aliases. On machines where integers are 4 bytes, leaving `INT_2_BYTES` undefined will cause the bottom set of type aliases to be used. In this way, as long as `INT_2_BYTES` is #defined correctly, `int8_t` will resolve to a 1 byte integer, `int16_t` will resolve to a 2 bytes integer, and `int32_t` will resolve to a 4 byte integer (using the combination of `char`, `short`, `int`, and `long` that is appropriate for the machine the program is being compiled on).
+
+The fixed-width integer types (such as `std::int16_t` and `std::uint32_t`) and the `size_t` type (both covered in lesson [4.6 -- Fixed-width integers and size_t](https://www.learncpp.com/cpp-tutorial/fixed-width-integers-and-size-t/)) are actually just type aliases to various fundamental types.
+
+This is also why when you print an 8-bit fixed-width integer using `std::cout`, you’re likely to get a character value. For example:
+
+```cpp
+#include <cstdint> // for fixed-width integers
+#include <iostream>
+
+int main()
+{
+    std::int8_t x{ 97 }; // int8_t is usually a typedef for signed char
+    std::cout << x << '\n';
+
+    return 0;
+}
+```
+
+This program prints:
+
+a
+
+Because `std::int8_t` is typically a typedef for `signed char`, variable `x` will likely be defined as a `signed char`. And char types print their values as ASCII characters rather than as integer values.
+
+---
+### Using type aliases to make complex types easier to read
+
+Although we have only dealt with simple data types so far, in advanced C++, types can be complicated and lengthy to manually enter on your keyboard. For example, you might see a function and variable defined like this:
+
+```cpp
+#include <string> // for std::string
+#include <vector> // for std::vector
+#include <utility> // for std::pair
+
+bool hasDuplicates(std::vector<std::pair<std::string, int>> pairlist)
+{
+    // some code here
+    return false;
+}
+
+int main()
+{
+     std::vector<std::pair<std::string, int>> pairlist;
+
+     return 0;
+}
+```
+
+By Using Type alias we can do something like this:
+
+```cpp
+#include <string> // for std::string
+#include <vector> // for std::vector
+#include <utility> // for std::pair
+
+using VectPairSI = std::vector<std::pair<std::string, int>>; // make VectPairSI an alias for this crazy type
+
+bool hasDuplicates(VectPairSI pairlist) // use VectPairSI in a function parameter
+{
+    // some code here
+    return false;
+}
+
+int main()
+{
+     VectPairSI pairlist; // instantiate a VectPairSI variable
+
+     return 0;
+}
+```
+This is probably best use case of type alias... 
+
+---
+### Using type aliases to document the meaning of a value
+
+With variables, we have the variable’s identifier to help document the purpose of the variable. But consider the case of a function’s return value. Data types such as `char`, `int`, `long`, `double`, and `bool` describe what _type_ of value a function returns, but more often we want to know what the _meaning_ of a return value is.
+
+```cpp
+using TestScore = int;
+TestScore gradeTest();
+```
+
+---
+### Using type aliases for easier code maintenance
+
+Type aliases also allow you to change the underlying type of an object without having to update lots of hardcoded types. For example, if you were using a `short` to hold a student’s ID number, but then later decided you needed a `long` instead, you’d have to comb through lots of code and replace `short` with `long`. It would probably be difficult to figure out which objects of type `short` were being used to hold ID numbers and which were being used for other purposes.
+
+However, if you use type aliases, then changing types becomes as simple as updating the type alias (e.g. from `using StudentId = short;` to `using StudentId = long;`).
+
+While this seems like a nice benefit, caution is necessary whenever a type is changed, as the behavior of the program may also change. This is especially true when changing the type of a type alias to a type in a different type family (e.g. an integer to a floating point value, or a signed to unsigned value)! The new type may have comparison or integer/floating point division issues, or other issues that the old type did not. If you change an existing type to some other type, your code should be thoroughly retested.
+
+---
+### Downsides and conclusion
+
+While type aliases offer some benefits, they also introduce yet another identifier into your code that needs to be understood. If this isn’t offset by some benefit to readability or comprehension, then the type alias is doing more harm than good.
+
+A poorly utilized type alias can take a familiar type (such as `std::string`) and hide it behind a custom name that needs to be looked up. In some cases (such as with smart pointers, which we’ll cover in a future chapter), obscuring the type information can also be harmful to understanding how the type should be expected to work.
+
+For this reason, type aliases should be used primarily in cases where there is a clear benefit to code readability or code maintenance. This is as much of an art as a science. Type aliases are most useful when they can be used in many places throughout your code, rather than in fewer places.
+
+Best practice
+
+Use type aliases judiciously, when they provide a clear benefit to code readability or code maintenance.
+
+---

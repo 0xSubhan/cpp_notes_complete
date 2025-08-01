@@ -11,14 +11,10 @@
             "id": "8bfd4ba0db4db947",
             "type": "leaf",
             "state": {
-              "type": "markdown",
-              "state": {
-                "file": "learncpp.com/Chapter 10 - Type Conversion, Type Aliases, and Type Deduction.md",
-                "mode": "source",
-                "source": false
-              },
+              "type": "empty",
+              "state": {},
               "icon": "lucide-file",
-              "title": "Chapter 10 - Type Conversion, Type Aliases, and Type Deduction"
+              "title": "New tab"
             }
           }
         ]
@@ -173,6 +169,24 @@
   "active": "8bfd4ba0db4db947",
   "lastOpenFiles": [
     "learncpp.com/Chapter 10 - Type Conversion, Type Aliases, and Type Deduction.md",
+    "C++_Complete_Notes/Chapter 0 Introduction/0.9 & 0.10 Build Configurations and Compiler extension.md",
+    "C++_Complete_Notes/Chapter 0 Introduction/0.4 and 0.5 Introduction to C++ development.md",
+    "C++_Complete_Notes/Chapter 0 Introduction/0.3 Introduction to C-C++.md",
+    "C++_Complete_Notes/Chapter 0 Introduction/0.2 Introduction to Programming Languages.md",
+    "C++_Complete_Notes/Chapter 0 Introduction/0.11 Configuring your compiler-Warning and error levels.md",
+    "C++_Complete_Notes/Chapter O - Bit Flags and manipulation.md",
+    "C++_Complete_Notes/Chapter 9 - Error Detection and Handling.md",
+    "C++_Complete_Notes/Chapter 8 - Control Flow.md",
+    "C++_Complete_Notes/Chapter 7 - Scope, Duration, and Linkage.md",
+    "C++_Complete_Notes/Chapter 6.md",
+    "C++_Complete_Notes/Chapter 5 Constants and Strings.md",
+    "C++_Complete_Notes/Chapter 4.md",
+    "C++_Complete_Notes/Chapter 3.md",
+    "C++_Complete_Notes/Chapter 2 C++ Basics  Functions and Files.md",
+    "C++_Complete_Notes/Chapter 10 - Type Conversion, Type Aliases, and Type Deduction.md",
+    "C++_Complete_Notes/Chapter 1 Basics.md",
+    "C++_Complete_Notes/Chapter 0 Introduction",
+    "C++_Complete_Notes",
     "learncpp.com/Chapter 9 - Error Detection and Handling.md",
     "Untitled.md",
     "learncpp.com/Chapter 8 - Control Flow.md",
@@ -183,23 +197,12 @@
     "learncpp.com/Chapter 6.md",
     "learncpp.com/Chapter 4.md",
     "learncpp.com/Chapter 3.md",
-    "learncpp.com/Chapter 5 Constants and Strings.md",
-    "2025-07-02.md",
-    "2025-06-06.md",
     "Pasted image 20250519184156.png",
     "learncpp.com/Chapter 3",
-    "learncpp.com/Chapter 1 Basics.md",
-    "learncpp.com/Chapter 0 Introduction/0.11 Configuring your compiler-Warning and error levels.md",
-    "learncpp.com/Chapter 0 Introduction/0.9 & 0.10 Build Configurations and Compiler extension.md",
-    "learncpp.com/Chapter 0 Introduction/0.4 and 0.5 Introduction to C++ development.md",
-    "learncpp.com/Chapter 0 Introduction/0.3 Introduction to C-C++.md",
-    "learncpp.com/Chapter 0 Introduction/0.2 Introduction to Programming Languages.md",
     "Pasted image 20250506200737.png",
-    "Cs50x/Problem Set 1 - Credit Problem.md",
     "Problem Set 1 - Credit Problem",
     "Cs50x",
     "memviz1.webp",
-    "1.1 Statements and the structure of a program.md",
     "learncpp.com/Chapter 1 Basics",
     "learncpp.com/Chapter 0 Introduction",
     "LinkingObjects-min.webp",
@@ -210,11 +213,7 @@
     "Compiling-min 1.webp",
     "Portability-min 1.webp",
     "Portability-min.webp",
-    "2024-12-28.md",
     "Untitled.canvas",
-    "hello.md",
-    "Untitled/subhan.md",
-    "Subhan.md",
     "learncpp.com"
   ]
 }
