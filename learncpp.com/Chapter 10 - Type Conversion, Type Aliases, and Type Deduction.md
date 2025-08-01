@@ -700,3 +700,629 @@ In this example, the fractional value (.5) is lost, leaving the following result
 While the numeric conversion rules might seem scary, in reality the compiler will generally warn you if you try to do something dangerous (excluding some signed/unsigned conversions).
 
 ---
+#### 🔹 **Source Type**:
+
+The **original type** of the value you're converting **from**.
+
+#### 🔹 **Destination Type**:
+
+The **new type** you're converting the value **to**.
+
+### Narrowing conversions
+
+>In C++, a **narrowing conversion** is a potentially unsafe numeric conversion where the destination type may not be able to hold all the values of the source type.
+
+The following conversions are defined to be narrowing:
+
+- From a floating point type to an integral type.
+- From a floating point type to a narrower or lesser ranked floating point type, unless the value being converted is constexpr and is in range of the destination type (even if the destination type doesn’t have the precision to store all the significant digits of the number).
+- From an integral to a floating point type, unless the value being converted is constexpr and whose value can be stored exactly in the destination type.
+- From an integral type to another integral type that cannot represent all values of the original type, unless the value being converted is constexpr and whose value can be stored exactly in the destination type. This covers both wider to narrower integral conversions, as well as integral sign conversions (signed to unsigned, or vice-versa).
+
+##### 🔸 “Unless the value being converted is `constexpr` and whose value can be stored exactly in the destination type.”
+
+There is **an exception** to narrowing conversions:  
+If the value is known **at compile-time** (`constexpr`), and it's **within the valid range** of the destination type, it's **not considered narrowing**.
+
+**Example:**
+
+```cpp
+`constexpr int x = 42; char y = x; // OK: 42 fits in char, and x is constexpr`
+```
+
+But:
+
+```cpp
+`int x = 42; char y = x; // narrowing, because x is not constexpr`
+```
+
+>In most cases, implicit narrowing conversions will result in compiler warnings, with the exception of signed/unsigned conversions (which may or may not produce warnings, depending on how your compiler is configured).
+
+Narrowing conversions should be avoided as much as possible, because they are potentially unsafe, and thus a source of potential errors.
+
+>[!Best Practice]
+>Because they can be unsafe and are a source of errors, avoid narrowing conversions whenever possible.
+
+---
+### Make intentional narrowing conversions explicit
+
+>Narrowing conversions are not always avoidable -- this is particularly true for function calls, where the function parameter and argument may have mismatched types and require a narrowing conversion.
+
+In such cases, it is a good idea to convert an implicit narrowing conversion into an explicit narrowing conversion using `static_cast`. Doing so helps document that the narrowing conversion is intentional, and will suppress any compiler warnings or errors that would otherwise result.
+
+For Example:
+
+```cpp
+void someFcn(int i)
+{
+}
+
+int main()
+{
+    double d{ 5.0 };
+
+    someFcn(d); // bad: implicit narrowing conversion will generate compiler warning
+
+    // good: we're explicitly telling the compiler this narrowing conversion is intentional
+    someFcn(static_cast<int>(d)); // no warning generated
+
+    return 0;
+}
+```
+
+>[!best practice]
+>If you need to perform a narrowing conversion, use `static_cast` to convert it into an explicit conversion.
+
+---
+
+>[!Key Insight]
+>Numeric conversion is allowed by list-initializiation but narrowing conversion produces error in list-initialization because it is disallowed.
+
+### Brace initialization disallows narrowing conversions
+
+>Narrowing conversions are disallowed when using brace initialization (which is one of the primary reasons this initialization form is preferred), and attempting to do so will produce a compile error.
+
+For Example:
+
+```cpp
+int main()
+{
+    int i { 3.5 }; // won't compile
+
+    return 0;
+}
+```
+
+`error C2397: conversion from 'double' to 'int' requires a narrowing conversion`
+
+>If you actually want to do a narrowing conversion inside a brace initialization, use `static_cast` to convert the narrowing conversion into an explicit conversion:
+
+>[!tip]
+>Explicit narrowing conversion is allowed also in list-initialization.
+
+---
+
+>[!Key Insight]
+>Double is not a integral type instead it is a floating-point data type.
+
+### Some constexpr conversions aren’t considered narrowing
+
+When the source value of a narrowing conversion isn’t known until runtime, the result of the conversion also can’t be determined until runtime. In such cases, whether the narrowing conversion preserves the value or not also can’t be determined until runtime. For example:
+
+```cpp
+#include <iostream>
+
+void print(unsigned int u) // note: unsigned
+{
+    std::cout << u << '\n';
+}
+
+int main()
+{
+    std::cout << "Enter an integral value: ";
+    int n{};
+    std::cin >> n; // enter 5 or -5
+    print(n);      // conversion to unsigned may or may not preserve value
+
+    return 0;
+}
+```
+
+In the above program, the compiler has no idea what value will be entered for `n`. When `print(n)` is called, the conversion from `int` to `unsigned int` will be performed at that time, and the results may be value-preserving or not depending on what value for `n` was entered. Thus, a compiler that has signed/unsigned warnings enabled will issue a warning for this case.
+
+However, you may have noticed that most of the narrowing conversions definitions have an exception clause that begins with “unless the value being converted is constexpr and …”. For example, a conversion is narrowing when it is “From an integral type to another integral type that cannot represent all values of the original type, unless the value being converted is constexpr and whose value can be stored exactly in the destination type.”
+
+When the source value of a narrowing conversion is constexpr, the specific value to be converted must be known to the compiler. In such cases, the compiler can perform the conversion itself, and then check whether the value was preserved. If the value was not preserved, the compiler can halt compilation with an error. If the value is preserved, the conversion is not considered to be narrowing (and the compiler can replace the entire conversion with the converted result, knowing that doing so is safe).
+
+For example:
+
+```cpp
+#include <iostream>
+
+int main()
+{
+    constexpr int n1{ 5 };   // note: constexpr
+    unsigned int u1 { n1 };  // okay: conversion is not narrowing due to exclusion clause
+
+    constexpr int n2 { -5 }; // note: constexpr
+    unsigned int u2 { n2 };  // compile error: conversion is narrowing due to value change
+
+    return 0;
+}
+```
+
+Let’s apply the rule “From an integral type to another integral type that cannot represent all values of the original type, unless the value being converted is constexpr and whose value can be stored exactly in the destination type” to both of the conversions above.
+
+In the case of `n1` and `u1`, `n1` is an `int` and `u1` is an `unsigned int`, so this is a conversion from an integral type to another integral type that cannot represent all values of the original type. However, `n1` is constexpr, and its value `5` can be represented exactly in the destination type (as unsigned value `5`). Therefore, this is not considered to be a narrowing conversion, and we are allowed to list initialize `u1` using `n1`.
+
+In the case of `n2` and `u2`, things are similar. Although `n2` is constexpr, its value `-5` cannot be represented exactly in the destination type, so this is considered to be a narrowing conversion, and because we are doing list initialization, the compiler will error and halt the compilation.
+
+Strangely, conversions from a floating point type to an integral type do not have a constexpr exclusion clause, so these are always considered narrowing conversions even when the value to be converted is constexpr and fits in the range of the destination type:
+
+```cpp
+int n { 5.0 }; // compile error: narrowing conversion
+```
+
+Even more strangely, conversions from a constexpr floating point type to a narrower floating point type are not considered narrowing even when there is a loss of precision!
+
+```cpp
+constexpr double d { 0.1 };
+float f { d }; // not narrowing, even though loss of precision results
+```
+
+>[!Warning]
+Conversion from a constexpr floating point type to a narrower floating point type is not considered narrowing even when a loss of precision results.
+
+---
+
+>[!Key Insight]
+>literal is a kind of implicit constexpr.
+
+#### ✅ **Key Concept: List Initialization with `constexpr` Initializers**
+
+In C++ (especially C++11 and beyond), when you use **list initialization** with `{}`, it **normally disallows narrowing conversions** at compile time to make your code safer.
+
+However, there's a **special rule**:
+
+> If the initializer is a `constexpr` **and the value fits** in the destination type **exactly or within range**, then the compiler will **allow** the initialization — even if it looks like a narrowing conversion.
+
+#### 🔍 What does this mean practically?
+
+#### 🧪 Without suffixes or casts:
+
+```cpp
+`unsigned int u { 5 };   // ✅ OK — no need to write 5u float f { 1.5 };        // ✅ OK — no need to write 1.5f`
+```
+
+These look like narrowing conversions, but:
+
+- `5` is a literal of type `int`, but it fits into `unsigned int` safely.
+    
+- `1.5` is a `double`, but it's small and fits into `float`.
+    
+
+Since the value is a literal (a kind of implicit `constexpr`), **the compiler allows it**.
+
+#### 🧪 No need for `static_cast`
+
+```cpp
+`constexpr int n{ 5 }; double d { n };   // ✅ OK — int to double is widening short s { 5 };    // ✅ OK — 5 fits in short, no cast needed`
+```
+
+No cast like `static_cast<short>(5)` is needed because the value is a constant that fits.
+
+#### ⚠️ Special Caveat for Floating-Point Types
+
+Floating-point types are **ranked**:
+
+```cpp
+`long double > double > float`
+```
+
+This means:
+
+```cpp
+`float f { 1.23456789 }; // ✅ OK (no compile error), even though some precision is lost`
+```
+
+- `1.23456789` is a `double` literal.
+    
+- `float` **can** store the value, but with **reduced precision**.
+    
+- Since the value fits within the **range** of `float`, the compiler accepts it.
+    
+- But: You **will** lose precision (i.e., it might store 1.2345678 instead).
+    
+
+#### 🛑 Why isn't this a narrowing conversion error?
+
+Because:
+
+- The initializer is a `constexpr` value (like a literal),
+    
+- The value fits **within the range** of the destination type,
+    
+- Even if **some precision is lost**, it's still allowed.
+    
+
+#### 🚨 But be aware:
+
+Some compilers like GCC/Clang will warn you about this **if** you compile with:
+
+---
+### Arithmetic Conversions
+
+```cpp
+int x { 2 + 3 };
+```
+
+Binary `operator+` is given two operands, both of type `int`. Because both operands are of the same type, that type will be used to perform the calculation, and the value returned will also be of this same type. Thus, `2 + 3` will evaluate to `int` value `5`.
+
+But what happens when the operands of a binary operator are of different types?
+
+```cpp
+??? y { 2 + 3.5 };
+```
+
+In this case, `operator+` is being given one operand of type `int` and another of type `double`. Should the result of the operator be returned as an `int`, a `double`, or possibly something else altogether?
+
+In C++, certain operators require that their operands be of the same type. If one of these operators is invoked with operands of different types, one or both of the operands will be implicitly converted to matching types using a set of rules called the **usual arithmetic conversions**. The matching type produced as a result of the usual arithmetic conversion rules is called the **common type** of the operands.
+
+---
+### The operators that require operands of the same type
+
+The following operators require their operands to be of the same type:
+
+- The binary arithmetic operators: +, -, *, /, %
+- The binary relational operators: <, >, <=, >=, ==, !=
+- The binary bitwise arithmetic operators: &, ^, |
+- The conditional operator ?: (excluding the condition, which is expected to be of type `bool`)
+
+>[!For advanced readers]
+Overloaded operators are not subject to the usual arithmetic conversion rules.
+
+---
+### The usual arithmetic conversion rules
+
+>The usual arithmetic conversion rules are somewhat complex, so we’ll simplify a bit. The compiler has a ranked list of types that looks something like this:
+
+- long double (highest rank)
+- double
+- float
+- long long
+- long
+- int (lowest rank)
+
+The following rules are applied to find a matching type:
+
+>Step 1:
+
+- If one operand is an integral type and the other a floating point type, the integral operand is converted to the type of the floating point operand (no integral promotion takes place).
+- If both operands are **integral**, then smaller types like `char`, `short`, or `bool` are **promoted to `int`** (this is **integral promotion**) **before the operation.**
+
+>Step 2:
+
+- After promotion, if one operand is signed and the other unsigned, special rules apply (see below)
+- Otherwise, the operand with lower rank is converted to the type of the operand with higher rank.
+
+>[!For advanced readers]
+The special matching rules for integral operands with different signs:
+- If the rank of the unsigned operand is greater than or equal to the rank of the signed operand, the signed operand is converted to the type of the unsigned operand.
+- If the type of the signed operand can represent all the values of the type of the unsigned operand, the type of the unsigned operand is converted to the type of the signed operand.
+- Otherwise both operands are converted to the corresponding unsigned type of the signed operand.
+
+---
+
+>In the following examples, we’ll use the `typeid` operator (included in the `<typeinfo>` header), to show the resulting type of an expression.
+
+```cpp
+#include <iostream>
+#include <typeinfo> // for typeid()
+
+int main()
+{
+    short a{ 4 };
+    short b{ 5 };
+    std::cout << typeid(a + b).name() << ' ' << a + b << '\n'; // show us the type of a + b
+
+    return 0;
+}
+```
+
+Because neither operand appears on the priority list, both operands undergo integral promotion to type `int`. The result of adding two `ints` is an `int`, as you would expect:
+
+--> Output: int 9
+
+---
+### Signed and unsigned issues
+
+This prioritization hierarchy and conversion rules can cause some problematic issues when mixing signed and unsigned values. For example, take a look at the following code:
+
+```cpp
+#include <iostream>
+#include <typeinfo> // for typeid()
+
+int main()
+{
+    std::cout << typeid(5u-10).name() << ' ' << 5u - 10 << '\n'; // 5u means treat 5 as an unsigned integer
+
+    return 0;
+}
+```
+
+You might expect the expression `5u - 10` to evaluate to `-5` since `5 - 10` = `-5`. But here’s what actually results:
+
+unsigned int 4294967291
+
+Due to the conversion rules, the `int` operand is converted to an `unsigned int`. And since the value `-5` is out of range of an `unsigned int`, we get a result we don’t expect.
+
+Here’s another example showing a counterintuitive result:
+
+```cpp
+#include <iostream>
+
+int main()
+{
+    std::cout << std::boolalpha << (-3 < 5u) << '\n';
+
+    return 0;
+}
+```
+
+While it’s clear to us that `5` is greater than `-3`, when this expression evaluates, `-3` is converted to a large `unsigned int` that is larger than `5`. Thus, the above prints `false` rather than the expected result of `true`.
+
+This is one of the primary reasons to avoid unsigned integers -- when you mix them with signed integers in arithmetic expressions, you’re at risk for unexpected results. And the compiler probably won’t even issue a warning.
+
+---
+### `std::common_type` and `std::common_type_t`
+
+In future lessons, we’ll encounter cases where it is useful to know what the common type of two type is. `std::common_type` and the useful type alias `std::common_type_t` (both defined in the <type_traits> header) can be used for just this purpose.
+
+For example, `std::common_type_t<int, double>` returns the common type of `int` and `double`, and `std::common_type_t<unsigned int, long>` returns the common type of `unsigned int` and `long`.
+
+>[!Key Insight]
+>std::common_type_t<int,double>; is a datatype like `int;` and it returns the common type:
+>
+
+---
+
+```cpp
+double d = 10 / 4; // does integer division, initializes d with value 2.0
+```
+
+Because `10` and `4` are both of type `int`, integer division is performed, and the expression evaluates to `int` value `2`. This value then undergoes numeric conversion to `double` value `2.0` before being used to initialize variable `d`. Most likely, this isn’t what was intended.
+
+In the case where you are using literal operands, replacing one or both of the integer literals with double literals will cause floating point division to happen instead:
+
+```cpp
+double d = 10.0 / 4.0; // does floating point division, initializes d with value 2.5
+```
+
+But what if you are using variables instead of literals? Consider this case:
+
+```cpp
+int x { 10 };
+int y { 4 };
+double d = x / y; // does integer division, initializes d with value 2.0
+```
+
+Because integer division is used here, variable `d` will end up with the value of `2.0`. How do we tell the compiler that we want to use floating point division instead of integer division in this case? Literal suffixes can’t be used with variables. We need some way to convert one (or both) of the variable operands to a floating point type, so that floating point division will be used instead.
+
+Fortunately, C++ comes with a number of different **type casting operators** (more commonly called **casts**) that can be used by the programmer to have the compiler perform type conversion. Because casts are explicit requests by the programmer, this form of type conversion is often called an **explicit type conversion** (as opposed to implicit type conversion, where the compiler performs a type conversion automatically).
+
+---
+
+>[!Key Insight]
+>`static_cast` : Performs compile-time type conversions.
+
+### Type casting
+
+C++ supports 5 different types of casts: `static_cast`, `dynamic_cast`, `const_cast`, `reinterpret_cast`, and C-style casts. The first four are sometimes referred to as **named casts**.
+
+For advanced readers
+
+| Cast             | Description                                                                                           | Safe?                 |
+| ---------------- | ----------------------------------------------------------------------------------------------------- | --------------------- |
+| static_cast      | Performs compile-time type conversions between related types.                                         | Yes                   |
+| dynamic_cast     | Performs runtime type conversions on pointers or references in an polymorphic (inheritance) hierarchy | Yes                   |
+| const_cast       | Adds or removes const.                                                                                | Only for adding const |
+| reinterpret_cast | Reinterprets the bit-level representation of one type as if it were another type                      | No                    |
+| C-style casts    | Performs some combination of `static_cast`, `const_cast`, or `reinterpret_cast`.                      | No                    |
+
+Each cast works the same way. As input, the cast takes an expression (that evaluates to a value or an object), and a target type. As output, the cast returns the result of the conversion.
+
+>[!Warning]
+>Avoid `const_cast` and `reinterpret_cast` unless you have a very good reason to use them.
+
+---
+### C-style cast
+
+In standard C programming, casting is done via `operator()`, with the name of the type to convert to placed inside the parentheses, and the value to convert to placed immediately to the right of the closing parenthesis. In C++, this type of cast is called a **C-style cast**. You may still see these used in code that has been converted from C.
+
+For example:
+
+```cpp
+#include <iostream>
+
+int main()
+{
+    int x { 10 };
+    int y { 4 };
+
+    std::cout << (double)x / y << '\n'; // C-style cast of x to double
+
+    return 0;
+}
+```
+
+C++ also provides an alternative form of C-style cast known as a **function-style cast**, which resembles a function call:
+
+```cpp
+std::cout << double(x) / y << '\n'; //  // function-style cast of x to double
+```
+
+>[!Best Practice]
+>Avoid using C-style casts.
+
+>There is one thing you can do with a C-style cast that you can’t do with C++ casts: C-style casts can convert a derived object to a base class that is inaccessible (e.g. because it was privately inherited).
+
+---
+### `static_cast` should be used to cast most values
+
+By far the most used cast in C++ is the **static cast** operator, which is accessed via the `static_cast` keyword. `static_cast` is used when we want to explicitly convert a value of one type into a value of another type.
+
+You’ve previously seen `static_cast` used to convert a `char` into an `int` so that `std::cout` prints it as an integer instead of a character:
+
+```cpp
+#include <iostream>
+
+int main()
+{
+    char c { 'a' };
+    std::cout << static_cast<int>(c) << '\n'; // prints 97 rather than a
+
+    return 0;
+}
+```
+
+To perform a static cast, we start with the `static_cast` keyword, and then place the type to convert to inside angled brackets. Then inside parenthesis, we place the expression whose value will be converted. Note how much the syntax looks like a function call to a function named `static_cast<type>()` with the expression whose value will be converted provided as an argument! Static casting a value to another type of value returns a temporary object that has been direct-initialized with the converted value.
+
+Here’s how we’d use `static_cast` to solve the problem we introduced in the introduction of this lesson:
+
+```cpp
+#include <iostream>
+
+int main()
+{
+    int x { 10 };
+    int y { 4 };
+
+    // static cast x to a double so we get floating point division
+    std::cout << static_cast<double>(x) / y << '\n'; // prints 2.5
+
+    return 0;
+}
+```
+
+`static_cast<double>(x)` returns a temporary `double` object containing the converted value `10.0`. This temporary is then used as the left-operand of the floating point division.
+
+>There are two important properties of `static_cast`.
+
+- First, `static_cast` provides compile-time type checking. If we try to convert a value to a type and the compiler doesn’t know how to perform that conversion, we will get a compilation error. [Confusion] : So my confusion was that if we have test() function who is returning a char and we do a static type casting so if static_cast performs casting at compile time but we dont know the value of test() function at compile time so how come it runs, so the answer is simple, static_cast performs compile time type checking only so it doesnt need to know the value of that type just the type and it can determine if the type conversion is possible!
+
+	```cpp
+	// a C-style string literal can't be converted to an int, so the following is an invalid conversion
+int x { static_cast<int>("Hello") }; // invalid: will produce compilation error
+```
+
+>[!Best Practice]
+>Favor `static_cast` when you need to convert a value from one type to another type.
+
+---
+### Using `static_cast` to make narrowing conversions explicit
+
+Compilers will often issue warnings when a potentially unsafe (narrowing) implicit type conversion is performed. For example, consider the following snippet:
+
+```cpp
+int i { 48 };
+char ch = i; // implicit narrowing conversion
+```
+
+Casting an `int` (2 or 4 bytes) to a `char` (1 byte) is potentially unsafe (as the compiler can’t tell whether the integer value will overflow the range of the `char` or not), and so the compiler will typically print a warning. If we used list initialization, the compiler would yield an error.
+
+To get around this, we can use a static cast to explicitly convert our integer to a `char`:
+
+```cpp
+int i { 48 };
+
+// explicit conversion from int to char, so that a char is assigned to variable ch
+char ch { static_cast<char>(i) };
+```
+
+When we do this, we’re explicitly telling the compiler that this conversion is intended, and we accept responsibility for the consequences (e.g. overflowing the range of a `char` if that happens). Since the output of this static cast is of type `char`, the initialization of variable `ch` doesn’t generate any type mismatches, and hence no warnings or errors.
+
+Here’s another example where the compiler will typically complain that converting a `double` to an `int` may result in loss of data:
+
+```cpp
+int i { 100 };
+i = i / 2.5;
+```
+
+To tell the compiler that we explicitly mean to do this:
+
+```cpp
+int i { 100 };
+i = static_cast<int>(i / 2.5);
+```
+
+---
+### Casting vs initializing a temporary object
+
+Let’s say we have some variable `x` that we need to convert to an `int`. There are two conventional ways we can do this:
+
+1. `static_cast<int>(x)`, which returns a temporary `int` object _direct-initialized_ with `x`.
+2. `int { x }`, which creates a temporary `int` object _direct-list-initialized_ with `x`.
+
+We should avoid `int ( x )`, which is a C-style cast. This will return a temporary `int` direct-initialized with the value of `x` (like we’d expect from the syntax), but it also has the other downsides mentioned in the C-style cast section (like allowing the possibility of performing a dangerous conversion).
+
+There are (at least) three notable differences between the `static_cast` and the direct-list-initialized temporary:
+
+1. `int { x }` uses list initialization, which disallows narrowing conversions. This is great when initializing a variable, because we rarely intend to lose data in such cases. But when using a cast, it is presumed we know what we’re doing, and if we want to do a cast that might lose some data, we should be able to do that. The narrowing conversion restriction can be an impediment in this case.
+
+Let’s show an example of this, including how it can lead to platform-specific issues:
+
+```cpp
+#include <iostream>
+
+int main()
+{
+    int x { 10 };
+    int y { 4 };
+
+    // We want to do floating point division, so one of the operands needs to be a floating point type
+    std::cout << double{x} / y << '\n'; // okay if int is 32-bit, narrowing if x is 64-bit
+}
+```
+
+In this example, we have decided to convert `x` to a `double` so we can do floating-point division rather than integer division. On a 32-bit architecture, this will work fine (because a `double` can represent all the values that can be stored in a 32-bit `int`, so it isn’t a narrowing conversion). But on a 64-bit architecture, this is not the case, so converting a 64-bit `int` to a `double` is a narrowing conversion. And since list initialization disallows narrowing conversions, this won’t compile on architectures where `int` is 64-bits.
+
+2. `static_cast` makes it clearer that we are intending to perform a conversion. Although the `static_cast` is more verbose than the direct-list-initialized alternative, in this case, that’s a good thing, as it makes the conversion easier to spot and search for. That ultimately makes your code safer and easier to understand.
+3. Direct-list-initializion of a temporary only allows single-word type names. Due to a weird syntax quirk, there are several places within C++ where only single-word type names are allowed (the C++ standard calls these names “simple type specifiers”). So while `int { x }` is a valid conversion syntax, `unsigned int { x }` is not.
+
+You can see this for yourself in the following example, which produces a compile error:
+
+```cpp
+#include <iostream>
+
+int main()
+{
+    unsigned char c { 'a' };
+    std::cout << unsigned int { c } << '\n';
+
+    return 0;
+}
+```
+
+There are simple ways to work around this, the easiest of which is to use a single-word type alias:
+
+```cpp
+#include <iostream>
+
+int main()
+{
+    unsigned char c { 'a' };
+    using uint = unsigned int;
+    std::cout << uint { c } << '\n';
+
+    return 0;
+}
+```
+
+But why go to the trouble when you can just `static_cast`?
+
+For all these reasons, we generally prefer `static_cast` over direct-list-initialization of a temporary.
+
+>[!Best practice]
+Prefer `static_cast` over initializing a temporary object when a conversion is desired.
+
+---

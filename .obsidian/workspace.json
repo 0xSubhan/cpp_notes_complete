@@ -4,16 +4,16 @@
     "type": "split",
     "children": [
       {
-        "id": "9d23d35df706ee41",
+        "id": "37d23dd27c216417",
         "type": "tabs",
         "children": [
           {
-            "id": "b4f7d2bba43a3ed4",
+            "id": "8bfd4ba0db4db947",
             "type": "leaf",
             "state": {
               "type": "markdown",
               "state": {
-                "file": "Chapter 10 - Type Conversion, Type Aliases, and Type Deduction.md",
+                "file": "learncpp.com/Chapter 10 - Type Conversion, Type Aliases, and Type Deduction.md",
                 "mode": "source",
                 "source": false
               },
@@ -170,9 +170,9 @@
       "command-palette:Open command palette": false
     }
   },
-  "active": "b4f7d2bba43a3ed4",
+  "active": "8bfd4ba0db4db947",
   "lastOpenFiles": [
-    "Chapter 10 - Type Conversion, Type Aliases, and Type Deduction.md",
+    "learncpp.com/Chapter 10 - Type Conversion, Type Aliases, and Type Deduction.md",
     "learncpp.com/Chapter 9 - Error Detection and Handling.md",
     "Untitled.md",
     "learncpp.com/Chapter 8 - Control Flow.md",
