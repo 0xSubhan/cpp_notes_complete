@@ -1489,3 +1489,157 @@ Best practice
 Use type aliases judiciously, when they provide a clear benefit to code readability or code maintenance.
 
 ---
+
+```cpp
+double d{ 5.0 };
+```
+
+In C++, we are required to provide an explicit type for all objects. Thus, we’ve specified that variable `d` is of type double.
+
+However, the literal value `5.0` used to initialize `d` also has type double (implicitly determined via the format of the literal).
+
+In cases where we want a variable and its initializer to have the same type, we’re effectively providing the same type information twice.
+
+---
+### Type deduction for initialized variables
+
+>**Type deduction** (also sometimes called **type inference**) is a feature that allows the compiler to deduce the type of an object from the object’s initializer. When defining a variable, type deduction can be invoked by using the `auto` keyword can be used in place of the variable’s type:
+
+```cpp
+int main()
+{
+    auto d { 5.0 }; // 5.0 is a double literal, so d will be deduced as a double
+    auto i { 1 + 2 }; // 1 + 2 evaluates to an int, so i will be deduced as an int
+    auto x { i }; // i is an int, so x will be deduced as an int
+
+    return 0;
+}
+```
+
+Because function calls are valid expressions, we can even use type deduction when our initializer is a non-void function call:
+
+```cpp
+int add(int x, int y)
+{
+    return x + y;
+}
+
+int main()
+{
+    auto sum { add(5, 6) }; // add() returns an int, so sum's type will be deduced as an int
+
+    return 0;
+}
+```
+
+>The `add()` function returns an `int` value, so the compiler will deduce that variable `sum` should have type `int`.
+
+Literal suffixes can be used in combination with type deduction to specify a particular type.
+
+---
+### Type deduction must have something to deduce from
+
+>Type deduction will not work for objects that either do not have initializers or have empty initializers. It also will not work when the initializer has type `void` (or any other incomplete type). Thus, the following is not valid:
+
+```cpp
+#include <iostream>
+
+void foo()
+{
+}
+
+int main()
+{
+    auto a;           // The compiler is unable to deduce the type of a
+    auto b { };       // The compiler is unable to deduce the type of b
+    auto c { foo() }; // Invalid: c can't have type incomplete type void
+
+    return 0;
+}
+```
+
+---
+### Type deduction drops `const` from the deduced type
+
+In most cases, type deduction will drop the `const` from deduced types. For example:
+
+```cpp
+int main()
+{
+    const int a { 5 }; // a has type const int
+    auto b { a };      // b has type int (const dropped)
+
+    return 0;
+}
+```
+
+If you want a deduced type to be const, you must supply the `const` yourself as part of the definition:
+
+```cpp
+int main()
+{
+    const int a { 5 };  // a has type const int
+    const auto b { a }; // b has type const int (const dropped but reapplied)
+
+
+    return 0;
+}
+```
+
+---
+### Type deduction for string literals
+
+>For historical reasons, string literals in C++ have a strange type. Therefore, the following probably won’t work as expected:
+
+```cpp
+auto s { "Hello, world" }; // s will be type const char*, not std::string
+```
+
+If you want the type deduced from a string literal to be `std::string` or `std::string_view`, you’ll need to use the `s` or `sv` literal suffixes
+
+```cpp
+#include <string>
+#include <string_view>
+
+int main()
+{
+    using namespace std::literals; // easiest way to access the s and sv suffixes
+
+    auto s1 { "goo"s };  // "goo"s is a std::string literal, so s1 will be deduced as a std::string
+    auto s2 { "moo"sv }; // "moo"sv is a std::string_view literal, so s2 will be deduced as a std::string_view
+
+    return 0;
+}
+```
+
+>[!tip]
+>But in such cases, it may be better to not use type deduction.
+
+---
+### Type deduction and constexpr
+
+>Because `constexpr` is not part of the type system, it cannot be deduced as part of type deduction. However, a `constexpr` variable is implicitly const, and this const will be dropped during type deduction (and can be readded if desired):
+
+```cpp
+int main()
+{
+    constexpr double a { 3.4 };  // a has type const double (constexpr not part of type, const is implicit)
+
+    auto b { a };                // b has type double (const dropped)
+    const auto c { a };          // c has type const double (const dropped but reapplied)
+    constexpr auto d { a };      // d has type const double (const dropped but implicitly reapplied by constexpr)
+
+    return 0;
+}
+```
+
+---
+### Type deduction benefits and downsides
+
+[Read here](https://www.learncpp.com/cpp-tutorial/type-deduction-for-objects-using-the-auto-keyword/#:~:text=Type%20deduction%20benefits,stands%20out%20better.)
+
+>[!Best Practice]
+>Use type deduction for your variables when the type of the object doesn’t matter.
+Favor an explicit type when you require a specific type that differs from the type of the initializer, or when your object is used in a context where making the type obvious is useful.
+
+---
