@@ -8,17 +8,17 @@
         "type": "tabs",
         "children": [
           {
-            "id": "8bfd4ba0db4db947",
+            "id": "866c2f40ae9ce191",
             "type": "leaf",
             "state": {
               "type": "markdown",
               "state": {
-                "file": "C++_Complete_Notes/Chapter 10 - Type Conversion, Type Aliases, and Type Deduction.md",
+                "file": "Chapter 11 - Function Overloading and Function Templates.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "Chapter 10 - Type Conversion, Type Aliases, and Type Deduction"
+              "title": "Chapter 11 - Function Overloading and Function Templates"
             }
           }
         ]
@@ -170,8 +170,10 @@
       "command-palette:Open command palette": false
     }
   },
-  "active": "8bfd4ba0db4db947",
+  "active": "866c2f40ae9ce191",
   "lastOpenFiles": [
+    "C++_Complete_Notes/Chapter 10 - Type Conversion, Type Aliases, and Type Deduction.md",
+    "Chapter 11 - Function Overloading and Function Templates.md",
     "README.md",
     "Cs50x",
     "learncpp.com/Chapter 0 Introduction/0.9 & 0.10 Build Configurations and Compiler extension.md",
@@ -198,11 +200,9 @@
     "C++_Complete_Notes/Chapter 4.md",
     "C++_Complete_Notes/Chapter 3.md",
     "C++_Complete_Notes/Chapter 2 C++ Basics  Functions and Files.md",
-    "C++_Complete_Notes/Chapter 10 - Type Conversion, Type Aliases, and Type Deduction.md",
     "C++_Complete_Notes/Chapter 1 Basics.md",
     "C++_Complete_Notes/Chapter 0 Introduction",
     "C++_Complete_Notes",
-    "learncpp.com/Chapter 9 - Error Detection and Handling.md",
     "Untitled",
     "Pasted image 20250519184156.png",
     "learncpp.com/Chapter 3",
