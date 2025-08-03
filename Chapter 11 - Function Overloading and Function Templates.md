@@ -79,3 +79,87 @@ In order for a program using overloaded functions to compile, two things have to
 >Use function overloading to make your program simpler.
 
 ---
+### How overloaded functions are differentiated
+
+|Function property|Used for differentiation|Notes|
+|---|---|---|
+|Number of parameters|Yes||
+|Type of parameters|Yes|Excludes typedefs, type aliases, and const qualifier on value parameters. Includes ellipses.|
+|Return type|No|
+For member functions, additional function level qualifiers are also considered:
+
+1. const 
+2. Reference
+
+---
+### Overloading based on number of parameters
+
+>An overloaded function is differentiated so long as each overloaded function has a different number of parameters
+
+---
+### Overloading based on type of parameters
+
+>A function can also be differentiated so long as each overloaded function’s list of parameter types is distinct. For example, all of the following overloads are differentiated:
+
+```cpp
+int add(int x, int y); // integer version
+double add(double x, double y); // floating point version
+double add(int x, double y); // mixed version
+double add(double x, int y); // mixed version
+```
+
+Because type aliases (or typedefs) are not distinct types, overloaded functions using type aliases are not distinct from overloads using the aliased type. For example, all of the following overloads are not differentiated (and will result in a compile error):
+
+```cpp
+typedef int Height; // typedef
+using Age = int; // type alias
+
+void print(int value);
+void print(Age value); // not differentiated from print(int)
+void print(Height value); // not differentiated from print(int)
+```
+
+>For parameters passed by value, the const qualifier is also not considered. Therefore, the following functions are not considered to be differentiated:
+
+```cpp
+void print(int);
+void print(const int); // not differentiated from print(int)
+```
+
+---
+### The return type of a function is not considered for differentiation
+
+A function’s return type is not considered when differentiating overloaded functions.
+
+Consider the case where you want to write a function that returns a random number, but you need a version that will return an int, and another version that will return a double. You might be tempted to do this:
+
+```cpp
+int getRandomValue();
+double getRandomValue();
+```
+
+Error: error C2556: 'double getRandomValue(void)': overloaded function differs only by return type from 'int getRandomValue(void)'
+
+>This makes sense. If you were the compiler, and you saw this statement:
+
+```cpp
+getRandomValue();
+```
+
+Which of the two overloaded functions would you call? It’s not clear.
+
+---
+### Type signature
+
+>[!Important]
+>The following question was asked in an interview as a basic question.
+>
+
+>A function’s **type signature** (generally called a **signature**) is defined as the parts of the function header that are used for differentiation of the function. In C++, this includes the function name, number of parameters, parameter type, and function-level qualifiers. It notably does _not_ include the return type.
+
+>[!As an aside]
+>When the compiler compiles a function, it performs **name mangling**, which means the compiled name of the function is altered (“mangled”) based on various criteria, such as the number and type of parameters, so that the linker has unique names to work with.
+For example, a function with prototype `int fcn()` might compile to mangled name `__fcn_v`, whereas `int fcn(int)` might compile to mangled name `__fcn_i`. So while in the source code, the two overloaded functions share the name `fcn()`, in compiled code, the mangled names are unique (`__fcn_v` vs `__fcn_i`).
+There is no standardization on how names should be mangled, so different compilers will produce different mangled names.
+
+---
