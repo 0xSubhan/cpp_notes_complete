@@ -866,3 +866,351 @@ void printInt(T) = delete;
 You delete **everything else** not exactly matched.
 
 ---
+### Default arguments
+
+>A **default argument** is a default value provided for a function parameter. For example:
+
+```cpp
+#include <iostream>
+
+void print(int x, int y=4) // 4 is the default argument
+{
+    std::cout << "x: " << x << '\n';
+    std::cout << "y: " << y << '\n';
+}
+
+int main()
+{
+    print(1, 2); // y will use user-supplied argument 2
+    print(3); // y will use default argument 4, as if we had called print(3, 4)
+
+    return 0;
+}
+```
+
+x: 1
+y: 2
+x: 3
+y: 4
+
+In the first function call, the caller supplied explicit arguments for both parameters, so those argument values are used. In the second function call, the caller omitted the second argument, so the default value of `4` was used.
+
+>[!Note]
+>Note that you must use the equals sign to specify a default argument. Using parenthesis or brace initialization won’t work:
+
+>Perhaps surprisingly, default arguments are handled by the compiler at the call site. In the above example, when the compiler sees `print(3)`, it will rewrite this function call as `print(3, 4)`, so that the number of arguments matches the number of parameters. The rewritten function call then works as per usual.
+
+>[!Key Insight]
+>Default arguments are inserted by the compiler at site of the function call.
+
+Default arguments are frequently used in C++, and you’ll see them a lot in code you encounter (and in future lessons).
+
+---
+### When to use default arguments
+
+>Default arguments are an excellent option when a function needs a value that has a reasonable default value, but for which you want to let the caller override if they wish.
+
+```cpp
+int rollDie(int sides=6);
+void openLogFile(std::string filename="default.log");
+```
+
+> **Default arguments** allow you to add new parameters to a function **without breaking old code** that uses that function.
+
+#### 📌 The Problem Without Default Arguments
+
+Imagine you have this function:
+
+```cpp
+void greet(std::string name) {
+    std::cout << "Hello, " << name << '\n';
+}
+```
+
+And it's been used in many places:
+
+```cpp
+greet("Alice");
+greet("Bob");
+```
+
+Now, you decide to **add a new parameter**:
+
+```cpp
+void greet(std::string name, std::string title);
+```
+
+Now all existing calls like `greet("Alice")` break with a compile error:
+
+```vbnet
+error: too few arguments to function 'greet'
+```
+
+👉 That means you'd have to go back and update **every existing call** to include a second argument — which could be **dozens or hundreds of places**.
+
+#### ✅ The Solution: Use a Default Argument
+
+Instead, write it like this:
+
+```cpp
+void greet(std::string name, std::string title = "Friend") {
+    std::cout << "Hello, " << title << " " << name << '\n';
+}
+```
+
+Now you get the best of both worlds:
+
+- Existing calls like `greet("Alice")` still work — they use `"Friend"` as the default title.
+    
+- New calls like `greet("Alice", "Dr.")` can provide the new argument explicitly.
+
+---
+### Multiple default arguments
+
+A function can have multiple parameters with default arguments:
+
+```cpp
+#include <iostream>
+
+void print(int x=10, int y=20, int z=30)
+{
+    std::cout << "Values: " << x << " " << y << " " << z << '\n';
+}
+
+int main()
+{
+    print(1, 2, 3); // all explicit arguments
+    print(1, 2); // rightmost argument defaulted
+    print(1); // two rightmost arguments defaulted
+    print(); // all arguments defaulted
+
+    return 0;
+}
+```
+
+Values: 1 2 3
+Values: 1 2 30
+Values: 1 20 30
+Values: 10 20 30
+
+>C++ does not (as of C++23) support a function call syntax such as `print(,,3)` (as a way to provide an explicit value for `z` while using the default arguments for `x` and `y`. This has three major consequences:
+
+1. In a function call, any explicitly provided arguments must be the leftmost arguments (arguments with defaults cannot be skipped).
+
+```cpp
+void print(std::string_view sv="Hello", double d=10.0);
+
+int main()
+{
+    print();           // okay: both arguments defaulted
+    print("Macaroni"); // okay: d defaults to 10.0
+    print(20.0);       // error: does not match above function (cannot skip argument for sv)
+
+    return 0;
+}
+```
+
+2. If a parameter is given a default argument, all subsequent parameters (to the right) must also be given default arguments.
+
+```cpp
+void print(int x=10, int y); // not allowed
+```
+
+3. If more than one parameter has a default argument, the leftmost parameter should be the one most likely to be explicitly set by the user.
+
+>[!Rule]
+>If a parameter is given a default argument, all subsequent parameters (to the right) must also be given default arguments.
+
+---
+### Default arguments can not be redeclared, and must be declared before use
+
+>Once declared, a default argument can not be redeclared in the same translation unit. That means for a function with a forward declaration and a function definition, the default argument can be declared in either the forward declaration or the function definition, but not both.
+
+```cpp
+#include <iostream>
+
+void print(int x, int y=4); // forward declaration
+
+void print(int x, int y=4) // compile error: redefinition of default argument
+{
+    std::cout << "x: " << x << '\n';
+    std::cout << "y: " << y << '\n';
+}
+```
+
+The default argument must also be declared in the translation unit before it can be used:
+
+#### 🧠 What does this rule mean?
+
+> The compiler must **see** the default argument **before** any call to the function that relies on it.
+
+In other words:
+
+- You **must declare the default value** before using the function **without that argument**.
+
+```cpp
+#include <iostream>
+
+void print(int x, int y); // forward declaration, no default argument
+
+int main()
+{
+    print(3); // compile error: default argument for y hasn't been defined yet
+
+    return 0;
+}
+
+void print(int x, int y=4)
+{
+    std::cout << "x: " << x << '\n';
+    std::cout << "y: " << y << '\n';
+}
+```
+
+The best practice is to declare the default argument in the forward declaration and not in the function definition, as the forward declaration is more likely to be seen by other files and included before use (particularly if it’s in a header file).
+
+in foo.h:
+
+```cpp
+#ifndef FOO_H
+#define FOO_H
+void print(int x, int y=4);
+#endif
+```
+
+in main.cpp:
+
+```cpp
+#include "foo.h"
+#include <iostream>
+
+void print(int x, int y)
+{
+    std::cout << "x: " << x << '\n';
+    std::cout << "y: " << y << '\n';
+}
+
+int main()
+{
+    print(5);
+
+    return 0;
+}
+```
+
+Note that in the above example, we’re able to use the default argument for function `print()` because _main.cpp_ `#includes` _foo.h_, which has the forward declaration that defines the default argument.
+
+>[!Best Practice]
+>If the function has a forward declaration (especially one in a header file), put the default argument there. Otherwise, put the default argument in the function definition.
+
+---
+### Default arguments and function overloading
+
+Functions with default arguments may be overloaded. For example, the following is allowed:
+
+```cpp
+#include <iostream>
+#include <string_view>
+
+void print(std::string_view s)
+{
+    std::cout << s << '\n';
+}
+
+void print(char c = ' ')
+{
+    std::cout << c << '\n';
+}
+
+int main()
+{
+    print("Hello, world"); // resolves to print(std::string_view)
+    print('a');            // resolves to print(char)
+    print();               // resolves to print(char)
+
+    return 0;
+}
+```
+
+The function call to `print()` actually calls `print(char)`, which acts as if the user had explicitly called `print(' ')`.
+
+Now consider this case:
+
+```cpp
+void print(int x);                  // signature print(int)
+void print(int x, int y = 10);      // signature print(int, int)
+void print(int x, double y = 20.5); // signature print(int, double)
+```
+
+Default values are not part of a function’s signature, so these function declarations are differentiated overloads.
+
+#### ✅ This means:
+
+Two functions **can’t differ only by default arguments**.
+
+Let’s look at an example to make this concrete:
+
+#### ❌ **Invalid — ambiguous overloads**
+
+```cpp
+void greet(int x);
+void greet(int x = 5); // ❌ Error: redefinition — same signature
+```
+
+Even though the second one has a default value, the **signature** of both is:
+
+```cpp
+greet(int)
+```
+
+Default values are **not considered part of the signature**, so this is a **duplicate** declaration — and causes a **compiler error**.
+
+---
+### Default arguments can lead to ambiguous matches
+
+Default arguments can easily lead to ambiguous function calls:
+
+```cpp
+void foo(int x = 0)
+{
+}
+
+void foo(double d = 0.0)
+{
+}
+
+int main()
+{
+    foo(); // ambiguous function call
+
+    return 0;
+}
+```
+
+In this example, the compiler can’t tell whether `foo()` should resolve to `foo(0)` or `foo(0.0)`.
+
+Here’s a slightly more complex example:
+
+```cpp
+void print(int x);                  // signature print(int)
+void print(int x, int y = 10);      // signature print(int, int)
+void print(int x, double y = 20.5); // signature print(int, double)
+
+int main()
+{
+    print(1, 2);   // will resolve to print(int, int)
+    print(1, 2.5); // will resolve to print(int, double)
+    print(1);      // ambiguous function call
+
+    return 0;
+}
+```
+
+For the call `print(1)`, the compiler is unable to tell whether this resolve to `print(int)`, `print(int, int)`, or `print(int, double)`.
+
+In the case where we mean to call `print(int, int)` or `print(int, double)` we can always explicitly specify the second parameter. But what if we want to call `print(int)`? It’s not obvious how we can do so.
+
+>[!Note]
+>Default arguments don’t work for functions called through function pointers
+
+---
