@@ -599,3 +599,270 @@ In the above program, all functions match the first argument exactly. However, t
 >So Numeric promotion takes precedence here!
 
 ---
+### Deleting functions
+
+>In some cases, it is possible to write functions that don’t behave as desired when called with values of certain types.
+
+```cpp
+#include <iostream>
+
+void printInt(int x)
+{
+    std::cout << x << '\n';
+}
+
+int main()
+{
+    printInt(5);    // okay: prints 5
+    printInt('a');  // prints 97 -- does this make sense?
+    printInt(true); // print 1 -- does this make sense?
+
+    return 0;
+}
+```
+
+Let’s assume we don’t think it makes sense to call `printInt()` with a value of type `char` or `bool`. What can we do?
+
+---
+### Deleting a function using the `=delete` specifier
+
+>In cases where we have a function that we explicitly do not want to be callable, we can define that function as deleted by using the **= delete** specifier. If the compiler matches a function call to a deleted function, compilation will be halted with a compile error.
+
+```cpp
+#include <iostream>
+
+void printInt(int x)
+{
+    std::cout << x << '\n';
+}
+
+void printInt(char) = delete; // calls to this function will halt compilation
+void printInt(bool) = delete; // calls to this function will halt compilation
+
+int main()
+{
+    printInt(97);   // okay
+
+    printInt('a');  // compile error: function deleted
+    printInt(true); // compile error: function deleted
+
+    printInt(5.0);  // compile error: ambiguous match
+
+    return 0;
+}
+```
+
+Let’s take a quick look at some of these. First, `printInt('a')` is a direct match for `printInt(char)`, which is deleted. The compiler thus produces a compilation error. `printInt(true)` is a direct match for `printInt(bool)`, which is deleted, and thus also produces a compilation error.
+
+#### 👇 Given:
+
+```cpp
+void printInt(int x);          // ✅ valid function
+void printInt(char) = delete; // ❌ explicitly disabled
+void printInt(bool) = delete; // ❌ explicitly disabled
+```
+
+And you call:
+
+```cpp
+ printInt(5.0); // 5.0 is a `double`
+```
+
+#### 🧠 What happens?
+
+#### 🧭 Step 1: Exact Match?
+
+Is there a function `printInt(double)`?
+
+- ❌ **No exact match**
+    
+
+So, the compiler tries to find the **best match** using **standard conversions**.
+
+#### 🔎 Step 2: What can `double` convert to?
+
+|Function|Conversion type from `double`|Deleted?|
+|---|---|---|
+|`printInt(int)`|double → int (standard conversion)|❌ No|
+|`printInt(char)`|double → char (standard conversion)|✅ Yes|
+|`printInt(bool)`|double → bool (standard conversion)|✅ Yes|
+
+All three are **viable** candidates from the compiler's perspective in overload resolution.
+
+BUT:
+
+- Even though some functions are **deleted**, they are **still considered** during overload resolution.
+    
+- If a deleted function is considered a **better match**, even though it can’t be called, it still **blocks** the other candidates.
+
+#### 💥 Step 3: Why is this **ambiguous**?
+
+- `double → int`, `double → char`, and `double → bool` are **all standard conversions**.
+    
+- **No conversion is clearly better** than the others. (Important insight)
+    
+- So the compiler **can't decide** which function is the best match.
+    
+
+Now, even though `char` and `bool` overloads are deleted, they **still participate** in overload resolution.
+
+So the compiler ends up with:
+
+> Multiple viable candidates — some deleted — but no unambiguously better one.
+
+➡️ Result: **Ambiguous match** → **Compile-time error**.
+
+#### 🧠 Important Rule:
+
+> 🔴 **Deleted functions participate in overload resolution**, but if the compiler ends up choosing a deleted function, or if one blocks another due to being a better match, it results in an error.
+
+This makes `= delete` a powerful tool for **disabling certain implicit conversions** while still allowing specific overloads.
+
+Let’s walk through a **clear, minimal example** of:
+
+> 🔴 **A deleted function that participates in overload resolution and blocks a valid one**, resulting in a **compile-time error**.
+
+#### 🧪 **Example Code**
+
+```cpp
+#include <iostream>
+
+void print(int) {
+    std::cout << "int version\n";
+}
+
+void print(double) = delete; // prevent accidental usage of double
+
+```
+
+#### 🤔 What happens here?
+
+Now call:
+
+```cpp
+int main() {
+    print(3.5); // double literal
+}
+
+```
+
+#### 🔎 Breakdown:
+
+- `3.5` is a `double`.
+    
+- There is **no exact match** for `print(double)` — but we do have one, it's **deleted**.
+    
+- The other candidate is:
+    
+    - `print(int)` — which requires **narrowing conversion**: `double → int`.
+        
+
+#### 🚨 So now what?
+
+- Both `print(double)` and `print(int)` are **viable** overloads.
+    
+- But:
+    
+    - The deleted function `print(double)` is **a better match** (no conversion).
+        
+- However, it’s **deleted**, so the compiler **cannot choose it**.
+    
+- And it **does not fall back to `print(int)`** — because `print(double)` is still considered a better match in overload resolution.
+    
+
+#### 💥 Result:
+
+
+```cpp
+error: use of deleted function ‘void print(double)’
+```
+
+Even though `print(int)` exists and could technically be used, the compiler says:
+
+> "Sorry, the better match is deleted, and I'm not allowed to ignore that."
+
+#### ✅ Moral of the story:
+
+> A deleted function can **block overloads** that would otherwise work, simply by being a better match.
+
+This makes `= delete` useful for **explicitly disabling certain types**, but you must be careful — because it can cause **surprising errors** if not designed thoughtfully.
+
+>[!Key insight]
+>`= delete` means “I forbid this”, not “this doesn’t exist”.
+>Deleted function participate in all stages of function overload resolution (not just in the exact match stage). If a deleted function is selected, then a compilation error results.
+
+---
+### Advance Technique
+
+#### 🧠 **What is this technique?**
+
+> A way to **delete all overloads** except for **one specific type**, using a **deleted function template**.
+
+It ensures that **only an exact type match** (like `int`) can be passed to a function — **all other types will cause a compile-time error**, even if they are convertible to `int`.
+
+## ✅ **How it works**
+
+### 🔹 The exact match:
+
+```cpp
+void printInt(int x)
+{
+    std::cout << x << '\n';
+}
+
+```
+
+This regular function handles the exact case where the argument is `int`.
+
+#### 🔹 The deleted catch-all template:
+
+```cpp
+template <typename T>
+void printInt(T x) = delete;
+```
+
+This is a **function template**, and it will match **any type that doesn't match an exact overload** — like `char`, `bool`, `float`, etc.
+
+But since this template is **`= delete`**, if the compiler tries to use it, it will **immediately produce a compile-time error**.
+
+#### 🧪 **Example in Action**
+
+```cpp
+printInt(97);    // ✅ int — matches the non-template version → compiles
+printInt('a');   // ❌ char — no exact match, matches deleted template → error
+printInt(true);  // ❌ bool — no exact match, matches deleted template → error
+```
+
+#### 🛠️ **Why use this technique?**
+
+This gives you **precise control** over what argument types are allowed:
+
+- Prevents accidental implicit conversions (e.g., `char → int`, `bool → int`)
+    
+- Avoids needing to manually `= delete` many overloads
+    
+- Makes errors **explicit and intentional** for unsupported types
+    
+
+#### ⚠️ **Without this technique:**
+
+You might write many individual deletions:
+
+```cpp
+void printInt(char) = delete;
+void printInt(bool) = delete;
+void printInt(float) = delete;
+void printInt(double) = delete;
+// ... tedious and error-prone
+```
+
+Instead, with one line:
+
+```cpp
+template <typename T>
+void printInt(T) = delete;
+```
+
+You delete **everything else** not exactly matched.
+
+---
