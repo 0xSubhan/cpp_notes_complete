@@ -4,16 +4,16 @@
     "type": "split",
     "children": [
       {
-        "id": "37d23dd27c216417",
+        "id": "5062752bd985e9e1",
         "type": "tabs",
         "children": [
           {
-            "id": "866c2f40ae9ce191",
+            "id": "ae1050130b8f5877",
             "type": "leaf",
             "state": {
               "type": "markdown",
               "state": {
-                "file": "Chapter 11 - Function Overloading and Function Templates.md",
+                "file": "C++_Complete_Notes/Chapter 11 - Function Overloading and Function Templates.md",
                 "mode": "source",
                 "source": false
               },
@@ -170,10 +170,11 @@
       "command-palette:Open command palette": false
     }
   },
-  "active": "866c2f40ae9ce191",
+  "active": "ae1050130b8f5877",
   "lastOpenFiles": [
     "C++_Complete_Notes/Chapter 10 - Type Conversion, Type Aliases, and Type Deduction.md",
-    "Chapter 11 - Function Overloading and Function Templates.md",
+    "C++_Complete_Notes/Chapter 11 - Function Overloading and Function Templates.md",
+    "****.md",
     "README.md",
     "Cs50x",
     "learncpp.com/Chapter 0 Introduction/0.9 & 0.10 Build Configurations and Compiler extension.md",
@@ -200,7 +201,6 @@
     "C++_Complete_Notes/Chapter 4.md",
     "C++_Complete_Notes/Chapter 3.md",
     "C++_Complete_Notes/Chapter 2 C++ Basics  Functions and Files.md",
-    "C++_Complete_Notes/Chapter 1 Basics.md",
     "C++_Complete_Notes/Chapter 0 Introduction",
     "C++_Complete_Notes",
     "Untitled",
