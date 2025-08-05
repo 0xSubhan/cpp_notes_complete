@@ -2261,3 +2261,236 @@ The rules for determining which of multiple matching function templates should b
 If multiple function templates can match a call and the compiler can’t determine which is more restrictive, the compiler will error with an ambiguous match.
 
 ---
+### Non-type template parameters
+
+>A **non-type template parameter** is a template parameter with a fixed type that serves as a placeholder for a constexpr value passed in as a template argument.
+
+A non-type template parameter can be any of the following types:
+
+- An integral type
+- An enumeration type
+- `std::nullptr_t`
+- A floating point type (since C++20)
+- A pointer or reference to an object
+- A pointer or reference to a function
+- A pointer or reference to a member function
+- A literal class type (since C++20)
+
+We saw our first example of a non-type template parameter when we discussed `std::bitset`
+
+```cpp
+#include <bitset>
+
+int main()
+{
+    std::bitset<8> bits{ 0b0000'0101 }; // The <8> is a non-type template parameter
+
+    return 0;
+}
+```
+
+In the case of `std::bitset`, the non-type template parameter is used to tell the `std::bitset` how many bits we want it to store.
+
+---
+### Defining our own non-type template parameters
+
+Here’s a simple example of a function that uses an int non-type template parameter:
+
+```cpp
+#include <iostream>
+
+template <int N> // declare a non-type template parameter of type int named N
+void print()
+{
+    std::cout << N << '\n'; // use value of N here
+}
+
+int main()
+{
+    print<5>(); // 5 is our non-type template argument
+
+    return 0;
+}
+```
+
+This example prints:
+
+5
+
+On line 3, we have our template parameter declaration. Inside the angled brackets, we’re defining a non-type template parameter named `N` that will be a placeholder for a value of type `int`. Inside the `print()` function, we use the value of `N`.
+
+On line 11, we have our call to function `print()`, which uses int value `5` as the non-type template argument. When the compiler sees this call, it will instantiate a function that looks something like this:
+
+```cpp
+template <>
+void print<5>()
+{
+    std::cout << 5 << '\n';
+}
+```
+
+At runtime, when this function is called from `main()`, it prints `5`.
+
+Then the program ends. Pretty simple, right?
+
+Much like `T` is typically used as the name for the first type template parameter, `N` is conventionally used as the name of an int non-type template parameter.
+
+>[!Best practice]
+Use `N` as the name of an int non-type template parameter.
+
+---
+### What are non-type template parameters useful for?
+
+>As of C++20, function parameters cannot be constexpr. This is true for normal functions, constexpr functions (which makes sense, as they must be able to be run at runtime), and perhaps surprisingly, even consteval functions.
+
+```cpp
+#include <cassert>
+#include <cmath> // for std::sqrt
+#include <iostream>
+
+double getSqrt(double d)
+{
+    assert(d >= 0.0 && "getSqrt(): d must be non-negative");
+
+    // The assert above will probably be compiled out in non-debug builds
+    if (d >= 0)
+        return std::sqrt(d);
+
+    return 0.0;
+}
+
+int main()
+{
+    std::cout << getSqrt(5.0) << '\n';
+    std::cout << getSqrt(-5.0) << '\n';
+
+    return 0;
+}
+```
+
+>When run, the call to `getSqrt(-5.0)` will runtime assert out. While this is better than nothing, because `-5.0` is a literal (and implicitly constexpr), it would be better if we could static_assert so that errors such as this one would be caught at compile-time. However, static_assert requires a constant expression, and function parameters can’t be constexpr…
+
+#### 🧠 The Key Concepts:
+
+##### 🔹 `-5.0` is a **literal**
+
+When you write:
+
+```cpp
+getSqrt(-5.0);
+```
+
+You're passing a **literal value**, which **is** a constant known at compile time — also known as a **constant expression** (a `constexpr`).
+
+BUT...
+
+##### 🔸 Function parameters can't be `constexpr`
+
+Even if you pass a literal like `-5.0`, once it reaches the function like this:
+
+```cpp
+double getSqrt(double d)
+```
+
+The parameter `d` is **just a runtime variable** — even if its value came from a compile-time constant.
+
+So inside the function:
+
+```cpp
+static_assert(d >= 0.0, "d must be non-negative"); // ❌ ERROR
+```
+
+this fails, because `static_assert` **needs a compile-time expression**, and `d` is **not** one — it's a runtime parameter.
+
+##### 🤯 Why is this a problem?
+
+You’re passing a constant, **but** your function can’t treat it as such:
+
+- You lose the ability to check for errors **at compile time**.
+    
+- So even if the input is clearly invalid (`-5.0`), the compiler doesn’t stop you.
+    
+- You only find out when you run the program (runtime assert fails).
+
+
+>However, if we change the function parameter to a non-type template parameter instead, then we can do exactly as we want:
+
+```cpp
+#include <cmath> // for std::sqrt
+#include <iostream>
+
+template <double D> // requires C++20 for floating point non-type parameters
+double getSqrt()
+{
+    static_assert(D >= 0.0, "getSqrt(): D must be non-negative");
+
+    if constexpr (D >= 0) // ignore the constexpr here for this example
+        return std::sqrt(D); // strangely, std::sqrt isn't a constexpr function (until C++26)
+
+    return 0.0;
+}
+
+int main()
+{
+    std::cout << getSqrt<5.0>() << '\n';
+    std::cout << getSqrt<-5.0>() << '\n';
+
+    return 0;
+}
+```
+
+This version fails to compile. When the compiler encounters `getSqrt<-5.0>()`, it will instantiate and call a function that looks something like this:
+
+```cpp
+template <>
+double getSqrt<-5.0>()
+{
+    static_assert(-5.0 >= 0.0, "getSqrt(): D must be non-negative");
+
+    if constexpr (-5.0 >= 0) // ignore the constexpr here for this example
+        return std::sqrt(-5.0);
+
+    return 0.0;
+}
+```
+
+The static_assert condition is false, so the compiler asserts out.
+
+>[!Key Insight]
+>Non-type template parameters are used primarily when we need to pass constexpr values to functions (or class types) so they can be used in contexts that require a constant expression.
+The class type `std::bitset` uses a non-type template parameter to define the number of bits to store because the number of bits must be a constexpr value.
+
+>[!Note]
+>Having to use non-type template parameters to circumvent the restriction that function parameters can’t be constexpr isn’t great. There are quite a few different proposals being evaluated to help address situations like this. I expect that we might see a better solution to this in a future C++ language standard.
+
+---
+### [Implicit conversions for non-type template arguments (Optional)](https://www.learncpp.com/cpp-tutorial/non-type-template-parameters/#:~:text=Implicit%20conversions%20for,in%20ambiguous%20matches.)
+---
+### ype deduction for non-type template parameters using `auto` C++17
+
+As of C++17, non-type template parameters may use `auto` to have the compiler deduce the non-type template parameter from the template argument:
+
+```cpp
+#include <iostream>
+
+template <auto N> // deduce non-type template parameter from template argument
+void print()
+{
+    std::cout << N << '\n';
+}
+
+int main()
+{
+    print<5>();   // N deduced as int `5`
+    print<'c'>(); // N deduced as char `c`
+
+    return 0;
+}
+```
+
+This compiles and produces the expected result:
+
+5
+c
+
+---
