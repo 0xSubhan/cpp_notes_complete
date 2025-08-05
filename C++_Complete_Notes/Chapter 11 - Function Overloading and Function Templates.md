@@ -1982,3 +1982,282 @@ These drawbacks are fairly minor compared with the power and safety that templat
 >Use function templates to write generic code that can work with a wide variety of types whenever you have the need.
 
 ---
+### Functions templates with multiple template types
+
+```cpp
+#include <iostream>
+
+template <typename T>
+T max(T x, T y)
+{
+    return (x < y) ? y : x;
+}
+
+int main()
+{
+    std::cout << max(2, 3.5) << '\n';  // compile error
+
+    return 0;
+}
+```
+
+You may be surprised to find that this program won’t compile. Instead, the compiler will issue a bunch of (probably crazy looking) error messages. On Visual Studio, the author got the following:
+
+Project3.cpp(11,18): error C2672: 'max': no matching overloaded function found
+Project3.cpp(11,28): error C2782: 'T max(T,T)': template parameter 'T' is ambiguous
+Project3.cpp(4): message : see declaration of 'max'
+Project3.cpp(11,28): message : could be 'double'
+Project3.cpp(11,28): message : or       'int'
+Project3.cpp(11,28): error C2784: 'T max(T,T)': could not deduce template argument for 'T' from 'double'
+Project3.cpp(4): message : see declaration of 'max'
+
+In our function call `max(2, 3.5)`, we’re passing arguments of two different types: one `int` and one `double`. Because we’re making a function call without using angled brackets to specify an actual type, the compiler will first look to see if there is a non-template match for `max(int, double)`. It won’t find one.
+
+Next, the compiler will see if it can find a function template match (using template argument deduction, which we covered in lesson [11.7 -- Function template instantiation](https://www.learncpp.com/cpp-tutorial/function-template-instantiation/)). However, this will also fail, for a simple reason: `T` can only represent a single type. There is no type for `T` that would allow the compiler to instantiate function template `max<T>(T, T)` into a function with two different parameter types. Put another way, because both parameters in the function template are of type `T`, they must resolve to the same actual type.
+
+Since both a non-template match and a template match couldn’t be found, the function call fails to resolve, and we get a compile error.
+
+>You might wonder why the compiler didn’t generate function `max<double>(double, double)` and then use numeric conversion to type convert the `int` argument to a `double`. The answer is simple: type conversion is done only when resolving function overloads, not when performing template argument deduction.
+
+This lack of type conversion is intentional for at least two reasons. First, it helps keep things simple: we either find an exact match between the function call arguments and template type parameters, or we don’t. Second, it allows us to create function templates for cases where we want to ensure that two or more parameters have the same type (as in the example above).
+
+---
+### Use static_cast to convert the arguments to matching types
+
+The first solution is to put the burden on the caller to convert the arguments into matching types. For example:
+
+```cpp
+#include <iostream>
+
+template <typename T>
+T max(T x, T y)
+{
+    return (x < y) ? y : x;
+}
+
+int main()
+{
+    std::cout << max(static_cast<double>(2), 3.5) << '\n'; // convert our int to a double so we can call max(double, double)
+
+    return 0;
+}
+```
+
+Now that both arguments are of type `double`, the compiler will be able to instantiate `max(double, double)` that will satisfy this function call.
+
+However, this solution is awkward and hard to read.
+
+---
+### Provide an explicit type template argument
+
+If we had written a non-template `max(double, double)` function, then we would be able to call `max(int, double)` and let the implicit type conversion rules convert our `int` argument into a `double` so the function call could be resolved:
+
+![Ezoic](https://go.ezodn.com/utilcave_com/ezoicbwa.png "ezoic")
+
+```cpp
+#include <iostream>
+
+double max(double x, double y)
+{
+    return (x < y) ? y : x;
+}
+
+int main()
+{
+    std::cout << max(2, 3.5) << '\n'; // the int argument will be converted to a double
+
+    return 0;
+}
+```
+
+However, when the compiler is doing template argument deduction, it won’t do any type conversions. Fortunately, we don’t have to use template argument deduction if we specify an explicit type template argument to be used instead:
+
+```cpp
+#include <iostream>
+
+template <typename T>
+T max(T x, T y)
+{
+    return (x < y) ? y : x;
+}
+
+int main()
+{
+    // we've explicitly specified type double, so the compiler won't use template argument deduction
+    std::cout << max<double>(2, 3.5) << '\n';
+
+    return 0;
+}
+```
+
+In the above example, we call `max<double>(2, 3.5)`. Because we’ve explicitly specified that `T` should be replaced with `double`, the compiler won’t use template argument deduction. Instead, it will just instantiate the function `max<double>(double, double)`, and then type convert any mismatched arguments. Our `int` parameter will be implicitly converted to a `double`.
+
+While this is more readable than using `static_cast`, it would be even nicer if we didn’t even have to think about the types when making a function call to `max` at all
+
+---
+### Function templates with multiple template type parameters
+
+#### ✅ THE ROOT OF THE PROBLEM
+
+##### Original function:
+
+```cpp
+template <typename T>
+T max(T x, T y)
+```
+
+- Both parameters **must be the same type** (`T`)
+    
+- Works fine for `max(3, 7)` or `max(2.5, 3.5)`
+    
+- ❌ But fails or gives **unexpected results** when you do:
+
+```cpp
+max(2, 3.5); // int + double
+```
+
+Because both `x` and `y` are of the **same template type**, this forces both to become `T`, and you may **lose precision** (e.g., `3.5 → 3`).
+
+#### 🛠 THE FIRST FIX: Use two template parameters
+
+```cpp
+template <typename T, typename U>
+T max(T x, U y)
+```
+
+Now, `x` and `y` can have different types — for example:
+
+```cpp
+max(2, 3.5); // T = int, U = double
+```
+
+**So far, so good.** But…
+
+#### ⚠️ THE NEW PROBLEM: Return type is **still T**
+
+```cpp
+return (x < y) ? y : x;
+```
+
+Even though the ternary operator produces a **double**, it’s being returned as **T (int)**.
+
+So:
+
+```cpp
+return 3.5; // narrowing conversion to int ⇒ becomes 3
+```
+
+This is why:
+
+```cpp
+std::cout << max(2, 3.5) << '\n'; // prints 3 instead of 3.5
+```
+
+#### ✅ THE RIGHT FIX: Use `auto` for return type
+
+```cpp
+template <typename T, typename U>
+auto max(T x, U y)
+{
+    return (x < y) ? y : x;
+}
+```
+
+Now the compiler does **return type deduction**:
+
+- If `x = int`, `y = double` → ternary produces **double** → compiler deduces return type is **double**
+    
+- If `x = std::string`, `y = std::string` → return type is **std::string**
+    
+
+This eliminates the **loss of precision** problem and makes your function **type-safe** and **generic**.
+
+---
+### Abbreviated function templates C++20
+
+>C++20 introduces a new use of the `auto` keyword: When the `auto` keyword is used as a parameter type in a normal function, the compiler will automatically convert the function into a function template with each auto parameter becoming an independent template type parameter. This method for creating a function template is called an **abbreviated function template**.
+
+For example:
+
+```cpp
+auto max(auto x, auto y)
+{
+    return (x < y) ? y : x;
+}
+```
+
+is shorthand in C++20 for the following:
+
+```cpp
+template <typename T, typename U>
+auto max(T x, U y)
+{
+    return (x < y) ? y : x;
+}
+```
+
+which is the same as the `max` function template we wrote above.
+
+In cases where you want each template type parameter to be an independent type, this form is preferred as the removal of the template parameter declaration line makes your code more concise and readable.
+
+>There isn’t a concise way to use abbreviated function templates when you want more than one auto parameter to be the same type. That is, there isn’t an easy abbreviated function template for something like this:
+
+```cpp
+template <typename T>
+T max(T x, T y) // two parameters of the same type
+{
+    return (x < y) ? y : x;
+}
+```
+
+>[!Best practice]
+Feel free to use abbreviated function templates with a single auto parameter, or where each auto parameter should be an independent type (and your language standard is set to C++20 or newer).
+
+---
+### Function templates may be overloaded
+
+Just like functions may be overloaded, function templates may also be overloaded. Such overloads can have a different number of template types and/or a different number or type of function parameters:
+
+```cpp
+#include <iostream>
+
+// Add two values with matching types
+template <typename T>
+auto add(T x, T y)
+{
+    return x + y;
+}
+
+// Add two values with non-matching types
+// As of C++20 we could also use auto add(auto x, auto y)
+template <typename T, typename U>
+auto add(T x, U y)
+{
+    return x + y;
+}
+
+// Add three values with any type
+// As of C++20 we could also use auto add(auto x, auto y, auto z)
+template <typename T, typename U, typename V>
+auto add(T x, U y, V z)
+{
+    return x + y + z;
+}
+
+int main()
+{
+    std::cout << add(1.2, 3.4) << '\n'; // instantiates and calls add<double>()
+    std::cout << add(5.6, 7) << '\n';   // instantiates and calls add<double, int>()
+    std::cout << add(8, 9, 10) << '\n'; // instantiates and calls add<int, int, int>()
+
+    return 0;
+}
+```
+
+One interesting note here is that for the call to `add(1.2, 3.4)`, the compiler will prefer `add<T>(T, T)` over `add<T, U>(T, U)` even though both could possibly match.
+
+The rules for determining which of multiple matching function templates should be preferred are called “partial ordering of function templates”. In short, whichever function template is more restrictive/specialized will be preferred. `add<T>(T, T)` is the more restrictive function template in this case (since it only has one template parameter), so it is preferred.
+
+If multiple function templates can match a call and the compiler can’t determine which is more restrictive, the compiler will error with an ambiguous match.
+
+---
