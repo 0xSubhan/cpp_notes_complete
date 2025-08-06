@@ -2494,3 +2494,52 @@ This compiles and produces the expected result:
 c
 
 ---
+
+>[!Note Important]
+> **Templates must be defined in the same translation unit where they are instantiated**
+
+>The most conventional way to address this issue is to put all your template code in a header (.h) file instead of a source (.cpp) file:
+
+add.h
+
+```cpp
+#ifndef ADD_H
+#define ADD_H
+
+template <typename T>
+T addOne(T x) // function template definition
+{
+    return x + 1;
+}
+
+#endif 
+```
+
+main.cpp
+
+```cpp
+#include "add.h" // import the function template definition
+#include <iostream>
+
+int main()
+{
+    std::cout << addOne(1) << '\n';
+    std::cout << addOne(2.3) << '\n';
+
+    return 0;
+}
+```
+
+That way, any files that need access to the template can #include the relevant header, and the template definition will be copied by the preprocessor into the source file. The compiler will then be able to instantiate any functions that are needed.
+
+>You may be wondering why this doesn’t cause a violation of the one-definition rule (ODR). The ODR says that types, templates, inline functions, and inline variables are allowed to have identical definitions in different files. So there is no problem if the template definition is copied into multiple files (as long as each definition is identical).
+
+But what about the instantiated functions themselves? If a function is instantiated in multiple files, how does that not cause a violation of the ODR? The answer is that functions implicitly instantiated from templates are implicitly inline. And as you know, inline functions can be defined in multiple files, so long as the definition is identical in each.
+
+>[!Best Practice]
+>Templates that are needed in multiple files should be defined in a header file, and then #included wherever needed. This allows the compiler to see the full template definition and instantiate the template when needed.
+
+---
+### [Summary and Quiz](https://www.learncpp.com/cpp-tutorial/chapter-11-summary-and-quiz/)
+
+---
