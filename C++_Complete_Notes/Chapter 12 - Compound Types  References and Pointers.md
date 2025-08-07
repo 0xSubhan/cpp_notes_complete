@@ -785,3 +785,260 @@ All three (`var`, `ref1`, `ref2`) refer to the **same int in memory**.
 >In **expressions**, a reference (like `ref1`) **automatically converts to the object it refers to**. compiler does that.
 
 ---
+>As we know lvalue reference binding to const variable is not allowed.
+
+```cpp
+int main()
+{
+    const int x { 5 }; // x is a non-modifiable (const) lvalue
+    int& ref { x }; // error: ref can not bind to non-modifiable lvalue
+
+    return 0;
+}
+```
+
+But what if we want to have a const variable we want to create a reference to? A normal lvalue reference (to a non-const value) won’t do.
+
+---
+### Lvalue reference to const 
+
+>By using the `const` keyword when declaring an lvalue reference, we tell an lvalue reference to treat the object it is referencing as const. Such a reference is called an **lvalue reference to a const value** (sometimes called a **reference to const** or a **const reference**).
+
+Lvalue references to const can bind to non-modifiable lvalues:
+
+```cpp
+int main()
+{
+    const int x { 5 };    // x is a non-modifiable lvalue
+    const int& ref { x }; // okay: ref is a an lvalue reference to a const value
+
+    return 0;
+}
+```
+
+Because lvalue references to const treat the object they are referencing as const, they can be used to access but not modify the value being referenced:
+
+```cpp
+#include <iostream>
+
+int main()
+{
+    const int x { 5 };    // x is a non-modifiable lvalue
+    const int& ref { x }; // okay: ref is a an lvalue reference to a const value
+
+    std::cout << ref << '\n'; // okay: we can access the const object
+    ref = 6;                  // error: we can not modify an object through a const reference
+
+    return 0;
+}
+```
+
+---
+### Initializing an lvalue reference to const with a modifiable lvalue
+
+Lvalue references to const can also bind to modifiable lvalues. In such a case, the object being referenced is treated as const when accessed through the reference (even though the underlying object is non-const):
+
+```cpp
+#include <iostream>
+
+int main()
+{
+    int x { 5 };          // x is a modifiable lvalue
+    const int& ref { x }; // okay: we can bind a const reference to a modifiable lvalue
+
+    std::cout << ref << '\n'; // okay: we can access the object through our const reference
+    ref = 7;                  // error: we can not modify an object through a const reference
+
+    x = 6;                // okay: x is a modifiable lvalue, we can still modify it through the original identifier
+
+    return 0;
+}
+```
+
+In the above program, we bind const reference `ref` to modifiable lvalue `x`. We can then use `ref` to access `x`, but because `ref` is const, we can not modify the value of `x` through `ref`. However, we still can modify the value of `x` directly (using the identifier `x`).
+
+>[!Best Practice]
+>Favor `lvalue references to const` over `lvalue references to non-const` unless you need to modify the object being referenced.
+
+---
+### Initializing an lvalue reference to const with an rvalue
+
+>Perhaps surprisingly, lvalues references to const can also bind to rvalues:
+
+```cpp
+#include <iostream>
+
+int main()
+{
+    const int& ref { 5 }; // okay: 5 is an rvalue
+
+    std::cout << ref << '\n'; // prints 5
+
+    return 0;
+}
+```
+
+When this happens, a temporary object is created and initialized with the rvalue, and the reference to const is bound to that temporary object.
+
+---
+### nitializing an lvalue reference to const with a value of a different type
+
+Lvalue references to const can even bind to values of a different type, so long as those values can be implicitly converted to the reference type:
+
+```cpp
+#include <iostream>
+
+int main()
+{
+    // case 1
+    const double& r1 { 5 };  // temporary double initialized with value 5, r1 binds to temporary
+
+    std::cout << r1 << '\n'; // prints 5
+
+    // case 2
+    char c { 'a' };
+    const int& r2 { c };     // temporary int initialized with value 'a', r2 binds to temporary
+
+    std::cout << r2 << '\n'; // prints 97 (since r2 is a reference to int)
+
+    return 0;
+}
+```
+
+In case 1, a temporary object of type `double` is created and initialized with int value `5`. Then `const double& r1` is bound to that temporary double object.
+
+In case 2, a temporary object of type `int` is created and initialized with char value `a`. Then `const int& r2` is bound to that temporary int object.
+
+In both cases, the type of the reference and the type of the temporary match.
+
+>[!Tip]
+>Also note that when we print `r2` it prints as an int rather than a char. This is because `r2` is a reference to an int object (the temporary int that was created), not to char `c`.
+
+```cpp
+char c{ 'A' };                // 'A' has ASCII value 65
+const int& r2{ c };          // Binding const int& to a char
+
+```
+
+#### 🔍 What's happening here?
+
+1. You're trying to bind a `const int&` (reference to const `int`) to a `char`.
+    
+2. But `c` is of type `char`, and you're binding it to a reference of a **different type** (`int`).
+    
+3. Since this is **not allowed directly** (you can't bind a non-const reference to a different type), the compiler does something smart:
+    
+
+#### ⚙️ Compiler's Behavior:
+
+- It **creates a temporary `int` object**, say `temp`, initialized with the value of `c` (which is `'A'`, or `65`).
+    
+- Then it **binds `r2` to this temporary `int` object**.
+    
+- So `r2` becomes a reference to this temporary `int` (which holds value `65`), not to the original `char c`.
+    
+
+#### 🖨️ Why does it print as an `int`?
+
+```cpp
+std::cout << r2;  // prints 65
+```
+
+- `r2` is a reference to an `int`, not a `char`.
+    
+- So it prints the `int` value (`65`), not the character `'A'`.
+
+--> Important Must Read!  
+
+>[!Warning]
+>We normally assume that a reference is identical to the object it is bound to -- but this assumption is broken when a reference is bound to a temporary copy of the object or a temporary resulting from the conversion of the object instead. Any modifications subsequently made to the original object will not be seen by the reference (as it is referencing a different object), and vice-versa.
+>Here’s a silly example showing this:
+```cpp
+#include <iostream>
+
+int main()
+{
+    short bombs { 1 };         // I can has bomb! (note: type is short)
+
+    const int& you { bombs };  // You can has bomb too (note: type is int&)
+    --bombs;                   // Bomb all gone
+
+    if (you)                   // You still has?
+    {
+        std::cout << "Bombs away!  Goodbye, cruel world.\n"; // Para bailar la bomba
+    }
+
+    return 0;
+}
+```
+>[!Warning]
+>In the above example, `bombs` is a `short` and `you` is a `const int&`. Because `you` can only bind to an `int` object, when `you` is initialized with `bombs`, the compiler will implicitly convert `bombs` to an `int`, which results in the creation of a temporary `int` object (with value `1`). `you` ends up bound to this temporary object rather than `bombs`.
+>When `bombs` is decremented, `you` is not affected because it is referencing a different object. So although we expect `if (you)` to evaluate to `false`, it actually evaluates to `true`.
+
+---
+### Const references bound to temporary objects extend the lifetime of the temporary object
+
+>Temporary objects are normally destroyed at the end of the expression in which they are created.
+
+Given the statement `const int& ref { 5 };`, consider what would happen instead if the temporary object created to hold rvalue `5` was destroyed at the end of the expression that initializes `ref`. Reference `ref` would be left dangling (referencing an object that had been destroyed), and we’d get undefined behavior when we tried to access `ref`.
+
+>To avoid dangling references in such cases, C++ has a special rule: When a const lvalue reference is _directly_ bound to a temporary object, the lifetime of the temporary object is extended to match the lifetime of the reference.
+
+```cpp
+#include <iostream>
+
+int main()
+{
+    const int& ref { 5 }; // The temporary object holding value 5 has its lifetime extended to match ref
+
+    std::cout << ref << '\n'; // Therefore, we can safely use it here
+
+    return 0;
+} // Both ref and the temporary object die here
+```
+
+In the above example, when `ref` is initialized with rvalue `5`, a temporary object is created and `ref` is bound to that temporary object. The lifetime of the temporary object matches the lifetime of `ref`. Thus, we can safely print the value of `ref` in the next statement. Then both `ref` and the temporary object go out of scope and are destroyed at the end of the block.
+
+>[!Tip]
+>Lvalue references can only bind to modifiable lvalues.
+>Lvalue references to const can bind to modifiable lvalues, non-modifiable lvalues, and rvalues. This makes them a much more flexible type of reference.
+
+---
+### Constexpr lvalue references Optional
+
+When applied to a reference, `constexpr` allows the reference to be used in a constant expression. Constexpr references have a particular limitation: they can only be bound to objects with static duration (either globals or static locals). This is because the compiler knows where static objects will be instantiated in memory, so it can treat that address as a compile-time constant.
+
+A constexpr reference cannot bind to a (non-static) local variable. This is because the address of local variables is not known until the function they are defined within is actually called.
+
+```cpp
+int g_x { 5 };
+
+int main()
+{
+    [[maybe_unused]] constexpr int& ref1 { g_x }; // ok, can bind to global
+
+    static int s_x { 6 };
+    [[maybe_unused]] constexpr int& ref2 { s_x }; // ok, can bind to static local
+
+    int x { 6 };
+    [[maybe_unused]] constexpr int& ref3 { x }; // compile error: can't bind to non-static object
+
+    return 0;
+}
+```
+
+When defining a constexpr reference to a const variable, we need to apply both `constexpr` (which applies to the reference) and `const` (which applies to the type being referenced).
+
+```cpp
+int main()
+{
+    static const int s_x { 6 }; // a const int
+    [[maybe_unused]] constexpr const int& ref2 { s_x }; // needs both constexpr and const
+
+    return 0;
+}
+```
+
+Given these limitations, constexpr references typically don’t see much use.
+
+---
