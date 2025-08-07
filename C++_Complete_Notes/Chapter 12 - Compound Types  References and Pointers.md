@@ -400,3 +400,388 @@ You may still be confused about what kind of expressions qualify as an lvalue vs
 >
 
 ---
+### Lvalue references
+
+>In C++, a **reference** is an alias for an existing object. Once a reference has been defined, any operation on the reference is applied to the object being referenced. This means we can use a reference to read or modify the object being referenced.
+
+Modern C++ contains two types of references: lvalue references, and rvalue references.
+
+---
+### Lvalue reference types
+
+>An **lvalue reference** acts as an alias for an existing lvalue (such as a variable).
+
+#### 🔹 1. **Regular Types vs Reference Types**
+
+##### ✅ `int`
+
+- This is a **regular type**.
+    
+- It represents a plain integer — **not** a reference.
+    
+
+```cpp
+int x = 5;
+```
+
+Here, `x` holds a copy of the value `5`.
+
+##### ✅ `int&`
+
+- This is a **reference type**.
+    
+- It means: “a reference to an `int`”.
+    
+- More precisely: **an lvalue reference to a modifiable `int`**.
+    
+
+```cpp
+int x = 5;
+int& ref = x; // ref refers to x
+```
+
+Now `ref` is another name for `x`. Changing `ref` will change `x`.
+
+##### ✅ `const int&`
+
+- This is an **lvalue reference to a const int**.
+    
+- That means: it can **refer to an `int`**, but **you can't modify it through the reference**.
+    
+
+```cpp
+int x = 10;
+const int& ref = x; // ref refers to x, but you can't change x through ref
+```
+
+>[!Tip]
+>A type that specifies a reference (e.g. `int&`) is called a **reference type**. The type that can be referenced (e.g. `int`) is called the **referenced type**.
+>
+>>int x = 5;
+int& ref = x; 
+>> //  `ref` is a **reference** to `x`, and its **type** is `int&` → this is the **reference type**.  
+>> The **referenced type** is `int`, because that's the type being referred to.
+
+--> What if referenced type was of different type than reference type:
+
+```cpp
+double x = 5;
+int& ref = x; // ❌ ERROR
+```
+
+This **will NOT compile**. Here's why:
+
+🚫 Why it fails
+
+C++ does **not** allow you to bind an `int&` (reference to `int`) to a `double` variable, because:
+
+- `x` is of **type `double`**
+    
+- `ref` wants to reference an **actual `int` object** — but `x` is not an `int`
+    
+- Even though the value `5` can be **converted** from `double` to `int`, C++ will not create a **temporary `int` object** just to bind it to a **non-const lvalue reference**
+    
+
+So this is an **invalid type mismatch**.
+
+---
+### Lvalue reference variables
+
+>One of the things we can do with an lvalue reference type is create an lvalue reference variable. An **lvalue reference variable** is a variable that acts as a reference to an lvalue (usually another variable).
+
+To create an lvalue reference variable, we simply define a variable with an lvalue reference type:
+
+```cpp
+#include <iostream>
+
+int main()
+{
+    int x { 5 };    // x is a normal integer variable
+    int& ref { x }; // ref is an lvalue reference variable that can now be used as an alias for variable x
+
+    std::cout << x << '\n';  // print the value of x (5)
+    std::cout << ref << '\n'; // print the value of x via ref (5)
+
+    return 0;
+}
+```
+
+>From the compiler’s perspective, it doesn’t matter whether the ampersand is “attached” to the type name (`int& ref`) or the variable’s name (`int &ref`), and which you choose is a matter of style. Modern C++ programmers tend to prefer attaching the ampersand to the type, as it makes clearer that the reference is part of the type information, not the identifier.
+
+>[!Best Practice]
+>When defining a reference, place the ampersand next to the type (not the reference variable’s name).
+
+>For those of you already familiar with pointers, the ampersand in this context does not mean “address of”, it means “lvalue reference to”.
+
+---
+### Modifying values through a non-const lvalue reference
+
+In the above example, we showed that we can use a reference to read the value of the object being referenced. We can also use a non-const reference to modify the value of the object being referenced:
+
+```cpp
+#include <iostream>
+
+int main()
+{
+    int x { 5 }; // normal integer variable
+    int& ref { x }; // ref is now an alias for variable x
+
+    std::cout << x << ref << '\n'; // print 55
+
+    x = 6; // x now has value 6
+
+    std::cout << x << ref << '\n'; // prints 66
+
+    ref = 7; // the object being referenced (x) now has value 7
+
+    std::cout << x << ref << '\n'; // prints 77
+
+    return 0;
+}
+```
+
+This code prints:
+
+55
+66
+77
+
+In the above example, `ref` is an alias for `x`, so we are able to change the value of `x` through either `x` or `ref`.
+
+---
+### 🧠 What is _Reference Initialization_?
+
+**Reference initialization** is the process of assigning a variable or function to a reference at the time the reference is declared.
+
+> Just like `const` variables, **all references must be initialized immediately** — you **can’t** create an empty reference and assign to it later.
+
+#### ❌ Invalid Example
+
+```cpp
+int& invalidRef; // ❌ ERROR: Reference must be initialized
+```
+
+#### ✅ Valid Reference Initialization
+
+```cpp
+int x { 5 };
+int& ref { x }; // ✅ OK: ref is now an alias for x
+```
+
+Now, anything you do to `ref` will affect `x` because `ref` is **bound to** `x`.
+
+#### 💬 Key Vocabulary
+
+- **Reference binding**: The act of associating a reference with an object or function.
+    
+- **Referent**: The object/function being referenced.
+    
+
+In the example above:
+
+- `ref` is a **reference**.
+    
+- `x` is the **referent**.
+    
+- The process of doing `int& ref { x };` is called **reference binding**.
+    
+
+#### 🧱 Reference Binding Rules
+
+##### ✔️ Non-const Lvalue References:
+
+```cpp
+int x = 5;
+int& ref = x; // ✅ okay
+```
+
+> ✅ Can **only bind to a modifiable lvalue**
+
+But NOT to these:
+
+```cpp
+const int y = 5;
+int& invalidRef = y;  // ❌ ERROR: can't bind to const
+
+int& invalidRef2 = 0; // ❌ ERROR: can't bind to rvalue
+```
+
+##### Why? 🚫
+
+Because then you could write code like this:
+
+```cpp
+const int y = 5;
+int& ref = y; // ❌ invalid
+ref = 10;     // 😱 would change a const value!
+```
+
+That would **break the rules of `const`** — so C++ disallows it.
+
+##### ❓Why can't we bind to rvalues?
+
+```cpp
+int& r = 5; // ❌ ERROR: rvalue (temporary) can't be bound to non-const reference
+```
+
+Because `5` is a **temporary value**, and you’re not allowed to change a temporary via a reference (it doesn’t make sense).
+
+✅ However, **const references** _can_ bind to rvalues:
+
+```cpp
+const int& r = 5; // ✅ allowed
+```
+
+This is legal because the compiler ensures the temporary lives long enough and you can't modify it.
+
+##### 🧠 Key Insight Recap
+
+> Non-const lvalue references **must bind to modifiable lvalues.**  
+> Why? To avoid allowing mutation of values that are supposed to be constant or temporary.
+
+##### ⚠️ Extra Note:
+
+> **Lvalue references to `void` are disallowed.**
+
+```cpp
+void x();
+void& ref = x; // ❌ ERROR: reference to void makes no sense
+```
+
+Because `void` means "no type / no value" — what would it even point to?
+
+---
+### A reference will (usually) only bind to an object matching its referenced type
+
+In most cases, a reference will only bind to an object whose type matches the referenced type, (there are some exceptions to this rule that we’ll discuss when we get into inheritance).
+
+If you try to bind a reference to an object that does not match its referenced type, the compiler will try to implicitly convert the object to the referenced type and then bind the reference to that.
+
+>[!Key insight]
+Since the result of a conversion is an rvalue, and a non-const lvalue reference can’t bind to an rvalue, trying to bind a non-const lvalue reference to an object that does not match its referenced type will result in a compilation error.
+
+```cpp
+int main()
+{
+    int x { 5 };
+    int& ref { x };            // okay: referenced type (int) matches type of initializer
+
+    double d { 6.0 };
+    int& invalidRef { d };     // invalid: conversion of double to int is narrowing conversion, disallowed by list initialization
+    double& invalidRef2 { x }; // invalid: non-const lvalue reference can't bind to rvalue (result of converting x to double)
+
+    return 0;
+}
+```
+
+---
+### References can’t be reseated (changed to refer to another object)
+
+Once initialized, a reference in C++ cannot be **reseated**, meaning it cannot be changed to reference another object.
+
+New C++ programmers often try to reseat a reference by using assignment to provide the reference with another variable to reference. This will compile and run -- but not function as expected. Consider the following program:
+
+```cpp
+#include <iostream>
+
+int main()
+{
+    int x { 5 };
+    int y { 6 };
+
+    int& ref { x }; // ref is now an alias for x
+
+    ref = y; // assigns 6 (the value of y) to x (the object being referenced by ref)
+    // The above line does NOT change ref into a reference to variable y!
+
+    std::cout << x << '\n'; // user is expecting this to print 5
+
+    return 0;
+}
+```
+
+Perhaps surprisingly, this prints:
+
+6
+
+When a reference is evaluated in an expression, it resolves to the object it’s referencing. So `ref = y` doesn’t change `ref` to now reference `y`. Rather, because `ref` is an alias for `x`, the expression evaluates as if it was written `x = y` -- and since `y` evaluates to value `6`, `x` is assigned the value `6`.
+
+---
+### References and referents have independent lifetimes
+
+With one exception (that we’ll cover next lesson), the lifetime of a reference and the lifetime of its referent are independent. In other words, both of the following are true:
+
+- A reference can be destroyed before the object it is referencing.
+- The object being referenced can be destroyed before the reference.
+
+When a reference is destroyed before the referent, the referent is not impacted. The following program demonstrates this:
+
+```cpp
+#include <iostream>
+
+int main()
+{
+    int x { 5 };
+
+    {
+        int& ref { x };   // ref is a reference to x
+        std::cout << ref << '\n'; // prints value of ref (5)
+    } // ref is destroyed here -- x is unaware of this
+
+    std::cout << x << '\n'; // prints value of x (5)
+
+    return 0;
+} // x destroyed here
+```
+
+The above prints:
+
+5
+5
+
+When `ref` dies, variable `x` carries on as normal, blissfully unaware that a reference to it has been destroyed.
+
+---
+### Dangling references
+
+When an object being referenced is destroyed before a reference to it, the reference is left referencing an object that no longer exists. Such a reference is called a **dangling reference**. Accessing a dangling reference leads to undefined behavior.
+
+---
+### References aren't objects
+
+Perhaps surprisingly, references are not objects in C++. A reference is not required to exist or occupy storage. If possible, the compiler will optimize references away by replacing all occurrences of a reference with the referent. However, this isn’t always possible, and in such cases, references may require storage.
+
+This also means that the term “reference variable” is a bit of a misnomer, as variables are objects with a name, and references aren’t objects.
+
+Because references aren’t objects, they can’t be used anywhere an object is required (e.g. you can’t have a reference to a reference, since an lvalue reference must reference an identifiable object). In cases where you need a reference that is an object or a reference that can be reseated.
+
+Consider the following variables:
+
+```cpp
+int var{};
+int& ref1{ var };  // an lvalue reference bound to var
+int& ref2{ ref1 }; // an lvalue reference bound to var
+```
+
+Because `ref2` (a reference) is initialized with `ref1` (a reference), you might be tempted to conclude that `ref2` is a reference to a reference. It is not. Because `ref1` is a reference to `var`, when used in an expression (such as an initializer), `ref1` evaluates to `var`. So `ref2` is just a normal lvalue reference (as indicated by its type `int&`), bound to `var`.
+
+```cpp
+int var = 5;
+
+int& ref1 = var;  // ref1 is alias for var
+int& ref2 = ref1; // ref1 evaluates to var → ref2 is also alias for var
+
+ref1 = 10;
+std::cout << var << '\n'; // prints 10
+
+ref2 = 15;
+std::cout << var << '\n'; // prints 15
+
+```
+
+All three (`var`, `ref1`, `ref2`) refer to the **same int in memory**.
+
+>[!tip]
+>In **expressions**, a reference (like `ref1`) **automatically converts to the object it refers to**. compiler does that.
+
+---
