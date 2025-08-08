@@ -1185,3 +1185,345 @@ int main()
 Fortunately, there’s an easy way around this, which we will discuss next lesson. We’ll also take a look at when to pass by value vs. pass by reference.
 
 ---
+### Pass by cosnt lvalue reference
+
+>Unlike a reference to non-const (which can only bind to modifiable lvalues), a reference to const can bind to modifiable lvalues, non-modifiable lvalues, and rvalues. Therefore, if we make a reference parameter const, then it will be able to bind to any type of argument:
+
+```cpp
+#include <iostream>
+
+void printRef(const int& y) // y is a const reference
+{
+    std::cout << y << '\n';
+}
+
+int main()
+{
+    int x { 5 };
+    printRef(x);   // ok: x is a modifiable lvalue, y binds to x
+
+    const int z { 5 };
+    printRef(z);   // ok: z is a non-modifiable lvalue, y binds to z
+
+    printRef(5);   // ok: 5 is rvalue literal, y binds to temporary int object
+
+    return 0;
+}
+```
+
+
+>Passing by const reference offers the same primary benefit as pass by non-const reference (avoiding making a copy of the argument), while also guaranteeing that the function can _not_ change the value being referenced.
+
+For example, the following is disallowed, because `ref` is const:
+
+```cpp
+void addOne(const int& ref)
+{
+    ++ref; // not allowed: ref is const
+}
+```
+
+In most cases, we don’t want our functions modifying the value of arguments.
+
+>[!Best Practice]
+>Favor passing by const reference over passing by non-const reference unless you have a specific reason to do otherwise (e.g. the function needs to change the value of an argument).
+
+Now we can understand the motivation for allowing const lvalue references to bind to rvalues: without that capability, there would be no way to pass literals (or other rvalues) to functions that used pass by reference!
+
+---
+### Passing arguments of a different type to a const lvalue reference parameter
+
+>we noted that a const lvalue reference can bind to a value of a different type, as long as that value is convertible to the type of the reference. The conversion creates a temporary object that the reference parameter can then bind to.
+
+```cpp
+#include <iostream>
+
+void printVal(double d)
+{
+    std::cout << d << '\n';
+}
+
+void printRef(const double& d)
+{
+    std::cout << d << '\n';
+}
+
+int main()
+{
+    printVal(5); // 5 converted to temporary double, copied to parameter d
+    printRef(5); // 5 converted to temporary double, bound to parameter d
+
+    return 0;
+}
+```
+
+With pass-by-value, we expect a copy to be made, so if a conversion occurs first (resulting in an additional copy) it’s rarely an issue (and the compiler will likely optimize one of the two copies away).
+
+However, we often use pass by reference when we _don’t_ want a copy to be made. If a conversion occurs first, this will typically result in a (possibly expensive) copy being made, which can be suboptimal.
+
+>[!Warning]
+>With pass by reference, ensure the type of the argument matches the type of the reference, or it will result in an unexpected (and possibly expensive) conversion.
+
+---
+### When to use pass by value vs pass by reference
+
+--> Thumb of rule:
+
+>[!Best Practice]
+>- As a rule of thumb, pass fundamental types by value and class types by const reference.
+>- If you aren’t sure what to do, pass by const reference, as you’re less likely to encounter unexpected behavior.
+
+[Here’s a partial list of other interesting cases!](https://www.learncpp.com/cpp-tutorial/pass-by-const-lvalue-reference/#:~:text=Tip,Object%20slicing)
+
+---
+### 1. **What happens when you pass by value vs pass by reference**
+
+When a function is called, the way parameters are passed affects both:
+
+- **The cost of setting up the parameter** (copying vs binding)
+    
+- **The cost of accessing the parameter** inside the function
+    
+
+Let’s analyze both.
+
+#### **Pass by Value**
+
+When you pass by value:
+
+```cpp
+void func(MyClass obj) { /* ... */ }
+```
+
+the compiler **makes a copy** of the argument before entering the function.
+
+**Cost:**
+
+1. **Copy construction cost** — depends on:
+    
+    - **Object size** — copying a big object = more memory moves.
+        
+    - **Setup costs** — some classes do extra work when constructed (allocate memory, open files, initialize buffers).
+        
+2. **Access inside the function** — the copy is _yours_ inside the function.
+    
+    - Can often be stored in a CPU register (fast).
+        
+    - No need to check where it points — just access it directly.
+        
+
+#### **Pass by Reference**
+
+When you pass by reference:
+
+```cpp
+void func(MyClass& obj) { /* ... */ }
+```
+
+the compiler **does not copy the object** — instead, it creates a **reference** (like an alias) to the original.
+
+**Cost:**
+
+1. **Binding cost** — minimal; just store the address of the object.
+    
+    - Roughly the cost of copying a pointer (very fast).
+        
+2. **Access inside the function** — every time you use the reference:
+    
+    - You first need to read the reference (pointer) to find the actual object.
+        
+    - Then you access the object itself.
+        
+    - This means **an extra memory access step** compared to value.
+        
+
+#### 2. **Performance trade-offs**
+
+##### **Step 1: Cost of Initialization**
+
+- **Value** — expensive if copying is heavy (large object or costly setup).
+    
+- **Reference** — always cheap to bind (like copying a pointer).
+    
+
+##### **Step 2: Cost of Access**
+
+- **Value** — direct access (1 memory/register read).
+    
+- **Reference** — indirect access (read pointer → read object).
+    
+- If the object is **small enough** to fit into registers, pass-by-value can be _faster_.
+    
+
+##### **Step 3: Compiler Optimizations**
+
+The compiler sometimes optimizes better with **pass-by-value** because:
+
+- No **aliasing** — the copy is independent from the original, so compiler knows no outside code can modify it.
+    
+- With **pass-by-reference**, compiler must be careful because:
+    
+    - The reference might point to something else also being modified elsewhere.
+        
+    - That means fewer optimizations.
+
+#### 3. **Why not “always pass by reference”**
+
+- For small cheap-to-copy types, **value can be faster**:
+    
+    - No extra pointer indirection.
+        
+    - Better compiler optimizations.
+        
+- For large expensive-to-copy types, **reference is faster**:
+    
+    - Avoids unnecessary copy.
+
+#### **Example Performance Scenario**
+
+Let’s say we have a small struct:
+
+```cpp
+struct Small { int x; int y; }; // 8 bytes
+```
+
+Call:
+
+```cpp
+void process(Small s); // pass-by-value
+void process_ref(const Small& s); // pass-by-reference
+```
+
+- Pass-by-value:
+    
+    - Copy 8 bytes into a register → done.
+        
+    - Every use = direct register access.
+        
+- Pass-by-reference:
+    
+    - Store pointer (8 bytes).
+        
+    - Every use = dereference pointer → access object in RAM.
+        
+
+In this case, **pass-by-value wins**.
+
+>[!Important]
+>when a reference parameter is used, there is usually an extra step. The running program must first directly access the storage location (CPU register or RAM) allocated to the reference, in order to determine which object is being referenced. Only then can it access the storage location of the referenced object (in RAM).
+>Therefore, each use of a value parameter is a single CPU register or RAM access, whereas each use of a reference parameter is a single CPU register or RAM access plus a second RAM access.
+
+--> Under the hood:
+
+#### pass-by-value:
+
+```cpp
+void func(int x) {
+    int y = x + 1;
+}
+```
+
+When `func` runs:
+
+- `x` is either:
+    
+    - In a **CPU register** (very fast), or
+        
+    - In your stack frame in **RAM**.
+        
+- When you use `x`, you **directly read** its value from that register or RAM slot.  
+    **→ 1 access**.
+
+#### pass-by-reference:
+
+```cpp
+void func(const int& x) {
+    int y = x + 1;
+}
+```
+
+When `func` runs:
+
+- `x` is not an `int`, it’s a hidden pointer to the caller’s `int`.
+    
+- When you use `x`:
+    
+    1. First, **read the pointer** (CPU register or RAM) to find out _where_ the real object lives.
+        
+    2. Then, **read the real object** from that memory address (almost always in RAM).
+        
+
+**→ 2 accesses**:
+
+1. Access reference storage to get the address.
+    
+2. Access that address to get the actual value.
+
+---
+###  function parameters, prefer `std::string_view` over `const std::string&` in most cases [](https://www.learncpp.com/cpp-tutorial/pass-by-const-lvalue-reference/#stringparameter)
+
+>One question that comes up often in modern C++: when writing a function that has a string parameter, should the type of the parameter be `const std::string&` or `std::string_view`?
+
+In most cases, `std::string_view` is the better choice, as it can handle a wider range of argument types efficiently. A `std::string_view` parameter also allows the caller to pass in a substring without having to copy that substring into its own string first. (since it just changes pointer & length)
+
+There are a few cases where using a `const std::string&` parameter may be more appropriate:
+
+- If you’re using C++14 or older, `std::string_view` isn’t available.
+- If your function needs to call some other function that takes a C-style string or `std::string` parameter, then `const std::string&` may be a better choice, as `std::string_view` is not guaranteed to be null-terminated (something that C-style string functions expect) and does not efficiently convert back to a `std::string`.
+
+- A `std::string_view` is just:
+        
+```cpp
+    pointer-to-char + length
+```
+    
+- It **does not** store a null terminator (`'\0'`), because it doesn’t own the data.
+    
+- Many **C-style functions** (like `strlen`, `printf("%s")`, `strcmp`) expect a **null-terminated string** — they’ll keep reading until they find `'\0'`.  
+    If the data is not null-terminated, those functions will read garbage or crash.
+
+
+>[!Best Practice]
+>Prefer passing strings using `std::string_view` (by value) instead of `const std::string&`, unless your function calls other functions that require C-style strings or `std::string` parameters.
+
+---
+### Why `std::string_view` parameters are more efficient than `const std::string&` Advanced
+
+In C++, a string argument will typically be a `std::string`, a `std::string_view`, or a C-style string/string literal.
+
+As reminders:
+
+- If the type of an argument does not match the type of the corresponding parameter, the compiler will try to implicitly convert the argument to match the type of the parameter.
+- Converting a value creates a temporary object of the converted type.
+- Creating (or copying) a `std::string_view` is inexpensive, as `std::string_view` does not make a copy of the string it is viewing.
+- Creating (or copying) a `std::string` can be expensive, as each `std::string` object makes a copy of the string.
+
+Here’s a table showing what happens when we try to pass each type:
+
+|Argument Type|std::string_view parameter|const std::string& parameter|
+|---|---|---|
+|std::string|Inexpensive conversion|Inexpensive reference binding|
+|std::string_view|Inexpensive copy|Expensive explicit conversion to `std::string`|
+|C-style string / literal|Inexpensive conversion|Expensive conversion|
+
+With a `std::string_view` value parameter:
+
+- If we pass in a `std::string` argument, the compiler will convert the `std::string` to a `std::string_view`, which is inexpensive, so this is fine.
+- If we pass in a `std::string_view` argument, the compiler will copy the argument into the parameter, which is inexpensive, so this is fine.
+- If we pass in a C-style string or string literal, the compiler will convert these to a `std::string_view`, which is inexpensive, so this is fine.
+
+As you can see, `std::string_view` handles all three cases inexpensively.
+
+With a `const std::string&` reference parameter:
+
+- If we pass in a `std::string` argument, the parameter will reference bind to the argument, which is inexpensive, so this is fine.
+- If we pass in a `std::string_view` argument, the compiler will refuse to do an implicit conversion, and produce a compilation error. We can use `static_cast` to do an explicit conversion (to `std::string`), but this conversion is expensive (since `std::string` will make a copy of the string being viewed). Once the conversion is done, the parameter will reference bind to the result, which is inexpensive. But we’ve made an expensive copy to do the conversion, so this isn’t great.
+- If we pass in a C-style string or string literal, the compiler will implicitly convert this to a `std::string`, which is expensive. So this isn’t great either.
+
+Thus, a `const std::string&` parameter only handles `std::string` arguments inexpensively.
+
+Additionally, we need to consider the cost of accessing the parameter inside the function. Because a `std::string_view` parameter is a normal object, the string being viewed can be accessed directly. Accessing a `std::string&` parameter requires an additional step to get to the referenced object before the string can be accessed.
+
+Finally, if we want to pass in a substring of an existing string (of any type), it is comparatively cheap to create a `std::string_view` substring, which can then be cheaply passed to a `std::string_view` parameter. In comparison, passing a substring to a `const std::string&` is more expensive, as the substring must at some point be copied into the `std::string` that the reference parameter binds to.
+
+---
