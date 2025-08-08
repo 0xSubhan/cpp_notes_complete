@@ -1042,3 +1042,146 @@ int main()
 Given these limitations, constexpr references typically don’t see much use.
 
 ---
+### Pass By lvalue reference
+
+>[!Tip]
+>fundamental types are cheap to copy.
+#### Some objects are expensive to copy
+
+>Most of the types provided by the standard library (such as `std::string`) are class types. Class types are usually expensive to copy. Whenever possible, we want to avoid making unnecessary copies of objects that are expensive to copy, especially when we will destroy those copies almost immediately.
+
+```cpp
+#include <iostream>
+#include <string>
+
+void printValue(std::string y)
+{
+    std::cout << y << '\n';
+} // y is destroyed here
+
+int main()
+{
+    std::string x { "Hello, world!" }; // x is a std::string
+
+    printValue(x); // x is passed by value (copied) into parameter y (expensive)
+
+    return 0;
+}
+```
+Hello, world!
+
+---
+### Pass by reference
+
+>One way to avoid making an expensive copy of an argument when calling a function is to use `pass by reference` instead of `pass by value`. When using **pass by reference**, we declare a function parameter as a reference type (or const reference type) rather than as a normal type. When the function is called, each reference parameter is bound to the appropriate argument. Because the reference acts as an alias for the argument, no copy of the argument is made.
+
+```cpp
+#include <iostream>
+#include <string>
+
+void printValue(std::string& y) // type changed to std::string&
+{
+    std::cout << y << '\n';
+} // y is destroyed here
+
+int main()
+{
+    std::string x { "Hello, world!" };
+
+    printValue(x); // x is now passed by reference into reference parameter y (inexpensive)
+
+    return 0;
+}
+```
+
+This program is identical to the prior one, except the type of parameter `y` has been changed from `std::string` to `std::string&` (an lvalue reference). Now, when `printValue(x)` is called, lvalue reference parameter `y` is bound to argument `x`. Binding a reference is always inexpensive, and no copy of `x` needs to be made. Because a reference acts as an alias for the object being referenced, when `printValue()` uses reference `y`, it’s accessing the actual argument `x` (rather than a copy of `x`).
+
+>The following program demonstrates that a value parameter is a separate object from the argument, while a reference parameter is treated as if it were the argument:
+
+```cpp
+#include <iostream>
+
+void printAddresses(int val, int& ref)
+{
+    std::cout << "The address of the value parameter is: " << &val << '\n';
+    std::cout << "The address of the reference parameter is: " << &ref << '\n';
+}
+
+int main()
+{
+    int x { 5 };
+    std::cout << "The address of x is: " << &x << '\n';
+    printAddresses(x, x);
+
+    return 0;
+}
+```
+The address of x is: 0x7ffd16574de0
+The address of the value parameter is: 0x7ffd16574de4
+The address of the reference parameter is: 0x7ffd16574de0
+
+---
+### Pass by reference allows us to change the value of an argument
+
+>When an object is passed by value, the function parameter receives a copy of the argument. This means that any changes to the value of the parameter are made to the copy of the argument, not the argument itself.
+
+However, since a reference acts identically to the object being referenced, when using pass by reference, any changes made to the reference parameter _will_ affect the argument:
+
+```cpp
+#include <iostream>
+
+void addOne(int& y) // y is bound to the actual object x
+{
+    ++y; // this modifies the actual object x
+}
+
+int main()
+{
+    int x { 5 };
+
+    std::cout << "value = " << x << '\n';
+
+    addOne(x);
+
+    std::cout << "value = " << x << '\n'; // x has been modified
+
+    return 0;
+}
+```
+
+>[!Note]
+>Passing values by reference to non-const allows us to write functions that modify the value of arguments passed in.
+
+>[!Example]
+>The ability for functions to modify the value of arguments passed in can be useful. Imagine you’ve written a function that determines whether a monster has successfully attacked the player. If so, the monster should do some amount of damage to the player’s health. If you pass your player object by reference, the function can directly modify the health of the actual player object that was passed in. If you pass the player object by value, you could only modify the health of a copy of the player object, which isn’t as useful.
+
+---
+### Pass by reference can only accept modifiable lvalue arguments
+
+Because a reference to a non-const value can only bind to a modifiable lvalue (essentially a non-const variable), this means that pass by reference only works with arguments that are modifiable lvalues. In practical terms, this significantly limits the usefulness of pass by reference to non-const, as it means we can not pass const variables or literals. For example:
+
+```cpp
+#include <iostream>
+
+void printValue(int& y) // y only accepts modifiable lvalues
+{
+    std::cout << y << '\n';
+}
+
+int main()
+{
+    int x { 5 };
+    printValue(x); // ok: x is a modifiable lvalue
+
+    const int z { 5 };
+    printValue(z); // error: z is a non-modifiable lvalue
+
+    printValue(5); // error: 5 is an rvalue
+
+    return 0;
+}
+```
+
+Fortunately, there’s an easy way around this, which we will discuss next lesson. We’ll also take a look at when to pass by value vs. pass by reference.
+
+---
