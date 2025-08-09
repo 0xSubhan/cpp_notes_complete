@@ -1958,3 +1958,213 @@ ptr = nullptr;
 ```
 
 ---
+### Null Pointers
+
+>Besides a memory address, there is one additional value that a pointer can hold: a null value. A **null value** (often shortened to **null**) is a special value that means something has no value. When a pointer is holding a null value, it means the pointer is not pointing at anything. Such a pointer is called a **null pointer**.
+
+The easiest way to create a null pointer is to use value initialization:
+
+```cpp
+int main()
+{
+    int* ptr {}; // ptr is now a null pointer, and is not holding an address
+
+    return 0;
+}
+```
+
+>[!Best Practice]
+>Value initialize your pointers (to be null pointers) if you are not initializing them with the address of a valid object.
+
+>Because we can use assignment to change what a pointer is pointing at, a pointer that is initially set to null can later be changed to point at a valid object:
+
+```cpp
+#include <iostream>
+
+int main()
+{
+    int* ptr {}; // ptr is a null pointer, and is not holding an address
+
+    int x { 5 };
+    ptr = &x; // ptr now pointing at object x (no longer a null pointer)
+
+    std::cout << *ptr << '\n'; // print value of x through dereferenced ptr
+
+    return 0;
+}
+```
+
+---
+### The nullptr keyword
+
+Much like the keywords `true` and `false` represent Boolean literal values, the **nullptr** keyword represents a null pointer literal. We can use `nullptr` to explicitly initialize or assign a pointer a null value.
+
+```cpp
+int main()
+{
+    int* ptr { nullptr }; // can use nullptr to initialize a pointer to be a null pointer
+
+    int value { 5 };
+    int* ptr2 { &value }; // ptr2 is a valid pointer
+    ptr2 = nullptr; // Can assign nullptr to make the pointer a null pointer
+
+    someFunction(nullptr); // we can also pass nullptr to a function that has a pointer parameter
+
+    return 0;
+}
+```
+
+In the above example, we use assignment to set the value of `ptr2` to `nullptr`, making `ptr2` a null pointer.
+
+>[!Best Practice]
+>Use `nullptr` when you need a null pointer literal for initialization, assignment, or passing a null pointer to a function.
+
+---
+### Dereferencing a null pointer results in undefined behavior
+
+```cpp
+#include <iostream>
+
+int main()
+{
+    int* ptr {}; // Create a null pointer
+    std::cout << *ptr << '\n'; // Dereference the null pointer
+
+    return 0;
+}
+```
+
+>Much like dereferencing a dangling (or wild) pointer leads to undefined behavior, dereferencing a null pointer also leads to undefined behavior. In most cases, it will crash your application.
+
+Conceptually, this makes sense. Dereferencing a pointer means “go to the address the pointer is pointing at and access the value there”. A null pointer holds a null value, which semantically means the pointer is not pointing at anything. So what value would it access?
+
+>[!Warning]
+>Whenever you are using pointers, you’ll need to be extra careful that your code isn’t dereferencing null or dangling pointers, as this will cause undefined behavior (probably an application crash).
+
+---
+### Checking for null pointers
+
+Much like we can use a conditional to test Boolean values for `true` or `false`, we can use a conditional to test whether a pointer has value `nullptr` or not:
+
+```cpp
+#include <iostream>
+
+int main()
+{
+    int x { 5 };
+    int* ptr { &x };
+
+    if (ptr == nullptr) // explicit test for equivalence
+        std::cout << "ptr is null\n";
+    else
+        std::cout << "ptr is non-null\n";
+
+    int* nullPtr {};
+    std::cout << "nullPtr is " << (nullPtr==nullptr ? "null\n" : "non-null\n"); // explicit test for equivalence
+
+    return 0;
+}
+```
+
+The above program prints:
+
+ptr is non-null
+nullPtr is null
+
+>In lesson [4.9 -- Boolean values](https://www.learncpp.com/cpp-tutorial/boolean-values/), we noted that integral values will implicitly convert into Boolean values: an integral value of `0` converts to Boolean value `false`, and any other integral value converts to Boolean value `true`.
+
+Similarly, pointers will also implicitly convert to Boolean values: a null pointer converts to Boolean value `false`, and a non-null pointer converts to Boolean value `true`. This allows us to skip explicitly testing for `nullptr` and just use the implicit conversion to Boolean to test whether a pointer is a null pointer. The following program is equivalent to the prior one:
+
+```cpp
+#include <iostream>
+
+int main()
+{
+    int x { 5 };
+    int* ptr { &x };
+
+    // pointers convert to Boolean false if they are null, and Boolean true if they are non-null
+    if (ptr) // implicit conversion to Boolean
+        std::cout << "ptr is non-null\n";
+    else
+        std::cout << "ptr is null\n";
+
+    int* nullPtr {};
+    std::cout << "nullPtr is " << (nullPtr ? "non-null\n" : "null\n"); // implicit conversion to Boolean
+
+    return 0;
+}
+```
+
+>[!Warning]
+>Conditionals can only be used to differentiate null pointers from non-null pointers. There is no convenient way to determine whether a non-null pointer is pointing to a valid object or dangling (pointing to an invalid object).
+
+---
+### Use nullptr to avoid dangling pointers
+
+Use nullptr to avoid dangling pointers
+
+Above, we mentioned that dereferencing a pointer that is either null or dangling will result in undefined behavior. Therefore, we need to ensure our code does not do either of these things.
+
+We can easily avoid dereferencing a null pointer by using a conditional to ensure a pointer is non-null before trying to dereference it:
+
+```cpp
+// Assume ptr is some pointer that may or may not be a null pointer
+if (ptr) // if ptr is not a null pointer
+    std::cout << *ptr << '\n'; // okay to dereference
+else
+    // do something else that doesn't involve dereferencing ptr (print an error message, do nothing at all, etc...)
+```
+
+But what about dangling pointers? Because there is no way to detect whether a pointer is dangling, we need to avoid having any dangling pointers in our program in the first place. We do that by ensuring that any pointer that is not pointing at a valid object is set to `nullptr`.
+
+That way, before dereferencing a pointer, we only need to test whether it is null -- if it is non-null, we assume the pointer is not dangling.
+
+>[!Best Practice]
+>A pointer should either hold the address of a valid object, or be set to nullptr. That way we only need to test pointers for null, and can assume any non-null pointer is valid.
+
+>[!Warning]
+>When an object is destroyed, any pointers to the destroyed object will be left dangling (they will not be automatically set to `nullptr`). It is your responsibility to detect these cases and ensure those pointers are subsequently set to `nullptr`.
+
+---
+### [Both `0` and `NULL` should be avoided in modern C++](https://www.learncpp.com/cpp-tutorial/null-pointers/#:~:text=Legacy%20null%20pointer,part%202)
+
+---
+### Favor references over pointers whenever possible
+
+Pointers and references both give us the ability to access some other object indirectly.
+
+Pointers have the additional abilities of being able to change what they are pointing at, and to be pointed at null. However, these pointer abilities are also inherently dangerous: A null pointer runs the risk of being dereferenced, and the ability to change what a pointer is pointing at can make creating dangling pointers easier:
+
+```cpp
+int main()
+{
+    int* ptr { };
+
+    {
+        int x{ 5 };
+        ptr = &x; // assign the pointer to an object that will be destroyed (not possible with a reference)
+    } // ptr is now dangling and pointing to invalid object
+
+    if (ptr) // condition evaluates to true because ptr is not nullptr
+        std::cout << *ptr; // undefined behavior
+
+    return 0;
+}
+```
+
+Since references can’t be bound to null, we don’t have to worry about null references. And because references must be bound to a valid object upon creation and then can not be reseated, dangling references are harder to create.
+
+Because they are safer, references should be favored over pointers, unless the additional capabilities provided by pointers are required.
+
+>[!Best Practice]
+>Favor references over pointers unless the additional capabilities provided by pointers are needed.
+
+---
+### Why should we set pointers that aren’t pointing to a valid object to ‘nullptr’?
+
+We can not determine whether a non-null pointer is valid or dangling, and accessing a dangling pointer will result in undefined behavior. Therefore, we need to ensure that we do not have any dangling pointers in our program.
+
+If we ensure all pointers are either pointing to valid objects or set to `nullptr`, then we can use a conditional to test for null to ensure we don’t dereference a null pointer, and assume all non-null pointers are pointing to valid objects.
+
+---
