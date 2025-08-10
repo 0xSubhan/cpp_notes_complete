@@ -3447,3 +3447,330 @@ The major disadvantage of return by address is that the caller has to remember t
 Prefer return by reference over return by address unless the ability to return “no object” (using `nullptr`) is important.
 
 ---
+### In parameters
+
+>In most cases, a function parameter is used only to receive an input from the caller. Parameters that are used only for receiving input from the caller are sometimes called **in parameters**.
+
+```cpp
+#include <iostream>
+
+void print(int x) // x is an in parameter
+{
+    std::cout << x << '\n';
+}
+
+void print(const std::string& s) // s is an in parameter
+{
+    std::cout << s << '\n';
+}
+
+int main()
+{
+    print(5);
+    std::string s { "Hello, world!" };
+    print(s);
+
+    return 0;
+}
+```
+
+In-parameters are typically passed by value or by const reference.
+
+---
+### Out parameters
+
+A function argument passed by non-const reference (or by pointer-to-non-const) allows the function to modify the value of an object passed as an argument. This provides a way for a function to return data back to the caller in cases where using a return value is not sufficient for some reason.
+
+>A function parameter that is used only for the purpose of returning information back to the caller is called an **out parameter**.
+
+For example:
+
+```cpp
+#include <cmath>    // for std::sin() and std::cos()
+#include <iostream>
+
+// sinOut and cosOut are out parameters
+void getSinCos(double degrees, double& sinOut, double& cosOut)
+{
+    // sin() and cos() take radians, not degrees, so we need to convert
+    constexpr double pi { 3.14159265358979323846 }; // the value of pi
+    double radians = degrees * pi / 180.0;
+    sinOut = std::sin(radians);
+    cosOut = std::cos(radians);
+}
+
+int main()
+{
+    double sin { 0.0 };
+    double cos { 0.0 };
+
+    double degrees{};
+    std::cout << "Enter the number of degrees: ";
+    std::cin >> degrees;
+
+    // getSinCos will return the sin and cos in variables sin and cos
+    getSinCos(degrees, sin, cos);
+
+    std::cout << "The sin is " << sin << '\n';
+    std::cout << "The cos is " << cos << '\n';
+
+    return 0;
+}
+```
+
+---
+### Out parameters have an unnatural usage syntax
+
+```cpp
+void getByReference(int& x) { x = 5; }
+```
+
+Here, `x` is an out-parameter: the function puts a value in it for the caller.
+
+#### **Why it’s “unnatural” compared to return-by-value**
+
+The author’s point is that **using out-parameters requires extra ceremony from the caller**, unlike return-by-value.
+
+##### **1. Extra variable setup**
+
+If you return by value:
+
+```cpp
+int x{ getByValue() };   // directly initialize
+std::cout << getByValue();
+```
+
+You can:
+
+- Initialize variables in one step
+    
+- Or use the return value directly in an expression
+    
+
+If you use an out-parameter:
+
+```cpp
+int y{};           // must declare a mutable variable first
+getByReference(y); // call function to fill it
+std::cout << y;    // now you can use it
+```
+
+You **can’t**:
+
+- Pass a temporary
+    
+- Skip creating a variable ahead of time
+    
+
+##### **2. No temporaries allowed**
+
+Out-parameters are usually **non-const references**, so:
+
+```cpp
+getByReference(10); // ❌ error — 10 is an rvalue, not an lvalue
+```
+
+You _must_ give it a named, modifiable object — you can’t just say “write it into this temporary value in place”.
+
+##### **3. Less expression-friendly**
+
+Because the out-parameter gets filled during the call, you can’t use it directly inline:
+
+```cpp
+std::cout << getByValue();   // ✅ nice and compact
+std::cout << getByReference(y); // ❌ doesn’t even compile (void return)
+```
+
+You have to break it into:
+
+```cpp
+int y{};
+getByReference(y);
+std::cout << y;
+```
+
+This makes the call feel more “manual” and verbose.
+
+##### **4. No `const` safety**
+
+Since the whole point of an out-parameter is mutation, the caller **can’t** pass a `const` object:
+
+```cpp
+const int z{};
+getByReference(z); // ❌ error — can't write to const
+```
+
+So you lose the ability to enforce immutability.
+
+####  **Why return-by-value feels more natural**
+
+- Lets you write compact, single-line expressions
+    
+- Works with temporaries and constants
+    
+- Cleaner and more composable
+    
+- Allows compiler optimizations like RVO (return value optimization), so there’s usually no performance penalty
+
+---
+### Out-parameters by reference don’t make it obvious the arguments will be modified
+
+When we assign a function’s return value to an object, it is clear that the value of the object is being modified:
+
+```cpp
+x = getByValue(); // obvious that x is being modified
+```
+
+This is good, as it makes it clear that we should expect the value of `x` to change.
+
+However, let’s take a look at the function call to `getSinCos()` in the example above again:
+
+```cpp
+getSinCos(degrees, sin, cos);
+```
+
+It is not clear from this function call that `degrees` is an in parameter, but `sin` and `cos` are out-parameters. If the caller does not realize that `sin` and `cos` will be modified, a semantic error will likely result.
+
+Using pass by address instead of pass by reference can in some case help make out-parameters more obvious by requiring the caller to pass in the address of objects as arguments.
+
+Consider the following example:
+
+```cpp
+void foo1(int x);  // pass by value
+void foo2(int& x); // pass by reference
+void foo3(int* x); // pass by address
+
+int main()
+{
+    int i{};
+
+    foo1(i);  // can't modify i
+    foo2(i);  // can modify i (not obvious)
+    foo3(&i); // can modify i
+
+    int *ptr { &i };
+    foo3(ptr); // can modify i (not obvious)
+
+    return 0;
+}
+```
+
+Notice that in the call to `foo3(&i)`, we have to pass in `&i` rather than `i`, which helps make it clearer that we should expect `i` to be modified.
+
+However, this is not fool-proof, as `foo3(ptr)` allows `foo3()` to modify `i` and does not require the caller to take the address-of `ptr`.
+
+The caller may also think they can pass in `nullptr` or a null pointer as a valid argument when this is disallowed. And the function is now required to do null pointer checking and handling, which adds more complexity. This need for added null pointer handling often causes more issues than just sticking with pass by reference.
+
+For all of these reasons, out-parameters should be avoided unless no other good options exist.
+
+>[!Best practice]
+Avoid out-parameters (except in the rare case where no better options exist).
+Prefer pass by reference for non-optional out-parameters.
+
+---
+### In/out parameters
+
+In rare cases, a function will actually use the value of an out-parameter before overwriting its value. Such a parameter is called an **in-out parameter**. In-out-parameters work identically to out-parameters and have all the same challenges.
+
+Example:
+
+- **Out-parameter**:  
+    The function **doesn’t care about the initial value** passed in — it just **writes a new value** into it for the caller.
+    
+```cpp
+void getByReference(int& x) { x = 5; } // ignores original value
+```
+    
+- **In-out parameter**:  
+    The function **both reads the current value** _and_ **writes a new value** back into it.
+    
+```cpp
+void doubleAndIncrement(int& x) {
+    x = (x * 2) + 1; // uses old value, then updates
+}
+```
+
+---
+### When to pass by non-const reference
+
+>If you’re going to pass by reference in order to avoid making a copy of the argument, you should almost always pass by const reference.
+
+However, there are two primary cases where pass by non-const reference may be the better choice.
+
+However, there are two primary cases where pass by non-const reference may be the better choice.
+
+First, use pass by non-const reference when a parameter is an in-out-parameter. Since we’re already passing in the object we need back out, it’s often more straightforward and performant to just modify that object.
+
+```cpp
+void someFcn(Foo& inout)
+{
+    // modify inout
+}
+
+int main()
+{
+    Foo foo{};
+    someFcn(foo); // foo modified after this call, may not be obvious
+
+    return 0;
+}
+```
+
+Giving the function a good name can help:
+
+```cpp
+void modifyFoo(Foo& inout)
+{
+    // modify inout
+}
+
+int main()
+{
+    Foo foo{};
+    modifyFoo(foo); // foo modified after this call, slightly more obvious
+
+    return 0;
+}
+```
+
+The alternative is to pass the object by value or const reference instead (as per usual) and return a new object by value, which the caller can then assign back to the original object:
+
+```cpp
+Foo someFcn(const Foo& in)
+{
+    Foo foo { in }; // copy here
+    // modify foo
+    return foo;
+}
+
+int main()
+{
+    Foo foo{};
+    foo = someFcn(foo); // makes it obvious foo is modified, but another copy made here
+
+    return 0;
+}
+```
+
+This has the benefit of using a more conventional return syntax, but requires making 2 extra copies (sometimes the compiler can optimize one of these copies away).
+
+Second, use pass by non-const reference when a function would otherwise return an object by value to the caller, but making a copy of that object is _extremely_ expensive. Especially if the function is called many times in a performance-critical section of code.
+
+```cpp
+void generateExpensiveFoo(Foo& out)
+{
+    // modify out
+}
+
+int main()
+{
+    Foo foo{};
+    generateExpensiveFoo(foo); // foo modified after this call
+
+    return 0;
+}
+```
+
+>That said, objects are rarely so expensive to copy that resorting to non-conventional methods of returning those objects is worthwhile.
+
+---
