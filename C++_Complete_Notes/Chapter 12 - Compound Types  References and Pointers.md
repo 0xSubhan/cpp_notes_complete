@@ -2334,5 +2334,367 @@ int main()
 ```
 
 ---
+### Pass by address
 
+C++ provides a third way to pass values to a function, called pass by address. With **pass by address**, instead of providing an object as an argument, the caller provides an object’s _address_ (via a pointer). This pointer (holding the address of the object) is copied into a pointer parameter of the called function (which now also holds the address of the object). The function can then dereference that pointer to access the object whose address was passed.
 
+Here’s a version of the above program that adds a pass by address variant:
+
+```cpp
+#include <iostream>
+#include <string>
+
+void printByValue(std::string val) // The function parameter is a copy of str
+{
+    std::cout << val << '\n'; // print the value via the copy
+}
+
+void printByReference(const std::string& ref) // The function parameter is a reference that binds to str
+{
+    std::cout << ref << '\n'; // print the value via the reference
+}
+
+void printByAddress(const std::string* ptr) // The function parameter is a pointer that holds the address of str
+{
+    std::cout << *ptr << '\n'; // print the value via the dereferenced pointer
+}
+
+int main()
+{
+    std::string str{ "Hello, world!" };
+
+    printByValue(str); // pass str by value, makes a copy of str
+    printByReference(str); // pass str by reference, does not make a copy of str
+    printByAddress(&str); // pass str by address, does not make a copy of str
+
+    return 0;
+}
+```
+
+Note how similar all three of these versions are. Let’s explore the pass by address version in more detail.
+
+First, because we want our `printByAddress()` function to use pass by address, we’ve made our function parameter a pointer named `ptr`. Since `printByAddress()` will use `ptr` in a read-only manner, `ptr` is a pointer to a const value.
+
+```cpp
+void printByAddress(const std::string* ptr)
+{
+    std::cout << *ptr << '\n'; // print the value via the dereferenced pointer
+}
+```
+
+Inside the `printByAddress()` function, we dereference `ptr` parameter to access the value of the object being pointed to.
+
+Second, when the function is called, we can’t just pass in the `str` object -- we need to pass in the address of `str`. The easiest way to do that is to use the address-of operator (&) to get a pointer holding the address of `str`:
+
+```cpp
+printByAddress(&str); // use address-of operator (&) to get pointer holding address of str
+```
+
+When this call is executed, `&str` will create a pointer holding the address of `str`. This address is then copied into function parameter `ptr` as part of the function call. Because `ptr` now holds the address of `str`, when the function dereferences `ptr`, it will get the value of `str`, which the function prints to the console.
+
+That’s it.
+
+Although we use the address-of operator in the above example to get the address of `str`, if we already had a pointer variable holding the address of `str`, we could use that instead:
+
+```cpp
+int main()
+{
+    std::string str{ "Hello, world!" };
+
+    printByValue(str); // pass str by value, makes a copy of str
+    printByReference(str); // pass str by reference, does not make a copy of str
+    printByAddress(&str); // pass str by address, does not make a copy of str
+
+    std::string* ptr { &str }; // define a pointer variable holding the address of str
+    printByAddress(ptr); // pass str by address, does not make a copy of str
+
+    return 0;
+}
+```
+
+---
+### Pass by address does not make a copy of the object being pointed to
+
+Consider the following statements:
+
+```cpp
+std::string str{ "Hello, world!" };
+printByAddress(&str); // use address-of operator (&) to get pointer holding address of str
+```
+
+As we noted in [12.5 -- Pass by lvalue reference](https://www.learncpp.com/cpp-tutorial/pass-by-lvalue-reference/), copying a `std::string` is expensive, so that’s something we want to avoid. When we pass a `std::string` by address, we’re not copying the actual `std::string` object -- we’re just copying the pointer (holding the address of the object) from the caller to the called function. Since an address is typically only 4 or 8 bytes, a pointer is only 4 or 8 bytes, so copying a pointer is always fast.
+
+Thus, just like pass by reference, pass by address is fast, and avoids making a copy of the argument object.
+
+---
+### Pass by address allows the function to modify the argument’s value
+
+>When we pass an object by address, the function receives the address of the passed object, which it can access via dereferencing. Because this is the address of the actual argument object being passed (not a copy of the object), if the function parameter is a pointer to non-const, the function can modify the argument via the pointer parameter:
+
+```cpp
+#include <iostream>
+
+void changeValue(int* ptr) // note: ptr is a pointer to non-const in this example
+{
+    *ptr = 6; // change the value to 6
+}
+
+int main()
+{
+    int x{ 5 };
+
+    std::cout << "x = " << x << '\n';
+
+    changeValue(&x); // we're passing the address of x to the function
+
+    std::cout << "x = " << x << '\n';
+
+    return 0;
+}
+```
+x = 5
+x = 6
+
+#### 1. **Two different uses of `const` with pointers**
+
+When you see `const` in a pointer parameter, it can mean two very different things depending on its position:
+
+##### **A. `const` before the type → "pointer-to-const"**
+
+```cpp
+void changeValue(const int* ptr);
+```
+
+- Here, `ptr` points to a **const int**.
+    
+- You **cannot modify** the value being pointed to (`*ptr` is read-only inside the function).
+    
+- The **caller** knows their passed-in variable **won’t be changed** by the function.
+    
+- **Significant** because it affects how the function can interact with the caller’s data.
+    
+
+#####  **B. `const` after the `*` → "const pointer"**
+
+```cpp
+void changeValue(int* const ptr);
+```
+
+- Here, `ptr` itself **cannot be changed** to point somewhere else inside the function.
+    
+- But the value pointed to (`*ptr`) **can still be changed**.
+    
+- **No impact on the caller** — this only matters to the function implementation.
+    
+- Mostly just a **self-reminder/documentation** for the implementer.
+    
+- Often considered **noise** unless there's a very specific reason to enforce that the pointer won't be reassigned.
+    
+
+#### 2. **Why pointer-to-const is preferred**
+
+If your function is **not supposed to modify** the data being pointed to, making it `pointer-to-const`:
+
+- Prevents accidental modification.
+    
+- Communicates the contract to the caller.
+    
+- Example:
+    
+
+```cpp
+void printArray(const int* arr, int size); // clearly read-only
+```
+
+#### 3. **Why const-pointer parameters are usually avoided**
+
+If you start using `const` for **const pointers** everywhere, it becomes harder to visually spot the important case: pointer-to-const.
+
+Example from your snippet:
+
+```cpp
+void foo(const char* source, char* dest, int count);
+```
+
+- Easy to see:
+    
+    - `source` is **pointer-to-const char** (read-only)
+        
+    - `dest` is **pointer-to-non-const char** (can be modified)
+        
+
+Now compare:
+
+```cpp
+void foo(const char* const source, char* const dest, int count);
+```
+
+- Both parameters have `const` in them, but:
+    
+    - `source` is **const pointer to const char** (read-only data, pointer itself fixed)
+        
+    - `dest` is **const pointer to non-const char** (can still modify data!)  
+        That subtlety can be **easy to miss**.
+        
+
+This is why adding `const` to the pointer itself often makes code harder to read without providing real benefit.
+
+>[!Best Practice]
+>Prefer pointer-to-const function parameters over pointer-to-non-const function parameters, unless the function needs to modify the object passed in.  
+Do not make function parameters const pointers unless there is some specific reason to do so.
+
+---
+### Null checking
+
+Now consider this fairly innocent looking program:
+
+```cpp
+#include <iostream>
+
+void print(int* ptr)
+{
+	std::cout << *ptr << '\n';
+}
+
+int main()
+{
+	int x{ 5 };
+	print(&x);
+
+	int* myPtr {};
+	print(myPtr);
+
+	return 0;
+}
+```
+
+When this program is run, it will print the value `5` and then most likely crash.
+
+In the call to `print(myPtr)`, `myPtr` is a null pointer, so function parameter `ptr` will also be a null pointer. When this null pointer is dereferenced in the body of the function, undefined behavior results.
+
+When passing a parameter by address, care should be taken to ensure the pointer is not a null pointer before you dereference the value. One way to do that is to use a conditional statement:
+
+```cpp
+#include <iostream>
+
+void print(int* ptr)
+{
+    if (ptr) // if ptr is not a null pointer
+    {
+        std::cout << *ptr << '\n';
+    }
+}
+
+int main()
+{
+	int x{ 5 };
+
+	print(&x);
+	print(nullptr);
+
+	return 0;
+}
+```
+
+In the above program, we’re testing `ptr` to ensure it is not null before we dereference it. While this is fine for such a simple function, in more complicated functions this can result in redundant logic (testing if ptr is not null multiple times) or nesting of the primary logic of the function (if contained in a block).
+
+In most cases, it is more effective to do the opposite: test whether the function parameter is null as a precondition ([9.6 -- Assert and static_assert](https://www.learncpp.com/cpp-tutorial/assert-and-static_assert/)) and handle the negative case immediately:
+
+```cpp
+#include <iostream>
+
+void print(int* ptr)
+{
+    if (!ptr) // if ptr is a null pointer, early return back to the caller
+        return;
+
+    // if we reached this point, we can assume ptr is valid
+    // so no more testing or nesting required
+
+    std::cout << *ptr << '\n';
+}
+
+int main()
+{
+	int x{ 5 };
+
+	print(&x);
+	print(nullptr);
+
+	return 0;
+}
+```
+
+If a null pointer should never be passed to the function, an `assert` (which we covered in lesson [9.6 -- Assert and static_assert](https://www.learncpp.com/cpp-tutorial/assert-and-static_assert/)) can be used instead (or also) (as asserts are intended to document things that should never happen):
+
+```cpp
+#include <iostream>
+#include <cassert>
+
+void print(const int* ptr) // now a pointer to a const int
+{
+	assert(ptr); // fail the program in debug mode if a null pointer is passed (since this should never happen)
+
+	// (optionally) handle this as an error case in production mode so we don't crash if it does happen
+	if (!ptr)
+		return;
+
+	std::cout << *ptr << '\n';
+}
+
+int main()
+{
+	int x{ 5 };
+
+	print(&x);
+	print(nullptr);
+
+	return 0;
+}
+```
+
+---
+### Prefer pass by (const) reference
+
+Note that function `print()` in the example above doesn’t handle null values very well -- it effectively just aborts the function. Given this, why allow a user to pass in a null value at all? Pass by reference has the same benefits as pass by address without the risk of inadvertently dereferencing a null pointer.
+
+Pass by const reference has a few other advantages over pass by address.
+
+First, because an object being passed by address must have an address, only lvalues can be passed by address (as rvalues don’t have addresses). Pass by const reference is more flexible, as it can accept lvalues and rvalues:
+
+```cpp
+#include <iostream>
+
+void printByValue(int val) // The function parameter is a copy of the argument
+{
+    std::cout << val << '\n'; // print the value via the copy
+}
+
+void printByReference(const int& ref) // The function parameter is a reference that binds to the argument
+{
+    std::cout << ref << '\n'; // print the value via the reference
+}
+
+void printByAddress(const int* ptr) // The function parameter is a pointer that holds the address of the argument
+{
+    std::cout << *ptr << '\n'; // print the value via the dereferenced pointer
+}
+
+int main()
+{
+    printByValue(5);     // valid (but makes a copy)
+    printByReference(5); // valid (because the parameter is a const reference)
+    printByAddress(&5);  // error: can't take address of r-value
+
+    return 0;
+}
+```
+
+Second, the syntax for pass by reference is natural, as we can just pass in literals or objects. With pass by address, our code ends up littered with ampersands (&) and asterisks (*).
+
+In modern C++, most things that can be done with pass by address are better accomplished through other methods. Follow this common maxim: “Pass by reference when you can, pass by address when you must”.
+
+>[!Best Practice]
+>Prefer pass by reference to pass by address unless you have a specific reason to use pass by address.
+
+---
