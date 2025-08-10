@@ -2698,3 +2698,198 @@ In modern C++, most things that can be done with pass by address are better acco
 >Prefer pass by reference to pass by address unless you have a specific reason to use pass by address.
 
 ---
+### Pass by address for “optional” arguments
+
+One of the more common uses for pass by address is to allow a function to accept an “optional” argument. This is easier to illustrate by example than to describe:
+
+```cpp
+#include <iostream>
+
+void printIDNumber(const int *id=nullptr)
+{
+    if (id)
+        std::cout << "Your ID number is " << *id << ".\n";
+    else
+        std::cout << "Your ID number is not known.\n";
+}
+
+int main()
+{
+    printIDNumber(); // we don't know the user's ID yet
+
+    int userid { 34 };
+    printIDNumber(&userid); // we know the user's ID now
+
+    return 0;
+}
+```
+
+This example prints:
+
+Your ID number is not known.
+Your ID number is 34.
+
+In this program, the `printIDNumber()` function has one parameter that is passed by address and defaulted to `nullptr`. Inside `main()`, we call this function twice. The first call, we don’t know the user’s ID, so we call `printIDNumber()` without an argument. The `id` parameter defaults to `nullptr`, and the function prints `Your ID number is not known.`. For the second call, we now have a valid id, so we call `printIDNumber(&userid)`. The `id` parameter receives the address of `userid`, so the function prints `Your ID number is 34.`.
+
+However, in many cases, function overloading is a better alternative to achieve the same result.
+
+---
+### Changing what a pointer parameter points at
+
+When we pass an address to a function, that address is copied from the argument into the pointer parameter (which is fine, because copying an address is fast). Now consider the following program:
+
+```cpp
+#include <iostream>
+
+// [[maybe_unused]] gets rid of compiler warnings about ptr2 being set but not used
+void nullify([[maybe_unused]] int* ptr2)
+{
+    ptr2 = nullptr; // Make the function parameter a null pointer
+}
+
+int main()
+{
+    int x{ 5 };
+    int* ptr{ &x }; // ptr points to x
+
+    std::cout << "ptr is " << (ptr ? "non-null\n" : "null\n");
+
+    nullify(ptr);
+
+    std::cout << "ptr is " << (ptr ? "non-null\n" : "null\n");
+    return 0;
+}
+```
+
+This program prints:
+
+ptr is non-null
+ptr is non-null
+
+As you can see, changing the address held by the pointer parameter had no impact on the address held by the argument (`ptr` still points at `x`). When function `nullify()` is called, `ptr2` receives a copy of the address passed in (in this case, the address held by `ptr`, which is the address of `x`). When the function changes what `ptr2` points at, this only affects the copy held by `ptr2`.
+
+So what if we want to allow a function to change what a pointer argument points to?
+
+---
+### Pass by address… by reference?
+
+Yup, it’s a thing. Just like we can pass a normal variable by reference, we can also pass pointers by reference. Here’s the same program as above with `ptr2` changed to be a reference to an address:
+
+```cpp
+#include <iostream>
+
+void nullify(int*& refptr) // refptr is now a reference to a pointer
+{
+    refptr = nullptr; // Make the function parameter a null pointer
+}
+
+int main()
+{
+    int x{ 5 };
+    int* ptr{ &x }; // ptr points to x
+
+    std::cout << "ptr is " << (ptr ? "non-null\n" : "null\n");
+
+    nullify(ptr);
+
+    std::cout << "ptr is " << (ptr ? "non-null\n" : "null\n");
+    return 0;
+}
+```
+
+This program prints:
+
+ptr is non-null
+ptr is null
+
+Because `refptr` is now a reference to a pointer, when `ptr` is passed as an argument, `refptr` is bound to `ptr`. This means any changes to `refptr` are made to `ptr`.
+
+---
+### [Why using `0` or `NULL` is no longer preferred (optional)](https://www.learncpp.com/cpp-tutorial/pass-by-address-part-2/#:~:text=In%20this%20subsection,a%20pointer%20type.)
+
+---
+### [std::nullptr_t (optional)](https://www.learncpp.com/cpp-tutorial/pass-by-address-part-2/#:~:text=Since%20nullptr%20can,just%20in%20case.)
+
+---
+### There is only pass by value under the hood
+
+#### 1. **The normal picture**
+
+In C++, we talk about:
+
+- **Pass by value** → function gets its own copy of the argument
+    
+- **Pass by reference** → function gets an alias to the caller’s variable
+    
+- **Pass by address** → function gets a pointer to the caller’s variable
+    
+
+At the language level, these _feel_ different.  
+But under the hood, the CPU doesn’t think in “references” — it only moves **values** around.
+
+#### 2. **What’s really going on**
+
+A CPU register or stack slot just stores **bits**.  
+When you pass anything to a function, the function parameter is **assigned** some bits — always a copy.
+
+##### A. Pass-by-value
+
+```cpp
+`void foo(int x) { x = 10; } int main() {     int a = 5;     foo(a); // copy of a into x }`
+```
+
+- The integer value `5` is copied into parameter `x`.
+    
+- Changes to `x` don’t affect `a` because they’re different memory locations.
+    
+
+##### B. Pass-by-address (pointer)
+
+```cpp
+`void foo(int* p) { *p = 10; } int main() {     int a = 5;     foo(&a); // copy of address of a into p }`
+```
+
+- The **address** of `a` (e.g., `0x7ffe...`) is **copied** into parameter `p`.
+    
+- Because `p` stores `a`’s location, dereferencing `*p` changes the caller’s variable.
+    
+- The pointer itself is **still passed by value** — just the _value happens to be an address_.
+    
+
+##### C. Pass-by-reference
+
+```cpp
+`void foo(int& r) { r = 10; } int main() {     int a = 5;     foo(a); // compiler secretly passes &a }`
+```
+
+- A reference in C++ is _usually_ implemented internally as a pointer that the compiler hides from you.
+    
+- Under the hood, the compiler takes the **address of `a`** and **passes it by value** to the function.
+    
+- Inside `foo`, `r` is just an alias for whatever the pointer points to.
+    
+
+#### 3. **So why “everything is pass-by-value” is true**
+
+At the hardware level:
+
+- **Always a copy** is made — either:
+    
+    - A copy of the actual object’s value (pass-by-value), or
+        
+    - A copy of the address pointing to the object (pass-by-address / pass-by-reference).
+        
+- “Pass-by-reference” is just “pass the address by value” + “automatically dereference it whenever used”.
+    
+
+The _difference_ between these mechanisms is **what that copied value represents** and whether the function can use it to affect the caller’s data.
+
+#### 4. **Key takeaway**
+
+- **Pass-by-value**: copy of the actual data → can’t modify caller’s variable.
+    
+- **Pass-by-address**: copy of the variable’s address → can modify caller’s variable by dereferencing.
+    
+- **Pass-by-reference**: compiler-generated pass-by-address that looks like you’re working directly with the original variable.
+
+---
