@@ -2893,3 +2893,557 @@ The _difference_ between these mechanisms is **what that copied value represents
 - **Pass-by-reference**: compiler-generated pass-by-address that looks like you’re working directly with the original variable.
 
 ---
+### Return by reference and return by address
+
+>when returning by value: a copy of the return value is passed back to the caller. If the return type of the function is a class type, this can be expensive.
+
+```cpp
+std::string returnByValue(); // returns a copy of a std::string (expensive)
+```
+
+### Return by reference
+
+>In cases where we’re passing a class type back to the caller, we may (or may not) want to return by reference instead. **Return by reference** returns a reference that is bound to the object being returned, which avoids making a copy of the return value. To return by reference, we simply define the return value of the function to be a reference type:
+
+```cpp
+std::string&       returnByReference(); // returns a reference to an existing std::string (cheap)
+const std::string& returnByReferenceToConst(); // returns a const reference to an existing std::string (cheap)
+```
+
+Here is an academic program to demonstrate the mechanics of return by reference:
+
+```cpp
+#include <iostream>
+#include <string>
+
+const std::string& getProgramName() // returns a const reference
+{
+    static const std::string s_programName { "Calculator" }; // has static duration, destroyed at end of program
+
+    return s_programName;
+}
+
+int main()
+{
+    std::cout << "This program is named " << getProgramName();
+
+    return 0;
+}
+```
+
+This program prints:
+
+This program is named Calculator
+
+Because `getProgramName()` returns a const reference, when the line `return s_programName` is executed, `getProgramName()` will return a const reference to `s_programName` (thus avoiding making a copy). That const reference can then be used by the caller to access the value of `s_programName`, which is printed.
+
+---
+### The object being returned by reference must exist after the function returns
+
+>Using return by reference has one major caveat: the programmer _must_ be sure that the object being referenced outlives the function returning the reference. Otherwise, the reference being returned will be left dangling (referencing an object that has been destroyed), and use of that reference will result in undefined behavior.
+
+In the program above, because `s_programName` has static duration, `s_programName` will exist until the end of the program. When `main()` accesses the returned reference, it is actually accessing `s_programName`, which is fine, because `s_programName` won’t be destroyed until later.
+
+Now let’s modify the above program to show what happens in the case where our function returns a dangling reference:
+
+```cpp
+#include <iostream>
+#include <string>
+
+const std::string& getProgramName()
+{
+    const std::string programName { "Calculator" }; // now a non-static local variable, destroyed when function ends
+
+    return programName;
+}
+
+int main()
+{
+    std::cout << "This program is named " << getProgramName(); // undefined behavior
+
+    return 0;
+}
+```
+
+>[!Warning]
+>Objects returned by reference must live beyond the scope of the function returning the reference, or a dangling reference will result. Never return a (non-static) local variable or temporary by reference.
+
+---
+### Lifetime extension doesn’t work across function boundaries
+
+####  **1. What lifetime extension normally does**
+
+Normally, when you bind a **const reference** directly to a **temporary**, the compiler extends the lifetime of that temporary until the reference goes out of scope.
+
+Example:
+
+```cpp
+const int& ref = 5; // temporary int(5) lives as long as ref
+```
+
+Here:
+
+- Compiler creates a temporary holding `5`.
+    
+- `ref` binds directly to that temporary.
+    
+- Lifetime is extended to match `ref`’s lifetime → safe.
+    
+
+#### **2. Why it fails across function boundaries**
+
+When you introduce a **function call** in between, the binding is no longer direct.
+
+Example:
+
+```cpp
+const int& returnByConstReference() {
+    return 5; // const ref to a temporary
+}
+
+const int& ref = returnByConstReference(); // looks similar, but...
+```
+
+What actually happens:
+
+1. Inside `returnByConstReference()`:
+    
+    - A temporary holding `5` is created.
+        
+    - A const reference binds to it.
+        
+    - **Lifetime extension applies here** — but only _inside the function_.
+        
+2. When the function returns:
+    
+    - The temporary is destroyed (end of function scope).
+        
+    - The returned reference is now **dangling**.
+        
+3. Caller binds this dangling reference to `ref` — too late to save it.
+    
+
+The rule:
+
+> Lifetime extension **only applies at the point of the original binding**.  
+> If you “bounce” the reference through a function, it’s not considered the same binding anymore.
+
+#### **3. The indirect binding trap**
+
+Your second example shows the subtle version:
+
+```cpp
+const int& returnByConstReference(const int& ref) {
+    return ref;
+}
+
+const int& ref2 = returnByConstReference(5); // dangling!
+```
+
+- Temporary `int(5)` is created in the caller.
+    
+- It’s bound to the parameter `ref` **inside the function** → lifetime extension happens _inside_ the function.
+    
+- When the function ends, the parameter `ref` goes out of scope → temporary destroyed.
+    
+- The caller gets a dangling reference.
+    
+
+It’s _indirect_ because:
+
+```sql
+temporary → parameter (in function) → returned reference → new variable in caller
+```
+
+Lifetime extension **only works for**:
+
+```bash
+temporary → reference (direct in caller scope)
+```
+
+Example:
+
+```cpp
+#include <iostream>
+
+const int& returnByConstReference(const int& ref)
+{
+    return ref;
+}
+
+int main()
+{
+    // case 1: direct binding
+    const int& ref1 { 5 }; // extends lifetime
+    std::cout << ref1 << '\n'; // okay
+
+    // case 2: indirect binding
+    const int& ref2 { returnByConstReference(5) }; // binds to dangling reference
+    std::cout << ref2 << '\n'; // undefined behavior
+
+    return 0;
+}
+```
+
+>In case 2, a temporary object is created to hold value `5`, which function parameter `ref` binds to. The function just returns this reference back to the caller, which then uses the reference to initialize `ref2`. Because this is not a direct binding to the temporary object (as the refrence was bounced through a function), lifetime extension doesn’t apply. This leaves `ref2` dangling, and its subsequent use is undefined behavior.
+
+>[!Warning]
+>Reference lifetime extension does not work across function boundaries.
+
+---
+### Don’t return non-const static local variables by reference
+
+>In the original example above, we returned a const static local variable by reference to illustrate the mechanics of return by reference in a simple way. However, returning non-const static local variables by reference is fairly non-idiomatic, and should generally be avoided. Here’s a simplified example that illustrates one such problem that can occur:
+
+```cpp
+#include <iostream>
+#include <string>
+
+const int& getNextId()
+{
+    static int s_x{ 0 }; // note: variable is non-const
+    ++s_x; // generate the next id
+    return s_x; // and return a reference to it
+}
+
+int main()
+{
+    const int& id1 { getNextId() }; // id1 is a reference
+    const int& id2 { getNextId() }; // id2 is a reference
+
+    std::cout << id1 << id2 << '\n';
+
+    return 0;
+}
+```
+
+This program prints:
+
+22
+
+This happens because `id1` and `id2` are referencing the same object (the static variable `s_x`), so when anything (e.g. `getNextId()`) modifies that value, all references are now accessing the modified value.
+
+This above example can be fixed by making `id1` and `id2` normal variables (rather than references) so they save a copy of the return value rather than a reference to `s_x`.
+
+>Here’s another example with a less obvious version of the same problem:
+
+```cpp
+#include <iostream>
+#include <string>
+#include <string_view>
+
+std::string& getName()
+{
+    static std::string s_name{};
+    std::cout << "Enter a name: ";
+    std::cin >> s_name;
+    return s_name;
+}
+
+void printFirstAlphabetical(const std::string& s1, const std::string& s2)
+{
+    if (s1 < s2)
+        std::cout << s1 << " comes before " << s2 << '\n';
+    else
+        std::cout << s2 << " comes before " << s1 << '\n';
+}
+
+int main()
+{
+    printFirstAlphabetical(getName(), getName());
+
+    return 0;
+}
+```
+
+Here’s the result from one run of this program:
+
+Enter a name: Dave
+Enter a name: Stan
+Stan comes before Stan
+
+In this example, `getName()` returns a reference to static local `s_name`. Initializing a `const std::string&` with a reference to `s_name` causes that `std::string&` to bind to `s_name` (not make a copy of it).
+
+Thus, both `s1` and `s2` end up viewing `s_name` (which was assigned the last name we entered).
+
+Note that if we use `std::string_view` parameters instead, the first `std::string_view` parameter will be invalidated when the underlying `std::string` is changed.
+
+>Another issue that commonly occurs with programs that return a non-const static local by reference is that there is no standardized way to reset `s_x` back to the default state. Such programs must either use a non-conventional solution (e.g. a reset function parameter), or can only be reset by quitting and restarting the program.
+
+>[!Best Practice]
+>Avoid returning references to non-const local static variables.
+
+>Returning a const reference to a _const_ local static variable is sometimes done if the local variable being returned by reference is expensive to create and/or initialize (so we don’t have to recreate the variable every function call). But this is rare.
+
+>Returning a const reference to a _const_ global variable is also sometimes done as a way to encapsulate access to a global variable.
+
+---
+### Assigning/initializing a normal variable with a returned reference makes a copy
+
+If a function returns a reference, and that reference is used to initialize or assign to a non-reference variable, the return value will be copied (as if it had been returned by value).
+
+```cpp
+#include <iostream>
+#include <string>
+
+const int& getNextId()
+{
+    static int s_x{ 0 };
+    ++s_x;
+    return s_x;
+}
+
+int main()
+{
+    const int id1 { getNextId() }; // id1 is a normal variable now and receives a copy of the value returned by reference from getNextId()
+    const int id2 { getNextId() }; // id2 is a normal variable now and receives a copy of the value returned by reference from getNextId()
+
+    std::cout << id1 << id2 << '\n';
+
+    return 0;
+}
+```
+
+In the above example, `getNextId()` is returning a reference, but `id1` and `id2` are non-reference variables. In such a case, the value of the returned reference is copied into the normal variable. Thus, this program prints:
+
+12
+
+Also note that if a program returns a dangling reference, the reference is left dangling before the copy is made, which will lead to undefined behavior:
+
+```cpp
+#include <iostream>
+#include <string>
+
+const std::string& getProgramName() // will return a const reference
+{
+    const std::string programName{ "Calculator" };
+
+    return programName;
+}
+
+int main()
+{
+    std::string name { getProgramName() }; // makes a copy of a dangling reference
+    std::cout << "This program is named " << name << '\n'; // undefined behavior
+
+    return 0;
+}
+```
+
+---
+### It’s okay to return reference parameters by reference
+
+>There are quite a few cases where returning objects by reference makes sense, and we’ll encounter many of those in future lessons. However, there is one useful example that we can show now.
+
+If a parameter is passed into a function by reference, it’s safe to return that parameter by reference. This makes sense: in order to pass an argument to a function, the argument must exist in the scope of the caller. When the called function returns, that object must still exist in the scope of the caller.
+
+Here is a simple example of such a function:
+
+```cpp
+#include <iostream>
+#include <string>
+
+// Takes two std::string objects, returns the one that comes first alphabetically
+const std::string& firstAlphabetical(const std::string& a, const std::string& b)
+{
+	return (a < b) ? a : b; // We can use operator< on std::string to determine which comes first alphabetically
+}
+
+int main()
+{
+	std::string hello { "Hello" };
+	std::string world { "World" };
+
+	std::cout << firstAlphabetical(hello, world) << '\n';
+
+	return 0;
+}
+```
+
+This prints:
+
+Hello
+
+In the above function, the caller passes in two std::string objects by const reference, and whichever of these strings comes first alphabetically is passed back by const reference. If we had used pass by value and return by value, we would have made up to 3 copies of std::string (one for each parameter, one for the return value). By using pass by reference/return by reference, we can avoid those copies.
+
+---
+### It’s okay for an rvalue passed by const reference to be returned by const reference
+
+![Ezoic](https://go.ezodn.com/utilcave_com/ezoicbwa.png "ezoic")
+
+When an argument for a const reference parameter is an rvalue, it’s still okay to return that parameter by const reference.
+
+This is because rvalues are not destroyed until the end of the full expression in which they are created.
+
+First, let’s look at this example:
+
+```cpp
+#include <iostream>
+#include <string>
+
+std::string getHello()
+{
+    return "Hello"; // implicit conversion to std::string
+}
+
+int main()
+{
+    const std::string s{ getHello() };
+
+    std::cout << s;
+
+    return 0;
+}
+```
+
+In this case, `getHello()` returns a `std::string` by value, which is an rvalue. This rvalue is then used to initialize `s`. After the initialization of `s`, the expression in which the rvalue was created has finished evaluating, and the rvalue is destroyed.
+
+Now let’s take a look at this similar example:
+
+```cpp
+#include <iostream>
+#include <string>
+
+const std::string& foo(const std::string& s)
+{
+    return s;
+}
+
+std::string getHello()
+{
+    return "Hello"; // implicit conversion to std::string
+}
+
+int main()
+{
+    const std::string s{ foo(getHello()) };
+
+    std::cout << s;
+
+    return 0;
+}
+```
+
+#### Step-by-step (safe case):
+
+**1. `getHello()` runs**
+
+- Creates **temporary std::string("Hello")** — call it `tempHello`.
+    
+
+**2. `foo()` is called**
+
+- `paramRef` (inside `foo`) is bound to `tempHello`.
+    
+- `foo()` returns a reference to `tempHello`.
+    
+
+**3. Back in `main()`**
+
+- The returned reference to `tempHello` is immediately used to **copy-construct** `myString` in `main`.
+    
+- Now `myString` has **its own separate copy** of `"Hello"`.
+    
+
+**4. End of full expression**
+
+- `tempHello` is destroyed here, but `myString` is fine because it’s a separate object with its own storage.
+
+#### ---> Confusion:
+
+#### 1. Inside `foo`
+
+```cpp
+const std::string& foo(const std::string& s)
+{
+    return s;
+}
+```
+
+- `s` is **just a reference variable** — it’s not an object itself.
+    
+- It’s bound to the **temporary object `"Hello"`** created by `getHello()`.
+    
+- When `foo` returns `s`, it’s not returning the `s` variable — it’s returning **the same reference** to `"Hello"`.
+    
+
+#### 2. When `foo` ends
+
+- The parameter variable `s` (the reference itself) goes out of scope.
+    
+- This **does not** destroy `"Hello"` — because references don’t control an object’s lifetime.
+    
+- The temporary `"Hello"` still exists until the **end of the full expression** in `main`.
+    
+
+#### 3. Back in `main`
+
+```cpp
+const std::string str{ foo(getHello()) };
+```
+
+- The returned reference to `"Hello"` is **immediately** used to **copy-construct** `str`.
+    
+- That copy happens **before** the temporary `"Hello"` is destroyed.
+    
+- `"Hello"` is destroyed only after the statement finishes executing — but `str` already has its own independent copy.
+    
+
+#### ✅ So:
+
+- `s` being destroyed **doesn’t matter**, because it’s only a reference — it doesn’t own `"Hello"`.
+    
+- The actual `"Hello"` object stays alive long enough for `main` to copy it.
+
+---
+### The caller can modify values through the reference
+
+>When an argument is passed to a function by non-const reference, the function can use the reference to modify the value of the argument.
+
+Similarly, when a non-const reference is returned from a function, the caller can use the reference to modify the value being returned.
+
+Here’s an illustrative example:
+
+```cpp
+#include <iostream>
+
+// takes two integers by non-const reference, and returns the greater by reference
+int& max(int& x, int& y)
+{
+    return (x > y) ? x : y;
+}
+
+int main()
+{
+    int a{ 5 };
+    int b{ 6 };
+
+    max(a, b) = 7; // sets the greater of a or b to 7
+
+    std::cout << a << b << '\n';
+
+    return 0;
+}
+```
+
+In the above program, `max(a, b)` calls the `max()` function with `a` and `b` as arguments. Reference parameter `x` binds to argument `a`, and reference parameter `y` binds to argument `b`. The function then determines which of `x` (`5`) and `y` (`6`) is greater. In this case, that’s `y`, so the function returns `y` (which is still bound to `b`) back to the caller. The caller then assigns the value `7` to this returned reference.
+
+Therefore, the expression `max(a, b) = 7` effectively resolves to `b = 7`.
+
+This prints:
+
+57
+
+---
+### Return by address
+
+**Return by address** works almost identically to return by reference, except a pointer to an object is returned instead of a reference to an object. Return by address has the same primary caveat as return by reference -- the object being returned by address must outlive the scope of the function returning the address, otherwise the caller will receive a dangling pointer.
+
+The major advantage of return by address over return by reference is that we can have the function return `nullptr` if there is no valid object to return. For example, let’s say we have a list of students that we want to search. If we find the student we are looking for in the list, we can return a pointer to the object representing the matching student. If we don’t find any students matching, we can return `nullptr` to indicate a matching student object was not found.
+
+The major disadvantage of return by address is that the caller has to remember to do a `nullptr` check before dereferencing the return value, otherwise a null pointer dereference may occur and undefined behavior will result. Because of this danger, return by reference should be preferred over return by address unless the ability to return “no object” is needed.
+
+>[!Best practice]
+Prefer return by reference over return by address unless the ability to return “no object” (using `nullptr`) is important.
+
+---
