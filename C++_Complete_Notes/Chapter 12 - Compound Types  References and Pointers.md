@@ -4534,3 +4534,8 @@ int main()
 Prefer function overloading for optional function parameters (when possible). Otherwise, use `std::optional<T>` for optional arguments when `T` would normally be passed by value. Favor `const T*` when `T` is expensive to copy.
 
 ---
+
+ [Complete Summary and quiz](https://www.learncpp.com/cpp-tutorial/chapter-12-summary-and-quiz/)
+
+---
+
