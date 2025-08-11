@@ -4275,3 +4275,262 @@ Type deduction and pointers:
 - Consider using `auto*` over `auto` when deducing a pointer type, as it allows you to explicitly reapply both the top-level and low-level const, and will error if a pointer type is not deduced.
 
 ---
+### **Handling errors when a function can’t compute a valid result**
+
+Sometimes a function cannot handle an error internally (e.g., division by zero) and must signal the error to the caller.
+
+**Traditional approaches:**
+
+1. **Return `bool`** instead of `void` to indicate success/failure.
+    
+2. **Return a sentinel value** — a special value that never occurs naturally in valid results (e.g., `0.0` in a reciprocal function).
+    
+
+**Problems with sentinel values:**
+
+- Caller must know which sentinel means “error” (varies per function).
+    
+- Some functions have no valid sentinel (e.g., `int` division can produce all possible `int` values).
+    
+- **Semipredicate problem:** Sentinel could be a valid result, making success/failure ambiguous.
+    
+
+**Example with sentinel:**
+
+```cpp
+int doIntDivision(int x, int y) {
+    if (y == 0)
+        return std::numeric_limits<int>::lowest(); // sentinel
+    return x / y;
+}
+```
+
+This works but is verbose to check and can be ambiguous.
+
+**Alternatives:**
+
+- **Exceptions** — powerful but may be overkill for simple cases.
+    
+- **Return two values**: a `bool` for success + the result (best approach before C++17).
+    
+
+**C++17 solution:**  
+Use `std::optional<T>` — allows returning “no value” cleanly, avoiding sentinel pitfalls while keeping value semantics.
+
+### Returning a `std::optional`
+
+C++17 introduces `std::optional`, which is a class template type that implements an optional value. That is, a `std::optional<T>` can either have a value of type `T`, or not. We can use this to implement the third option above:
+
+```cpp
+#include <iostream>
+#include <optional> // for std::optional (C++17)
+
+// Our function now optionally returns an int value
+std::optional<int> doIntDivision(int x, int y)
+{
+    if (y == 0)
+        return {}; // or return std::nullopt
+    return x / y;
+}
+
+int main()
+{
+    std::optional<int> result1 { doIntDivision(20, 5) };
+    if (result1) // if the function returned a value
+        std::cout << "Result 1: " << *result1 << '\n'; // get the value
+    else
+        std::cout << "Result 1: failed\n";
+
+    std::optional<int> result2 { doIntDivision(5, 0) };
+
+    if (result2)
+        std::cout << "Result 2: " << *result2 << '\n';
+    else
+        std::cout << "Result 2: failed\n";
+
+    return 0;
+}
+```
+
+This prints:
+
+Result 1: 4
+Result 2: failed
+
+Using `std::optional` is quite easy. We can construct a `std::optional<T>` either with or without a value:
+
+```cpp
+std::optional<int> o1 { 5 };            // initialize with a value
+std::optional<int> o2 {};               // initialize with no value
+std::optional<int> o3 { std::nullopt }; // initialize with no value
+```
+
+To see if a `std::optional` has a value, we can choose one of the following:
+
+```cpp
+if (o1.has_value()) // call has_value() to check if o1 has a value
+if (o2)             // use implicit conversion to bool to check if o2 has a value
+```
+
+To get the value from a `std::optional`, we can choose one of the following:
+
+```cpp
+std::cout << *o1;             // dereference to get value stored in o1 (undefined behavior if o1 does not have a value)
+std::cout << o2.value();      // call value() to get value stored in o2 (throws std::bad_optional_access exception if o2 does not have a value)
+std::cout << o3.value_or(42); // call value_or() to get value stored in o3 (or value `42` if o3 doesn't have a value)
+```
+
+Note that `std::optional` has a usage syntax that is essentially identical to a pointer:
+
+|Behavior|Pointer|`std::optional`|
+|---|---|---|
+|Hold no value|initialize/assign `{}` or `std::nullptr`|initialize/assign `{}` or `std::nullopt`|
+|Hold a value|initialize/assign an address|initialize/assign a value|
+|Check if has value|implicit conversion to bool|implicit conversion to bool or `has_value()`|
+|Get value|dereference|dereference or `value()`|
+
+However, semantically, a pointer and a `std::optional` are quite different.
+
+- A pointer has reference semantics, meaning it references some other object, and assignment copies the pointer, not the object. If we return a pointer by address, the pointer is copied back to the caller, not the object being pointed to. This means we can’t return a local object by address, as we’ll copy that object’s address back to the caller, and then the object will be destroyed, leaving the returned pointer dangling.
+- A `std::optional` has value semantics, meaning it actually contains its value, and assignment copies the value. If we return a `std::optional` by value, the `std::optional` (including the contained value) is copied back to the caller. This means we can return a value from the function back to the caller using `std::optional`.
+
+With this in mind, let’s look at how our example works. Our `doIntDivision()` now returns a `std::optional<int>` instead of an `int`. Inside the function body, if we detect an error, we return `{}`, which implicitly returns a `std::optional` containing no value. If we have a value, we return that value, which implicit returns a `std::optional` containing that value.
+
+Within `main()`, we use an implicit conversion to bool to check if our returned `std::optional` has a value or not. If it does, we dereference the `std::optional` object to get the value. If it doesn’t, then we execute our error condition. That’s it!
+
+---
+### Pros and cons of returning a `std::optional`
+
+Returning a `std::optional` is nice for a number of reasons:
+
+- Using `std::optional` effectively documents that a function may return a value or not.
+- We don’t have to remember which value is being returned as a sentinel.
+- The syntax for using `std::optional` is convenient and intuitive.
+
+Returning a `std::optional` does come with a few downsides:
+
+- We have to make sure the `std::optional` contains a value before getting the value. If we dereference a `std::optional` that does not contain a value, we get undefined behavior.
+- `std::optional` does not provide a way to pass back information about why the function failed.
+
+Unless your function needs to return additional information about why it failed (either to better understand the failure, or to differentiate different kinds of failure), `std::optional` is an excellent choice for functions that may return a value or fail.
+
+>[!Best practice]
+Return a `std::optional` (instead of a sentinel value) for functions that may fail, unless your function needs to return additional information about why it failed.
+
+>`std::expected` (introduced in C++23) is designed to handle the case where a function can return either an expected value or an unexpected error code.
+
+--> We’re dereferencing the `std::optional` because it’s **not** an `int` — it’s a wrapper **that contains** an `int` (or nothing).
+
+Think of `std::optional<int>` like a little box:
+
+- The **box** is the `std::optional`.
+    
+- Inside the box is the actual `int` value.
+    
+- To get at the thing inside, you have to “open the box” — and dereferencing (`*opt`) is one way to do that.
+
+---
+### Using `std::optional` as an optional function parameter
+
+In lesson [12.11 -- Pass by address (part 2)](https://www.learncpp.com/cpp-tutorial/pass-by-address-part-2/), we discussed how pass by address can be used to allow a function to accept an “optional” argument (that is, the caller can either pass in `nullptr` to represent “no argument” or an object). However, one downside of this approach is that a non-nullptr argument must be an lvalue (so that its address can be passed to the function).
+
+Perhaps unsurprisingly (given the name), `std::optional` is an alternative way for a function to accept an optional argument (that is used as an in-parameter only). Instead of this:
+
+```cpp
+#include <iostream>
+
+void printIDNumber(const int *id=nullptr)
+{
+    if (id)
+        std::cout << "Your ID number is " << *id << ".\n";
+    else
+        std::cout << "Your ID number is not known.\n";
+}
+
+int main()
+{
+    printIDNumber(); // we don't know the user's ID yet
+
+    int userid { 34 };
+    printIDNumber(&userid); // we know the user's ID now
+
+    return 0;
+}
+```
+
+You can do this:
+
+```cpp
+#include <iostream>
+#include <optional>
+
+void printIDNumber(std::optional<const int> id = std::nullopt)
+{
+    if (id)
+        std::cout << "Your ID number is " << *id << ".\n";
+    else
+        std::cout << "Your ID number is not known.\n";
+}
+
+int main()
+{
+    printIDNumber(); // we don't know the user's ID yet
+
+    int userid { 34 };
+    printIDNumber(userid); // we know the user's ID now
+
+    printIDNumber(62); // we can also pass an rvalue
+
+    return 0;
+}
+```
+
+There are two advantages to this approach:
+
+1. It effectively documents that the parameter is optional.
+2. We can pass in an rvalue (since `std::optional` will make a copy).
+
+However, because `std::optional` makes a copy of its argument, this becomes problematic when `T` is an expensive-to-copy type (like `std::string`). With normal function parameters, we worked around this by making the parameter a `const lvalue reference`, so that a copy would not be made. Unfortunately, as of C++23 `std::optional` does not support references.
+
+Therefore, we recommend using `std::optional<T>` as an optional parameter only when `T` would normally be passed by value. Otherwise, use `const T*`.
+
+>In many cases, function overloading provides a superior solution:
+
+```cpp
+#include <iostream>
+#include <string>
+
+struct Employee
+{
+    std::string name{}; // expensive to copy
+    int id;
+};
+
+void printEmployeeID()
+{
+    std::cout << "Your ID number is not known.\n";
+}
+
+void printEmployeeID(const Employee& e)
+{
+    std::cout << "Your ID number is " << e.id << ".\n";
+}
+
+int main()
+{
+    printEmployeeID(); // we don't know the Employee yet
+
+    Employee e { "James", 34 };
+    printEmployeeID(e); // we know the Employee's ID now
+
+    printEmployeeID( { "Dave", 62 } ); // we can even pass rvalues
+
+    return 0;
+}
+```
+
+>[!Best Practice]
+>Prefer `std::optional` for optional return types.
+Prefer function overloading for optional function parameters (when possible). Otherwise, use `std::optional<T>` for optional arguments when `T` would normally be passed by value. Favor `const T*` when `T` is expensive to copy.
+
+---
