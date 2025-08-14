@@ -1458,3 +1458,303 @@ int main()
 >In the above solution, we use a series of if-else statements to do string comparisons. If the user’s input string matches an enumerator string, we return the appropriate enumerator. If none of the strings match, we return `{}`, which means “no value”.
 
 ---
+### Scoped enumerations (enum classes)
+
+>Although unscoped enumerations are distinct types in C++, they are not type safe, and in some cases will allow you to do things that don’t make sense. Consider the following case:
+
+```cpp
+#include <iostream>
+
+int main()
+{
+    enum Color
+    {
+        red,
+        blue,
+    };
+
+    enum Fruit
+    {
+        banana,
+        apple,
+    };
+
+    Color color { red };
+    Fruit fruit { banana };
+
+    if (color == fruit) // The compiler will compare color and fruit as integers
+        std::cout << "color and fruit are equal\n"; // and find they are equal!
+    else
+        std::cout << "color and fruit are not equal\n";
+
+    return 0;
+}
+```
+
+This prints:
+
+color and fruit are equal
+
+When `color` and `fruit` are compared, the compiler will look to see if it knows how to compare a `Color` and a `Fruit`. It doesn’t. Next, it will try converting `Color` and/or `Fruit` to integers to see if it can find a match. Eventually the compiler will determine that if it converts both to integers, it can do the comparison. Since `color` and `fruit` are both set to enumerators that convert to integer value `0`, `color` will equal `fruit`.
+
+This doesn’t make sense semantically since `color` and `fruit` are from different enumerations and are not intended to be comparable. With standard enumerators, there’s no easy way to prevent this.
+
+Because of such challenges, as well as the namespace pollution problem (unscoped enumerations defined in the global scope put their enumerators in the global namespace), the C++ designers determined that a cleaner solution for enumerations would be of use.
+
+---
+### Scoped Enumerations
+
+#### 1️⃣ What a **Scoped Enumeration** Is
+
+A **scoped enumeration** (`enum class`) is basically an _enumeration with boundaries_.  
+Compared to old-style (**unscoped**) `enum`, it has two major changes:
+
+1. **No implicit conversion to integers**
+    
+    - In old `enum`, you could treat the values like `int` without asking — which sometimes led to mistakes.
+        
+    - In `enum class`, you must _explicitly_ convert to `int` if you want the numeric value.
+        
+2. **Enumerator names are scoped inside the enum**
+    
+    - In old `enum`, the names (`red`, `blue`) are dumped into the surrounding scope — possibly clashing with other enums.
+        
+    - In `enum class`, the names stay inside the enum’s scope, so you write `Color::red` instead of just `red`.
+
+--> Example:
+
+```cpp
+enum class Color
+{
+    red,
+    blue
+};
+
+enum class Fruit
+{
+    banana,
+    apple
+};
+
+Color color { Color::red };
+Fruit fruit { Fruit::banana };
+```
+
+Here:
+
+- `Color::red` and `Fruit::banana` are **completely separate identifiers**.
+    
+- There’s no accidental conflict — you _must_ qualify them with their enum name.
+
+#### 3️⃣ Why the comparison fails
+
+```cpp
+if (color == fruit) // ❌ compile error
+```
+
+This fails because:
+
+- `color` is type `Color`.
+    
+- `fruit` is type `Fruit`.
+    
+- **They are not interchangeable** — `enum class` values don’t implicitly convert to integers or other enums.
+    
+
+If you _really_ wanted to compare them numerically, you’d have to cast:
+
+```cpp
+if (static_cast<int>(color) == static_cast<int>(fruit)) { ... }
+```
+
+…but that defeats the type-safety benefit.
+
+#### 4️⃣ Why `enum class` exists
+
+It was introduced in **C++11** to fix problems with old enums:
+
+- Old enums could silently convert to `int` and be mixed with unrelated enums, leading to bugs.
+    
+- Old enums polluted the surrounding namespace with their names, making conflicts easy.
+
+>[!As an aside…]
+The `class` keyword (along with the `static` keyword), is one of the most overloaded keywords in the C++ language, and can have different meanings depending on context. Although scoped enumerations use the `class` keyword, they aren’t considered to be a “class type” (which is reserved for structs, classes, and unions).
+`enum struct` also works in this context, and behaves identically to `enum class`. However, use of `enum struct` is non-idiomatic, so avoid its use.
+
+---
+### Scoped enumerations define their own scope regions
+
+>Unlike unscoped enumerations, which place their enumerators in the same scope as the enumeration itself, scoped enumerations place their enumerators _only_ in the scope region of the enumeration. In other words, scoped enumerations act like a namespace for their enumerators. This built-in namespacing helps reduce global namespace pollution and the potential for name conflicts when scoped enumerations are used in the global scope.
+
+To access a scoped enumerator, we do so just as if it was in a namespace having the same name as the scoped enumeration:
+
+```cpp
+#include <iostream>
+
+int main()
+{
+    enum class Color // "enum class" defines this as a scoped enum rather than an unscoped enum
+    {
+        red, // red is considered part of Color's scope region
+        blue,
+    };
+
+    std::cout << red << '\n';        // compile error: red not defined in this scope region
+    std::cout << Color::red << '\n'; // compile error: std::cout doesn't know how to print this (will not implicitly convert to int)
+
+    Color color { Color::blue }; // okay
+
+    return 0;
+}
+```
+
+---
+### Scoped enumerations don’t implicitly convert to integers
+
+#### 1️⃣ Old behavior: unscoped enums
+
+In an **unscoped** enum:
+
+```cpp
+enum Color { red, blue };
+Color c = red;
+int x = c; // ✅ works automatically (implicit conversion)
+```
+
+Here, `red` and `blue` are basically just named integers. They _automatically_ convert to `int` — which is convenient but risky, because:
+
+- You can accidentally mix enums from different categories.
+    
+- You can do nonsensical math like `red + 5`.
+    
+- Name clashes are easier.
+
+#### 2️⃣ Scoped enums block implicit conversion
+
+With a **scoped** enum (`enum class`):
+
+```cpp
+enum class Color { red, blue };
+Color c = Color::red;
+int x = c; // ❌ compile error
+```
+
+- You _must_ explicitly convert if you want the integer value.
+    
+- This **forces you to be intentional** when treating enum values as numbers.
+    
+- You _can still_ compare values from the **same** scoped enum (e.g., `Color::red == Color::blue`), because they’re the same type.
+
+#### 3️⃣ Explicit conversion methods
+
+If you _really_ want the numeric value, you can do it in two main ways:
+
+##### **C++11+** — `static_cast`
+
+```cpp
+std::cout << static_cast<int>(Color::blue); // prints 1
+```
+
+**C++23** — `std::to_underlying()` (cleaner)
+
+```cpp
+#include <utility>
+std::cout << std::to_underlying(Color::blue); // prints 1
+```
+
+`std::to_underlying()` is nicer because:
+
+- It’s self-documenting.
+    
+- It avoids surprises if the underlying type isn’t `int` (could be `unsigned char`, etc.).
+
+#### 4️⃣ Converting integers back to enums
+
+Sometimes you’ll get an `int` from somewhere (like user input) and want to turn it into a scoped enum value:
+
+```cpp
+int input{};
+std::cin >> input;
+Pet pet = static_cast<Pet>(input);
+```
+
+This works, but **be careful** — there’s no automatic range checking.  
+If the user enters `99`, you’ll still get a `Pet` value — it’ll just be invalid.
+
+#### 5️⃣ C++17 shortcut
+
+As of **C++17**, you can directly list-initialize a scoped enum from an integer without `static_cast`:
+
+```cpp
+Pet pet { 1 }; // same as static_cast<Pet>(1)
+```
+
+This is a bit more concise, but explicit `static_cast` can still be clearer in intent
+
+#### 6️⃣ Why use scoped enums
+
+**Benefits:**
+
+- No accidental mixing of unrelated enums.
+    
+- Prevents weird math operations on enums.
+    
+- No name pollution in outer scope.
+    
+- Safer, more readable code.
+    
+
+**Downside:**
+
+- You have to explicitly convert when you _do_ want integer behavior — which can feel tedious in some scenarios (especially for bitmask flags, where unscoped enums are still common).
+
+>[!Best Practice]
+>Use `enum class` by default. Only use unscoped enums when implicit integer conversion is truly needed (like heavy bitmasking or legacy code interop).
+
+---
+### `using enum` statements C++20
+
+>Introduced in C++20, a `using enum` statement imports all of the enumerators from an enum into the current scope. When used with an enum class type, this allows us to access the enum class enumerators without having to prefix each with the name of the enum class.
+
+This can be useful in cases where we would otherwise have many identical, repeated prefixes, such as within a switch statement:
+
+```cpp
+#include <iostream>
+#include <string_view>
+
+enum class Color
+{
+    black,
+    red,
+    blue,
+};
+
+constexpr std::string_view getColor(Color color)
+{
+    using enum Color; // bring all Color enumerators into current scope (C++20)
+    // We can now access the enumerators of Color without using a Color:: prefix
+
+    switch (color)
+    {
+    case black: return "black"; // note: black instead of Color::black
+    case red:   return "red";
+    case blue:  return "blue";
+    default:    return "???";
+    }
+}
+
+int main()
+{
+    Color shirt{ Color::blue };
+
+    std::cout << "Your shirt is " << getColor(shirt) << '\n';
+
+    return 0;
+}
+```
+
+In the above example, `Color` is an enum class, so we normally would access the enumerators using a fully qualified name (e.g. `Color::blue`). However, within function `getColor()`, we’ve added the statement `using enum Color;`, which allows us to access those enumerators without the `Color::` prefix.
+
+This saves us from having multiple, redundant, obvious prefixes inside the switch statement.
+
+---

@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "C++_Complete_Notes/Chapter 06 - Operators.md",
+                "file": "C++_Complete_Notes/Chapter 13 - Compound Types Enums and Structs.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "Chapter 06 - Operators"
+              "title": "Chapter 13 - Compound Types Enums and Structs"
             }
           }
         ]
@@ -78,7 +78,8 @@
       }
     ],
     "direction": "horizontal",
-    "width": 300
+    "width": 300,
+    "collapsed": true
   },
   "right": {
     "id": "a90c9f7febfb8538",
@@ -171,6 +172,7 @@
   },
   "active": "f57afa3d5d6975e1",
   "lastOpenFiles": [
+    "C++_Complete_Notes/Chapter 06 - Operators.md",
     "C++_Complete_Notes/Chapter 04 - Fundamental Data Types.md",
     "C++_Complete_Notes/Chapter 03 - Debugging C++ Programs.md",
     "C++_Complete_Notes/Chapter 01 - Basics.md",
@@ -178,7 +180,6 @@
     "C++_Complete_Notes/Chapter 09 - Error Detection and Handling.md",
     "C++_Complete_Notes/Chapter 08 - Control Flow.md",
     "C++_Complete_Notes/Chapter 07 - Scope, Duration, and Linkage.md",
-    "C++_Complete_Notes/Chapter 06 - Operators.md",
     "C++_Complete_Notes/Chapter 05 - Constants and Strings.md",
     "C++_Complete_Notes/Chapter 02 - C++ Basics  Functions and Files.md",
     "C++_Complete_Notes/Chapter 13 - Compound Types Enums and Structs.md",
