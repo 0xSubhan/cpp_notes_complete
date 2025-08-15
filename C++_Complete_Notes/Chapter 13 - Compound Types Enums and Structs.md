@@ -2344,3 +2344,211 @@ Employee joe {}; // value-initialize all members
 ```
 
 ---
+### Overloading `operator<<` to print a struct
+
+```cpp
+#include <iostream>
+
+struct Employee
+{
+    int id {};
+    int age {};
+    double wage {};
+};
+
+std::ostream& operator<<(std::ostream& out, const Employee& e)
+{
+    out << "id: " << e.id << " age: " << e.age << " wage: " << e.wage;
+    return out;
+}
+
+int main()
+{
+    Employee joe { 2, 28 }; // joe.wage will be value-initialized to 0.0
+    std::cout << joe << '\n';
+
+    return 0;
+}
+```
+id: 2 age: 28 wage: 0
+
+---
+### Designated initializers C++20
+
+>When initializing a struct from a list of values, the initializers are applied to the members in order of declaration.
+
+```cpp
+struct Foo
+{
+    int a {};
+    int c {};
+};
+
+int main()
+{
+    Foo f { 1, 3 }; // f.a = 1, f.c = 3
+
+    return 0;
+}
+```
+
+Now consider what would happen if you were to update this struct definition to add a new member that is not the last member:
+
+```cpp
+struct Foo
+{
+    int a {};
+    int b {}; // just added
+    int c {};
+};
+
+int main()
+{
+    Foo f { 1, 3 }; // now, f.a = 1, f.b = 3, f.c = 0
+
+    return 0;
+}
+```
+
+Now all your initialization values have shifted, and worse, the compiler may not detect this as an error (after all, the syntax is still valid).
+
+>To help avoid this, C++20 adds a new way to initialize struct members called **designated initializers**. Designated initializers allow you to explicitly define which initialization values map to which members. The members can be initialized using list or copy initialization, and must be initialized in the same order in which they are declared in the struct, otherwise a warning or error will result. Members not designated an initializer will be value initialized.
+
+```cpp
+struct Foo
+{
+    int a{ };
+    int b{ };
+    int c{ };
+};
+
+int main()
+{
+    Foo f1{ .a{ 1 }, .c{ 3 } }; // ok: f1.a = 1, f1.b = 0 (value initialized), f1.c = 3
+    Foo f2{ .a = 1, .c = 3 };   // ok: f2.a = 1, f2.b = 0 (value initialized), f2.c = 3
+    Foo f3{ .b{ 2 }, .a{ 1 } }; // error: initialization order does not match order of declaration in struct
+
+    return 0;
+}
+```
+
+Designated initializers are nice because they provide some level of self-documentation and help ensure you don’t inadvertently mix up the order of your initialization values. However, designated initializers also clutter up the initializer list significantly, so we won’t recommend their use as a best practice at this time.
+
+Also, because there’s no enforcement that designated initializers are being used consistently everywhere an aggregate is initialized, it’s a good idea to avoid adding new members to the middle of an existing aggregate definition, to avoid the risk of initializer shifting.
+
+>[!Best Practice]
+>When adding a new member to an aggregate, it’s safest to add it to the bottom of the definition list so the initializers for other members don’t shift.
+
+---
+### Assignment with an initializer list
+
+As shown in the prior lesson, we can assign values to members of structs individually:
+
+```cpp
+struct Employee
+{
+    int id {};
+    int age {};
+    double wage {};
+};
+
+int main()
+{
+    Employee joe { 1, 32, 60000.0 };
+
+    joe.age  = 33;      // Joe had a birthday
+    joe.wage = 66000.0; // and got a raise
+
+    return 0;
+}
+```
+
+This is fine for single members, but not great when we want to update many members. Similar to initializing a struct with an initializer list, you can also assign values to structs using an initializer list (which does memberwise assignment):
+
+```cpp
+struct Employee
+{
+    int id {};
+    int age {};
+    double wage {};
+};
+
+int main()
+{
+    Employee joe { 1, 32, 60000.0 };
+    joe = { joe.id, 33, 66000.0 }; // Joe had a birthday and got a raise
+
+    return 0;
+}
+```
+
+Note that because we didn’t want to change `joe.id`, we needed to provide the current value for `joe.id` in our list as a placeholder, so that memberwise assignment could assign `joe.id` to `joe.id`. This is a bit ugly.
+
+---
+### Assignment with designated initializers C++20
+
+Designated initializers can also be used in a list assignment:
+
+```cpp
+struct Employee
+{
+    int id {};
+    int age {};
+    double wage {};
+};
+
+int main()
+{
+    Employee joe { 1, 32, 60000.0 };
+    joe = { .id = joe.id, .age = 33, .wage = 66000.0 }; // Joe had a birthday and got a raise
+
+    return 0;
+}
+```
+
+Any members that aren’t designated in such an assignment will be assigned the value that would be used for value initialization. If we hadn’t have specified a designated initializer for `joe.id`, `joe.id` would have been assigned the value 0.
+
+---
+### Initializing a struct with another struct of the same type
+
+A struct may also be initialized using another struct of the same type:
+
+```cpp
+#include <iostream>
+
+struct Foo
+{
+    int a{};
+    int b{};
+    int c{};
+};
+
+std::ostream& operator<<(std::ostream& out, const Foo& f)
+{
+    out << f.a << ' ' << f.b << ' ' << f.c;
+    return out;
+}
+
+int main()
+{
+    Foo foo { 1, 2, 3 };
+
+    Foo x = foo; // copy-initialization
+    Foo y(foo);  // direct-initialization
+    Foo z {foo}; // direct-list-initialization
+
+    std::cout << x << '\n';
+    std::cout << y << '\n';
+    std::cout << z << '\n';
+
+    return 0;
+}
+```
+
+The above prints:
+
+1 2 3
+1 2 3
+1 2 3
+
+---
