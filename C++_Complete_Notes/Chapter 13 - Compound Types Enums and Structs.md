@@ -1931,3 +1931,416 @@ int main()
 In the above example, it is very easy to tell which member variables belong to Joe and which belong to Frank. This provides a much higher level of organization than individual variables would. Furthermore, because Joe’s and Frank’s members have the same names, this provides consistency when you have multiple variables of the same struct type.
 
 ---
+### Forgotten lesson - Introduction to overloading the I/O operators
+
+==I forget to do this lesson so here:
+
+>Ideally, it would be nice if we could somehow teach `operator<<` to output an enumeration, so we could do something like this: `std::cout << shirt` and have it do what we expect.
+
+#### Introduction to operator overloading
+
+>we introduced function overloading, which allows us to create multiple functions with the same name so long as each function has a unique function prototype. Using function overloading, we can create variations of a function that work with different data types, without having to think up a unique name for each variant.
+
+Similarly, C++ also supports **operator overloading**, which lets us define overloads of existing operators, so that we can make those operators work with our program-defined data types.
+
+Basic operator overloading is fairly straightforward:
+
+- Define a function using the name of the operator as the function’s name.
+- Add a parameter of the appropriate type for each operand (in left-to-right order). One of these parameters must be a user-defined type (a class type or an enumerated type), otherwise the compiler will error.
+- Set the return type to whatever type makes sense.
+- Use a return statement to return the result of the operation.
+
+--> **"Add a parameter of the appropriate type for each operand (in left-to-right order)"?**
+
+Operators act on **operands**.
+
+For example:
+
+```cpp
+x + y
+```
+
+- **Left operand** = `x`
+    
+- **Right operand** = `y`
+    
+
+When you overload an operator as a **non-member function**, the operands become parameters in **that same left-to-right order**:
+
+```cpp
+Vector operator+(const Vector& left, const Vector& right);
+```
+
+Here:
+
+- `left` → corresponds to `x` in `x + y`
+    
+- `right` → corresponds to `y` in `x + y`
+
+>When the compiler encounters the use of an operator in an expression and one or more of the operands is a user-defined type, the compiler will check to see if there is an overloaded operator function that it can use to resolve that call. For example, given some expression `x + y`, the compiler will use function overload resolution to see if there is an `operator+(x, y)` function call that it can use to evaluate the operation. If a non-ambiguous `operator+` function can be found, it will be called, and the result of the operation returned as the return value.
+
+#### Overloading `operator<<` to print an enumerator
+
+##### 1. **How `operator<<` works normally**
+
+When you write:
+
+```cpp
+std::cout << 5;
+```
+
+- `std::cout` is a `std::ostream` object (a user-defined type in the standard library).
+    
+- The compiler looks for an `operator<<` that takes:
+    
+    - Left operand: `std::ostream&`
+        
+    - Right operand: `int`
+        
+- The standard library provides exactly that, so it calls it.
+    
+- Inside that function, `5` gets printed into the stream.
+    
+- The function **returns the left operand** (`std::cout`) so you can chain:
+
+```cpp
+std::cout << 5 << 10 << '\n';
+```
+
+##### 2. **Our goal**
+
+We have an enum:
+
+```cpp
+enum Color { black, red, blue };
+```
+
+By default, `std::cout << blue;` would print `2` (the underlying integer value), not `"blue"`.  
+We want:
+
+```cpp
+std::cout << blue; // prints "blue"
+```
+
+##### 3. **Overloading `operator<<` for our enum**
+
+We define:
+
+```cpp
+std::ostream& operator<<(std::ostream& out, Color color)
+```
+
+- **Name**: `operator<<`
+    
+- **Left operand** → `std::ostream& out`
+    
+    - Passed by non-const reference because we **don’t** want to copy `std::ostream` and we **do** want to modify it (insert data into it).
+        
+- **Right operand** → `Color color`
+    
+- **Return type** → `std::ostream&`
+    
+    - This lets us return the same output stream so chaining works.
+
+
+##### 4. **Implementation details**
+
+We already have a helper:
+
+```cpp
+constexpr std::string_view getColorName(Color color)
+```
+
+It turns `black` → `"black"`, etc.
+
+Inside `operator<<`:
+
+```cpp
+out << getColorName(color);
+return out;
+```
+
+- We call `getColorName(color)` to get the string `"blue"`.
+    
+- `out << ...` works because `std::ostream` already knows how to print a `std::string_view`.
+    
+- We return `out` so you can write:
+
+```cpp
+std::cout << "Shirt: " << blue << '\n';
+```
+
+##### 5. **Why we don’t hardcode `std::cout`**
+
+We use the `out` parameter instead of `std::cout` directly because the left operand might be something else, like:
+
+```cpp
+std::cerr << blue; // prints to std::cerr
+```
+
+This way, the same function works for **any** `std::ostream`.
+
+##### 6. **What happens when you run it**
+
+For:
+
+```cpp
+std::cout << "Your shirt is " << shirt << '\n';
+```
+
+Steps:
+
+1. `"Your shirt is "` → printed by the `std::ostream& operator<<(std::ostream&, const char*)` overload.
+    
+2. `shirt` → triggers our custom `operator<<(std::ostream&, Color)`.
+    
+3. Inside our function:
+    
+    - `out` is a reference to `std::cout`
+        
+    - `color` is `blue`
+        
+    - `getColorName(color)` returns `"blue"`
+        
+    - That string is sent into the same `std::ostream` (`std::cout`).
+        
+4. `out` is returned so the final `'\n'` gets printed in the next chained call.
+
+Result:
+
+```cpp
+Your shirt is blue
+```
+
+
+##### Why return _must_ be a reference, not a copy
+
+- If you **returned by value** (`std::ostream operator<<(...)`), the compiler would need to **copy** `std::cout` to make the return value.
+    
+- But `std::ostream` **cannot** be copied — so it would fail to compile.
+    
+- Even if it could be copied, each `<<` would operate on a **different stream object**, so output wouldn’t all go to the same place.
+
+#### Overloading `operator>>` to input an enumerator
+
+```cpp
+#include <iostream>
+#include <limits>
+#include <optional>
+#include <string>
+#include <string_view>
+
+enum Pet
+{
+    cat,   // 0
+    dog,   // 1
+    pig,   // 2
+    whale, // 3
+};
+
+constexpr std::string_view getPetName(Pet pet)
+{
+    switch (pet)
+    {
+    case cat:   return "cat";
+    case dog:   return "dog";
+    case pig:   return "pig";
+    case whale: return "whale";
+    default:    return "???";
+    }
+}
+
+constexpr std::optional<Pet> getPetFromString(std::string_view sv)
+{
+    if (sv == "cat")   return cat;
+    if (sv == "dog")   return dog;
+    if (sv == "pig")   return pig;
+    if (sv == "whale") return whale;
+
+    return {};
+}
+
+// pet is an in/out parameter
+std::istream& operator>>(std::istream& in, Pet& pet)
+{
+    std::string s{};
+    in >> s; // get input string from user
+
+    std::optional<Pet> match { getPetFromString(s) };
+    if (match) // if we found a match
+    {
+        pet = *match; // dereference std::optional to get matching enumerator
+        return in;
+    }
+
+    // We didn't find a match, so input must have been invalid
+    // so we will set input stream to fail state
+    in.setstate(std::ios_base::failbit);
+
+    // On an extraction failure, operator>> zero-initializes fundamental types
+    // Uncomment the following line to make this operator do the same thing
+    // pet = {};
+
+    return in;
+}
+
+int main()
+{
+    std::cout << "Enter a pet: cat, dog, pig, or whale: ";
+    Pet pet{};
+    std::cin >> pet;
+
+    if (std::cin) // if we found a match
+        std::cout << "You chose: " << getPetName(pet) << '\n';
+    else
+    {
+        std::cin.clear(); // reset the input stream to good
+        std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+        std::cout << "Your pet was not valid\n";
+    }
+
+    return 0;
+}
+```
+
+##### Why `operator>>` returns a reference
+
+Same reason as with `operator<<`:
+
+- Streams are non-copyable, so we must return by reference.
+    
+- Allows chaining:
+
+```cpp
+std::cin >> pet1 >> pet2;
+```
+
+works because the same stream reference is returned.
+
+>If the user did not enter a valid pet, then we handle that case by putting `std::cin` into “failure mode”. This is the state that `std::cin` typically goes into when an extraction fails. The caller can then check `std::cin` to see if the extraction succeeded or failed.
+
+---
+### Struct aggregate initialization
+
+#### Data members are not initialized by default
+
+Much like normal variables, data members are not initialized by default. Consider the following struct:
+
+```cpp
+#include <iostream>
+
+struct Employee
+{
+    int id; // note: no initializer here
+    int age;
+    double wage;
+};
+
+int main()
+{
+    Employee joe; // note: no initializer here either
+    std::cout << joe.id << '\n';
+
+    return 0;
+}
+```
+
+Because we have not provided any initializers, when `joe` is instantiated, `joe.id`, `joe.age`, and `joe.wage` will all be uninitialized. We will then get undefined behavior when we try to print the value of `joe.id`.
+
+However, before we show you how to initialize a struct, let’s take a short detour.
+
+#### What is an aggregate? [](https://www.learncpp.com/cpp-tutorial/struct-aggregate-initialization/#aggregate)
+
+In general programming, an **aggregate data type** (also called an **aggregate**) is any type that can contain multiple data members. Some types of aggregates allow members to have different types (e.g. structs), while others require that all members must be of a single type (e.g. arrays).
+
+In C++, the definition of an aggregate is narrower and quite a bit more complicated.
+
+>[!Reminder]
+>The key thing to understand at this point is that structs with only data members are aggregates.
+
+---
+### Aggregate initialization of a struct
+
+Because a normal variable can only hold a single value, we only need to provide a single initializer:
+
+```cpp
+int x { 5 };
+```
+
+However, a struct can have multiple members:
+
+```cpp
+struct Employee
+{
+    int id {};
+    int age {};
+    double wage {};
+};
+```
+
+When we define an object with a struct type, we need some way to initialize multiple members at initialization time:
+
+```cpp
+Employee joe; // how do we initialize joe.id, joe.age, and joe.wage?
+```
+
+>Aggregates use a form of initialization called **aggregate initialization**, which allows us to directly initialize the members of aggregates. To do this, we provide an **initializer list** as an initializer, which is just a braced list of comma-separated values.
+
+There are 2 primary forms of aggregate initialization:
+
+```cpp
+struct Employee
+{
+    int id {};
+    int age {};
+    double wage {};
+};
+
+int main()
+{
+    Employee frank = { 1, 32, 60000.0 }; // copy-list initialization using braced list
+    Employee joe { 2, 28, 45000.0 };     // list initialization using braced list (preferred)
+
+    return 0;
+}
+```
+
+Each of these initialization forms does a **memberwise initialization**, which means each member in the struct is initialized in the order of declaration. Thus, `Employee joe { 2, 28, 45000.0 };` first initializes `joe.id` with value `2`, then `joe.age` with value `28`, and `joe.wage` with value `45000.0` last.
+
+>[!Best practice]
+Prefer the (non-copy) braced list form when initializing aggregates.
+
+---
+### Missing initializers in an initializer list
+
+If an aggregate is initialized but the number of initialization values is fewer than the number of members, then each member without an explicit initializer is initialized as follows:
+
+- If the member has a default member initializer, that is used.
+- Otherwise, the member is copy-initialized from an empty initializer list. In most cases, this will perform value-initialization on those members (on class types, this will invoke the default constructor even if a list constructor exist).
+
+```cpp
+struct Employee
+{
+    int id {};
+    int age {};
+    double wage { 76000.0 };
+    double whatever;
+};
+
+int main()
+{
+    Employee joe { 2, 28 }; // joe.whatever will be value-initialized to 0.0
+
+    return 0;
+}
+```
+
+In the above example, `joe.id` will be initialized with value `2` and `joe.age` will be initialized with value `28`. Because `joe.wage` wasn’t given an explicit initializer but has a default member initializer, `joe.wage` will be initialized to `76000.0`. And finally, because `joe.whatever` wasn’t given an explicit initializer, `joe.whatever` is value-initialized to `0.0`.
+
+>[!Tip]
+This means we can generally use an empty initialization list to value-initialize all members of the struct:
+```cpp
+Employee joe {}; // value-initialize all members
+```
+
+---
