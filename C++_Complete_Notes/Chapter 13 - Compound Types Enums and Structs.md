@@ -3117,3 +3117,207 @@ Note that `Foo1` and `Foo2` have the same members, the only difference being
 >The C++ compiler is not allowed to reorder members, so this has to be done manually.
 
 ---
+### Member selection with pointers and references
+
+>Since references to an object act just like the object itself, we can also use the member selection operator (.) to select a member from a reference to a struct:
+
+```cpp
+#include <iostream>
+
+struct Employee
+{
+    int id{};
+    int age{};
+    double wage{};
+};
+
+void printEmployee(const Employee& e)
+{
+    // Use member selection operator (.) to select member from reference to struct
+    std::cout << "Id: " << e.id << '\n';
+    std::cout << "Age: " << e.age << '\n';
+    std::cout << "Wage: " << e.wage << '\n';
+}
+
+int main()
+{
+    Employee joe{ 1, 34, 65000.0 };
+
+    ++joe.age;
+    joe.wage = 68000.0;
+
+    printEmployee(joe);
+
+    return 0;
+}
+```
+
+---
+### Member selection for pointers to structs
+
+>However, the member selection operator (.) can’t be used directly on a pointer to a struct:
+
+```cpp
+#include <iostream>
+
+struct Employee
+{
+    int id{};
+    int age{};
+    double wage{};
+};
+
+int main()
+{
+    Employee joe{ 1, 34, 65000.0 };
+
+    ++joe.age;
+    joe.wage = 68000.0;
+
+    Employee* ptr{ &joe };
+    std::cout << ptr.id << '\n'; // Compile error: can't use operator. with pointers
+
+    return 0;
+}
+```
+
+>With normal variables or references, we can access objects directly. However, because pointers hold addresses, we first need to dereference the pointer to get the object before we can do anything with it. So one way to access a member from a pointer to a struct is as follows:
+
+```cpp
+#include <iostream>
+
+struct Employee
+{
+    int id{};
+    int age{};
+    double wage{};
+};
+
+int main()
+{
+    Employee joe{ 1, 34, 65000.0 };
+
+    ++joe.age;
+    joe.wage = 68000.0;
+
+    Employee* ptr{ &joe };
+    std::cout << (*ptr).id << '\n'; // Not great but works: First dereference ptr, then use member selection
+
+    return 0;
+}
+```
+
+==To make for a cleaner syntax, C++ offers a **member selection from pointer operator (->)** (also sometimes called the **arrow operator**) that can be used to select members from a pointer to an object:
+
+```cpp
+#include <iostream>
+
+struct Employee
+{
+    int id{};
+    int age{};
+    double wage{};
+};
+
+int main()
+{
+    Employee joe{ 1, 34, 65000.0 };
+
+    ++joe.age;
+    joe.wage = 68000.0;
+
+    Employee* ptr{ &joe };
+    std::cout << ptr->id << '\n'; // Better: use -> to select member from pointer to object
+
+    return 0;
+}
+```
+
+This member selection from pointer operator (->) works identically to the member selection operator (.) but does an implicit dereference of the pointer object before selecting the member. Thus `ptr->id` is equivalent to `(*ptr).id`.
+
+>[!Best Practice]
+>When using a pointer to access a member, use the member selection from pointer operator (->) instead of the member selection operator (.).
+
+---
+### Chaining `operator->`
+
+If the member accessed via `operator->` is a pointer to a class type, `operator->` can be applied again in the same expression to access the member of that class type.
+
+The following example illustrates this (courtesy of reader Luna):
+
+```cpp
+#include <iostream>
+
+struct Point
+{
+    double x {};
+    double y {};
+};
+
+struct Triangle
+{
+    Point* a {};
+    Point* b {};
+    Point* c {};
+};
+
+int main()
+{
+    Point a {1,2};
+    Point b {3,7};
+    Point c {10,2};
+
+    Triangle tr { &a, &b, &c };
+    Triangle* ptr {&tr};
+
+    // ptr is a pointer to a Triangle, which contains members that are pointers to a Point
+    // To access member y of Point c of the Triangle pointed to by ptr, the following are equivalent:
+
+    // access via operator.
+    std::cout << (*(*ptr).c).y << '\n'; // ugly!
+
+    // access via operator->
+    std::cout << ptr -> c -> y << '\n'; // much nicer
+}
+```
+
+When using more than one `operator->` in sequence (e.g `ptr->c->y`), the expression can be hard to read. Adding whitespace between the members and `operator->` (e.g. `ptr -> c -> y`) can make it a bit easier to distinguish the members being accessed from the operator.
+
+---
+### Mixing pointers and non-pointers to members
+
+The member selection operator is always applied to the currently selected variable. If you have a mix of pointers and normal member variables, you can see member selections where . and -> are both used in sequence:
+
+```cpp
+#include <iostream>
+#include <string>
+
+struct Paw
+{
+    int claws{};
+};
+
+struct Animal
+{
+    std::string name{};
+    Paw paw{};
+};
+
+int main()
+{
+    Animal puma{ "Puma", { 5 } };
+
+    Animal* ptr{ &puma };
+
+    // ptr is a pointer, use ->
+    // paw is not a pointer, use .
+
+    std::cout << (ptr->paw).claws << '\n';
+
+    return 0;
+}
+```
+
+Note that in the case of `(ptr->paw).claws`, parentheses aren’t necessary since both `operator->` and `operator.` evaluate in left to right order, but it does help readability slightly.
+
+---
