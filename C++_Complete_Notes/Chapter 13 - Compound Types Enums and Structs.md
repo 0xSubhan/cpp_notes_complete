@@ -3321,3 +3321,758 @@ int main()
 Note that in the case of `(ptr->paw).claws`, parentheses aren’t necessary since both `operator->` and `operator.` evaluate in left to right order, but it does help readability slightly.
 
 ---
+### Class templates
+
+>For example, let’s say we’re writing a program where we need to work with pairs of `int` values, and need to determine which of the two numbers is larger. We might write a program like this:
+
+```cpp
+#include <iostream>
+
+struct Pair
+{
+    int first{};
+    int second{};
+};
+
+constexpr int max(Pair p) // pass by value because Pair is small
+{
+    return (p.first < p.second ? p.second : p.first);
+}
+
+int main()
+{
+    Pair p1{ 5, 6 };
+    std::cout << max(p1) << " is larger\n";
+
+    return 0;
+}
+```
+
+Later, we discover that we also need pairs of `double` values. So we update our program to the following:
+
+```cpp
+#include <iostream>
+
+struct Pair
+{
+    int first{};
+    int second{};
+};
+
+struct Pair // compile error: erroneous redefinition of Pair
+{
+    double first{};
+    double second{};
+};
+
+constexpr int max(Pair p)
+{
+    return (p.first < p.second ? p.second : p.first);
+}
+
+constexpr double max(Pair p) // compile error: overloaded function differs only by return type
+{
+    return (p.first < p.second ? p.second : p.first);
+}
+
+int main()
+{
+    Pair p1{ 5, 6 };
+    std::cout << max(p1) << " is larger\n";
+
+    Pair p2{ 1.2, 3.4 };
+    std::cout << max(p2) << " is larger\n";
+
+    return 0;
+}
+```
+
+Unfortunately, this program won’t compile, and has a number of problems that need to be addressed.
+
+>First, unlike functions, type definitions can’t be overloaded. The compiler will treat double second definition of `Pair` as an erroneous redeclaration of the first definition of `Pair`. Second, although functions can be overloaded, our `max(Pair)` functions only differ by return type, and overloaded functions can’t be differentiated solely by return type. Third, there is a lot of redundancy here. Each `Pair` struct is identical (except for the data type) and same with our `max(Pair)` functions (except for the return type).
+
+We could solve the first two issues by giving our `Pair` structs different names (e.g. `PairInt` and `PairDouble`). But then we both have to remember our naming scheme, and essentially clone a bunch of code for each additional pair type we want, which doesn’t solve the redundancy problem.
+
+Fortunately, we can do better.
+
+---
+### Class templates
+
+>Much like a function template is a template definition for instantiating functions, a **class template** is a template definition for instantiating class types.
+
+>[!Reminder]
+>A “class type” is a struct, class, or union type. Although we’ll be demonstrating “class templates” on structs for simplicity, everything here applies equally well to classes.
+
+#### 🔹 Function templates vs. Class templates
+
+- **Function template** → blueprint for generating functions.
+    
+- **Class template** → blueprint for generating class/struct types.
+    
+
+Just like you don’t really “call” a function template directly, you don’t “use” a class template directly. Instead, you **instantiate** it with a real type, and the compiler generates an actual type definition for you.
+
+#### 🔹 Normal (non-templated) class/struct
+
+Example:
+
+```cpp
+struct Pair
+{
+    int first{};
+    int second{};
+};
+```
+
+This is **hard-coded** for `int`. If you want `Pair<double>` or `Pair<std::string>`, you’d have to write separate versions manually.
+
+#### 🔹 Turning it into a class template
+
+```cpp
+template <typename T>
+struct Pair
+{
+    T first{};
+    T second{};
+};
+```
+
+- `template <typename T>` says:  
+    _“This is a template. Wherever I see `T` in this struct, I’ll substitute whatever type the user requests later.”_
+    
+- `T` is a placeholder type (like a variable, but for types).
+    
+- Now, instead of being locked to `int`, the struct can be reused with any type.
+
+#### 🔹 Instantiating the template
+
+In `main`:
+
+```cpp
+Pair<int> p1{5, 6};        // compiler generates Pair<int>
+Pair<double> p2{1.2, 3.4}; // compiler generates Pair<double>
+Pair<double> p3{7.8, 9.0}; // uses already-generated Pair<double>
+```
+
+When the compiler sees `Pair<int>`, it says:
+
+> “Hmm, I don’t have a definition for `Pair<int>` yet. Let’s substitute `T = int` in the blueprint.”
+
+It produces (behind the scenes):
+
+```cpp
+struct Pair<int>
+{
+    int first{};
+    int second{};
+};
+```
+
+Same for `Pair<double>`.
+
+For `p3`, since `Pair<double>` was already generated earlier, the compiler just reuses that definition. It doesn’t generate it again.
+
+#### 🔹 What the compiler _actually sees_ after instantiation
+
+The second version in your example is showing the **expanded code** (like unrolling a macro, but type-safe):
+
+```cpp
+// Generated from template
+struct Pair<int>
+{
+    int first{};
+    int second{};
+};
+
+struct Pair<double>
+{
+    double first{};
+    double second{};
+};
+```
+
+Now your `main` just works with these concrete types like normal structs.
+
+#### 🔹 Important points about class templates
+
+1. **Blueprint, not a real class**  
+    `Pair` by itself is _not_ a type. Only `Pair<int>` or `Pair<double>` are real types.
+```cpp
+Pair x; // ❌ error, compiler doesn’t know what type T is
+```
+- **On-demand instantiation**  
+    The compiler only generates a version of the class when you use it with a specific type.
+    
+- **Reusability**  
+    You don’t need to write separate classes for `int`, `double`, etc. One template covers all.
+    
+- **Specialization** (the `template <> struct Pair<int> { ... };` you saw)
+    
+    - This lets you say: _“Hey compiler, when someone asks for `Pair<int>`, don’t use the generic version, use this custom one.”_
+        
+    - Useful when some types need special handling.
+
+==Here’s the same example as above, showing what the compiler actually compiles after all template instantiations are done:
+
+```cpp
+#include <iostream>
+
+// A declaration for our Pair class template
+// (we don't need the definition any more since it's not used)
+template <typename T>
+struct Pair;
+
+// Explicitly define what Pair<int> looks like
+template <> // tells the compiler this is a template type with no template parameters
+struct Pair<int>
+{
+    int first{};
+    int second{};
+};
+
+// Explicitly define what Pair<double> looks like
+template <> // tells the compiler this is a template type with no template parameters
+struct Pair<double>
+{
+    double first{};
+    double second{};
+};
+
+int main()
+{
+    Pair<int> p1{ 5, 6 };        // instantiates Pair<int> and creates object p1
+    std::cout << p1.first << ' ' << p1.second << '\n';
+
+    Pair<double> p2{ 1.2, 3.4 }; // instantiates Pair<double> and creates object p2
+    std::cout << p2.first << ' ' << p2.second << '\n';
+
+    Pair<double> p3{ 7.8, 9.0 }; // creates object p3 using prior definition for Pair<double>
+    std::cout << p3.first << ' ' << p3.second << '\n';
+
+    return 0;
+}
+```
+
+---
+### Using our class template in a function
+
+#### 🔹 The Problem
+
+You have a **class template**:
+
+```cpp
+template <typename T>
+struct Pair {
+    T first{};
+    T second{};
+};
+```
+
+Now you want a function `max()` that works with _any_ `Pair<T>`.
+
+If you try to write one overload per type:
+
+```cpp
+constexpr int max(Pair<int> p) { /* ... */ }
+constexpr double max(Pair<double> p) { /* ... */ }
+```
+
+✔️ Works,  
+❌ But it’s **repetitive**. For every new type (`char`, `std::string`, etc.), you’d have to write another overload.
+
+That defeats the purpose of templates.
+
+#### 🔹 The Solution → Function Template
+
+Instead of hardcoding each type, you write:
+
+```cpp
+template <typename T>
+constexpr T max(Pair<T> p)
+{
+    return (p.first < p.second ? p.second : p.first);
+}
+```
+
+Now:
+
+- `T` is a **template parameter for the function** (separate from the class template).
+    
+- The parameter type is `Pair<T>`.
+    
+- The return type is also `T`.
+    
+
+This means the function works for **any `Pair<T>`**.
+
+#### 🔹 What Happens When You Call It
+
+##### Example 1: Explicit instantiation
+
+```cpp
+Pair<int> p1{5, 6};
+std::cout << max<int>(p1);
+```
+
+- Compiler sees `max<int>(p1)`
+    
+- Substitutes `T = int`
+    
+- Instantiates this:
+
+```cpp
+constexpr int max(Pair<int> p)
+{
+    return (p.first < p.second ? p.second : p.first);
+}
+```
+
+##### Example 2: Template Argument Deduction
+
+```cpp
+Pair<double> p2{1.2, 3.4};
+std::cout << max(p2);
+```
+
+- Compiler sees parameter type `Pair<double>`
+    
+- Figures out `T = double` automatically
+    
+- Instantiates this:
+
+```cpp
+constexpr double max(Pair<double> p)
+{
+    return (p.first < p.second ? p.second : p.first);
+}
+```
+
+No need to write `<double>` explicitly.
+
+#### 🔹 Why This Is Powerful
+
+1. **No redundancy** — one function template replaces many overloads.
+    
+2. **Scales automatically** — works for any `Pair<T>`, even user-defined types (as long as `<` works).
+    
+3. **Compiler-generated** — you don’t need to write versions for each type, the compiler does it for you.
+
+#### ✅ **Summary**:  
+`max(Pair<T>)` is a **function template** that works with your `Pair<T>` **class template**.
+
+- When called, the compiler **deduces T** from the argument type.
+    
+- It instantiates a version of the function specialized for that type.
+    
+- You don’t need multiple overloads anymore — one template handles all cases.
+
+---
+### Class templates with template type and non-template type members
+
+Class templates can have some members using a template type and other members using a normal (non-template) type. For example:
+
+```cpp
+template <typename T>
+struct Foo
+{
+    T first{};    // first will have whatever type T is replaced with
+    int second{}; // second will always have type int, regardless of what type T is
+};
+```
+
+This works exactly like you’d expect: `first` will be whatever the template type `T` is, and `second` will always be an `int`.
+
+---
+### Class templates with multiple template types
+
+Class templates can also have multiple template types. For example, if we wanted the two members of our `Pair` class to be able to have different types, we can define our `Pair` class template with two template types:
+
+```cpp
+#include <iostream>
+
+template <typename T, typename U>
+struct Pair
+{
+    T first{};
+    U second{};
+};
+
+template <typename T, typename U>
+void print(Pair<T, U> p)
+{
+    std::cout << '[' << p.first << ", " << p.second << ']';
+}
+
+int main()
+{
+    Pair<int, double> p1{ 1, 2.3 }; // a pair holding an int and a double
+    Pair<double, int> p2{ 4.5, 6 }; // a pair holding a double and an int
+    Pair<int, int> p3{ 7, 8 };      // a pair holding two ints
+
+    print(p2);
+
+    return 0;
+}
+```
+
+To define multiple template types, in our template parameter declaration, we separate each of our desired template types with a comma. In the above example we define two different template types, one named `T`, and one named `U`. The actual template type arguments for `T` and `U` can be different (as in the case of `p1` and `p2` above) or the same (as in the case of `p3`).
+
+---
+### Making a function template work with more than one class type
+
+Consider the `print()` function template from the above example:
+
+```cpp
+template <typename T, typename U>
+void print(Pair<T, U> p)
+{
+    std::cout << '[' << p.first << ", " << p.second << ']';
+}
+```
+
+Because we’ve explicitly defined the function parameter as a `Pair<T, U>`, only arguments of type `Pair<T, U>` (or those that can be converted to a `Pair<T, U>`) will match. This is ideal if we only want to be able to call our function with a `Pair<T, U>` argument.
+
+In some cases, we may write function templates that we want to use with any type that will successfully compile. To do that, we simply use a type template parameter as the function parameter instead.
+
+For example:
+
+```cpp
+#include <iostream>
+
+template <typename T, typename U>
+struct Pair
+{
+    T first{};
+    U second{};
+};
+
+struct Point
+{
+    int first{};
+    int second{};
+};
+
+template <typename T>
+void print(T p) // type template parameter will match anything
+{
+    std::cout << '[' << p.first << ", " << p.second << ']'; // will only compile if type has first and second members
+}
+
+int main()
+{
+    Pair<double, int> p1{ 4.5, 6 };
+    print(p1); // matches print(Pair<double, int>)
+
+    std::cout << '\n';
+
+    Point p2 { 7, 8 };
+    print(p2); // matches print(Point)
+
+    std::cout << '\n';
+
+    return 0;
+}
+```
+
+In the above example, we’ve rewritten `print()` so that it has only a single type template parameter (`T`), which will match any type. The body of the function will compile successfully for any class type that has a `first` and `second` member. We demonstrate this by calling `print()` with an object of type `Pair<double, int>`, and then again with an object of type `Point`.
+
+There is one case that can be misleading. Consider the following version of `print()`:
+
+```cpp
+template <typename T, typename U>
+struct Pair // defines a class type named Pair
+{
+    T first{};
+    U second{};
+};
+
+template <typename Pair> // defines a type template parameter named Pair (shadows Pair class type)
+void print(Pair p)       // this refers to template parameter Pair, not class type Pair
+{
+    std::cout << '[' << p.first << ", " << p.second << ']';
+}
+```
+
+You might expect that this function will only match when called with a `Pair` class type argument. But this version of `print()` is functionally identically to the prior version where the template parameter was named `T`, and will match with _any_ type. The issue here is that when we define `Pair` as a type template parameter, it shadows other uses of the name `Pair` within the global scope. So within the function template, `Pair` refers to the template parameter `Pair`, not the class type `Pair`. And since a type template parameter will match to any type, this `Pair` matches to any argument type, not just those of class type `Pair`!
+
+This is a good reason to stick to simple template parameter names, such a `T`, `U`, `N`, as they are less likely to shadow a class type name.
+
+---
+### std::pair
+
+Because working with pairs of data is common, the C++ standard library contains a class template named `std::pair` (in the `<utility>` header) that is defined identically to the `Pair` class template with multiple template types in the preceding section. In fact, we can swap out the `pair` struct we developed for `std::pair`:
+
+```cpp
+#include <iostream>
+#include <utility>
+
+template <typename T, typename U>
+void print(std::pair<T, U> p)
+{
+    // the members of std::pair have predefined names `first` and `second`
+    std::cout << '[' << p.first << ", " << p.second << ']';
+}
+
+int main()
+{
+    std::pair<int, double> p1{ 1, 2.3 }; // a pair holding an int and a double
+    std::pair<double, int> p2{ 4.5, 6 }; // a pair holding a double and an int
+    std::pair<int, int> p3{ 7, 8 };      // a pair holding two ints
+
+    print(p2);
+
+    return 0;
+}
+```
+
+We developed our own `Pair` class in this lesson to show how things work, but in real code, you should favor `std::pair` over writing your own.
+
+---
+### Using class templates in multiple files
+
+Just like function templates, class templates are typically defined in header files so they can be included into any code file that needs them. Both template definitions and type definitions are exempt from the one-definition rule, so this won’t cause problems:
+
+pair.h:
+
+```cpp
+#ifndef PAIR_H
+#define PAIR_H
+
+template <typename T>
+struct Pair
+{
+    T first{};
+    T second{};
+};
+
+template <typename T>
+constexpr T max(Pair<T> p)
+{
+    return (p.first < p.second ? p.second : p.first);
+}
+
+#endif
+```
+
+foo.cpp:
+
+```cpp
+#include "pair.h"
+#include <iostream>
+
+void foo()
+{
+    Pair<int> p1{ 1, 2 };
+    std::cout << max(p1) << " is larger\n";
+}
+```
+
+main.cpp:
+
+```cpp
+#include "pair.h"
+#include <iostream>
+
+void foo(); // forward declaration for function foo()
+
+int main()
+{
+    Pair<double> p2 { 3.4, 5.6 };
+    std::cout << max(p2) << " is larger\n";
+
+    foo();
+
+    return 0;
+}
+```
+
+---
+### Class template argument deduction (CTAD) C++17 [](https://www.learncpp.com/cpp-tutorial/class-template-argument-deduction-ctad-and-deduction-guides/#CTAD)
+
+Starting in C++17, when instantiating an object from a class template, the compiler can deduce the template types from the types of the object’s initializer (this is called **class template argument deduction** or **CTAD** for short). For example:
+
+```cpp
+#include <utility> // for std::pair
+
+int main()
+{
+    std::pair<int, int> p1{ 1, 2 }; // explicitly specify class template std::pair<int, int> (C++11 onward)
+    std::pair p2{ 1, 2 };           // CTAD used to deduce std::pair<int, int> from the initializers (C++17)
+
+    return 0;
+}
+```
+
+CTAD is only performed if no template argument list is present. Therefore, both of the following are errors:
+
+```cpp
+#include <utility> // for std::pair
+
+int main()
+{
+    std::pair<> p1 { 1, 2 };    // error: too few template arguments, both arguments not deduced
+    std::pair<int> p2 { 3, 4 }; // error: too few template arguments, second argument not deduced
+
+    return 0;
+}
+```
+
+>Since CTAD is a form of type deduction, we can use literal suffixes to change the deduced type:
+
+```cpp
+#include <utility> // for std::pair
+
+int main()
+{
+    std::pair p1 { 3.4f, 5.6f }; // deduced to pair<float, float>
+    std::pair p2 { 1u, 2u };     // deduced to pair<unsigned int, unsigned int>
+
+    return 0;
+}
+```
+
+---
+### **Why doesn’t CTAD work with aggregates in C++17?**
+
+Your custom `Pair` is an **aggregate** (a simple struct without constructors).  
+In **C++17**, CTAD **only works with constructors**, not with aggregate initialization.
+
+So:
+
+```cpp
+Pair p2{1, 2}; // ❌ error in C++17
+```
+
+Because there’s no constructor, the compiler has no rule to deduce `<int, int>` from `{1, 2}`.
+
+### **Deduction Guides**
+
+To fix this in C++17, you add a **deduction guide**.  
+A deduction guide explicitly tells the compiler **how to map constructor arguments to template parameters**.
+
+Example:
+
+```cpp
+template <typename T, typename U>
+Pair(T, U) -> Pair<T, U>;
+```
+
+This means:
+
+- If you see `Pair(x, y)` where `x` has type `T` and `y` has type `U`,
+    
+- Deduce the type as `Pair<T, U>`.
+    
+
+Now this works:
+
+```cpp
+Pair p2{1, 2};   // ✅ deduced as Pair<int, int>
+```
+
+>[!Tip]
+>C++20 added the ability for the compiler to automatically generate deduction guides for aggregates, so deduction guides should only need to be provided for C++17 compatibility.
+
+---
+### Type template parameters with default values
+
+>Just like function parameters can have default arguments, template parameters can be given default values. These will be used when the template parameter isn’t explicitly specified and can’t be deduced.
+
+Here’s a modification of our `Pair<T, U>` class template program above, with type template parameters `T` and `U` defaulted to type `int`:
+
+```cpp
+template <typename T=int, typename U=int> // default T and U to type int
+struct Pair
+{
+    T first{};
+    U second{};
+};
+
+template <typename T, typename U>
+Pair(T, U) -> Pair<T, U>;
+
+int main()
+{
+    Pair<int, int> p1{ 1, 2 }; // explicitly specify class template Pair<int, int> (C++11 onward)
+    Pair p2{ 1, 2 };           // CTAD used to deduce Pair<int, int> from the initializers (C++17)
+
+    Pair p3;                   // uses default Pair<int, int>
+
+    return 0;
+}
+```
+
+Our definition for `p3` does not explicitly specify types for the type template parameters, nor is there an initializer for these types to be deduced from. Therefore, the compiler will use the types specified in the defaults, which means `p3` will be of type `Pair<int, int>`.
+
+---
+### CTAD doesn’t work with non-static member initialization
+
+CTAD doesn’t work with non-static member initialization
+
+When initializing the member of a class type using non-static member initialization, CTAD will not work in this context. All template arguments must be explicitly specified:
+
+```cpp
+#include <utility> // for std::pair
+
+struct Foo
+{
+    std::pair<int, int> p1{ 1, 2 }; // ok, template arguments explicitly specified
+    std::pair p2{ 1, 2 };           // compile error, CTAD can't be used in this context
+};
+
+int main()
+{
+    std::pair p3{ 1, 2 };           // ok, CTAD can be used here
+    return 0;
+}
+```
+
+--> Foo is a defination so we are not constructing it.
+
+---
+### CTAD doesn’t work with function parameters
+
+CTAD stands for class template _argument_ deduction, not class template _parameter_ deduction, so it will only deduce the type of template arguments, not template parameters.
+
+Therefore, CTAD can’t be used in function parameters.
+
+```cpp
+#include <iostream>
+#include <utility>
+
+void print(std::pair p) // compile error, CTAD can't be used here
+{
+    std::cout << p.first << ' ' << p.second << '\n';
+}
+
+int main()
+{
+    std::pair p { 1, 2 }; // p deduced to std::pair<int, int>
+    print(p);
+
+    return 0;
+}
+```
+
+In such cases, you should use a template instead:
+
+```cpp
+#include <iostream>
+#include <utility>
+
+template <typename T, typename U>
+void print(std::pair<T, U> p)
+{
+    std::cout << p.first << ' ' << p.second << '\n';
+}
+
+int main()
+{
+    std::pair p { 1, 2 }; // p deduced to std::pair<int, int>
+    print(p);
+
+    return 0;
+}
+```
+
+---
