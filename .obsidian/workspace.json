@@ -78,8 +78,7 @@
       }
     ],
     "direction": "horizontal",
-    "width": 300,
-    "collapsed": true
+    "width": 300
   },
   "right": {
     "id": "a90c9f7febfb8538",
@@ -172,6 +171,7 @@
   },
   "active": "9a688ccb8c29a9d6",
   "lastOpenFiles": [
+    "Untitled.md",
     "Untitled 1.md",
     "C++_Complete_Notes/Object Oriented Programming in C++/00_Introduction to Classes.md",
     "C++_Complete_Notes/Chapter 13 - Compound Types Enums and Structs.md",
@@ -200,7 +200,6 @@
     "learncpp.com/Chapter 0 Introduction/0.11 Configuring your compiler-Warning and error levels.md",
     "learncpp.com/Chapter 2 C++ Basics  Functions and Files.md",
     "learncpp.com/Chapter 10 - Type Conversion, Type Aliases, and Type Deduction.md",
-    "learncpp.com/Chapter 1 Basics.md",
     "learncpp.com/Chapter 0 Introduction",
     "learncpp.com",
     "C++_Complete_Notes/Chapter 0 Introduction",
