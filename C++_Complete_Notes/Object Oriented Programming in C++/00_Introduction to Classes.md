@@ -462,3 +462,247 @@ class is by default private, which we will cover soon.
 Classes are really the heart and soul of C++ -- they are so foundational that C++ was originally named “C with classes”! Once you are familiar with classes, much of your time in C++ will be spent writing, testing, and using them.
 
 ---
+# Member Functions
+
+### The separation of properties and actions
+
+>Take a look around you -- everywhere you look are objects: books and buildings and food and even you. Real-life objects have two major components to them: 1) Some number of observable properties (e.g. weight, color, size, solidity, shape, etc…), and 2) Some number of actions that they can perform or have performed on them (e.g. being opened, damaging something else, etc…) based on those properties. These properties and actions are inseparable.
+
+In programming, we represent properties with variables, and actions with functions.
+
+>In the `Date` example above, note that we have defined our properties (the member variables of `Date`) and the actions we perform using those properties (the function `print()`) separately. We are left to infer a connection between `Date` and `print()` based solely on the `const Date&` parameter of `print()`.
+
+While we could put both `Date` and `print()` into a namespace (to make it clearer that the two are meant to be packaged together), that adds yet more names into our program and more namespace prefixes, cluttering our code.
+
+It sure would be nice if there were some way to define our properties and actions together, as a single package.
+
+### Member functions
+
+>In addition to having member variables, class types (which includes structs, classes, and unions) can also have their own functions! Functions that belong to a class type are called **member functions**.
+
+>[!Aside]
+>In other object-oriented languages (such as Java and C#), these are called **methods**.
+
+Functions that are not member functions are called non-member functions.
+
+>[!Important]
+>Member functions must be declared inside the class type definition, and can be defined inside or outside of the class type definition. As a reminder, a definition is also a declaration, so if we define a member function inside the class, that counts as a declaration.
+
+> --> Example of member function:
+
+Let’s rewrite the `Date` example from the top of the lesson, converting `print()` from a non-member function into a member function:
+
+```cpp
+// Member function version
+#include <iostream>
+
+struct Date
+{
+    int year {};
+    int month {};
+    int day {};
+
+    void print() // defines a member function named print
+    {
+        std::cout << year << '/' << month << '/' << day;
+    }
+};
+
+int main()
+{
+    Date today { 2020, 10, 14 }; // aggregate initialize our struct
+
+    today.day = 16; // member variables accessed using member selection operator (.)
+    today.print();  // member functions also accessed using member selection operator (.)
+
+    return 0;
+}
+```
+2020/10/16
+
+### Member functions are declared inside the class type defination
+
+>In the non-member example, the `print()` non-member function is defined outside of the `Date` struct, in the global namespace. By default, it has external linkage, so it could be called from other source files (with the appropriate forward declaration).
+
+In the member example, the `print()` member function is declared (and in this case, defined) inside the `Date` struct definition. Because `print()` is declared as part of the `Date`, this tells the compiler that `print()` is a member function.
+
+Member functions defined inside the class type definition are implicitly inline, so they will not cause violations of the one-definition rule if the class type definition is included into multiple code files.
+
+>**Member**: It’s “built into” the `Date` type. Since all code that sees `Date` must see the same definition, C++ allows `inline` to make this safe.
+
+### Calling member functions (and the implicit object)
+
+>In the non-member example, we call `print(today)`, where `today` is (explicitly) passed as an argument.
+
+In the member example, we call `today.print()`. This syntax, which uses the member selection operator (.) to select the member function to call, is consistent with how we access member variables (e.g. `today.day = 16;`).
+
+All (non-static) member functions must be called using an object of that class type. In this case, `today` is the object that `print()` is being called on.
+
+Note that in the member function case, we don’t need to pass `today` as an argument. The object that a member function is called on is _implicitly_ passed to the member function. For this reason, the object that a member function is called on is often called **the implicit object**.
+
+In other words, when we call `today.print()`, `today` is the implicit object, and it is implicitly passed to the `print()` member function.
+
+### Accessing members inside a member function uses the implicit object
+
+>With non-member functions, we have to explicitly pass an object to the function to work with, and members are explicitly accessed through that object.
+
+```cpp
+// non-member version of print
+void print(const Date& date)
+{
+    // member variables accessed using member selection operator (.)
+    std::cout << date.year << '/' << date.month << '/' << date.day;
+}
+```
+
+>With member functions, we implicitly pass an object to the function to work with, and members are implicitly accessed through that object.
+
+```cpp
+void print() // defines a member function named print()
+{
+    std::cout << year << '/' << month << '/' << day;
+}
+```
+
+In other words, when `today.print()` is called, `today` is our implicit object, and `year`, `month`, and `day` (which are not prefixed) evaluate to the values of `today.year`, `today.month`, and `today.day` respectively.
+
+### Another member function example
+
+>Here’s an example with a slightly more complex member function:
+
+```cpp
+#include <iostream>
+#include <string>
+
+struct Person
+{
+    std::string name{};
+    int age{};
+
+    void kisses(const Person& person)
+    {
+        std::cout << name << " kisses " << person.name << '\n';
+    }
+};
+
+int main()
+{
+    Person joe{ "Joe", 29 };
+    Person kate{ "Kate", 27 };
+
+    joe.kisses(kate);
+
+    return 0;
+}
+```
+Joe kisses Kate
+
+When the `kisses()` member function executes, the identifier `name` doesn’t use the member selection operator (.), so it refers to the implicit object, which is `joe`. So this resolves to `joe.name`. `person.name` uses the member selection operator, so it does not refer to the implicit object. Since `person` is a reference for `kate`, this resolves to `kate.name`.
+
+>[!Key Insight]
+>Without a member function, we would have written `kisses(joe, kate)`. With a member function, we write `joe.kisses(kate)`. Note how much better the latter reads, and how it makes clear exactly which object is initiating the action and which is in support.
+
+### Member variables and functions can be defined in any order
+
+>In **normal C++ code** (outside a class), the compiler reads top to bottom.
+
+If you try to call a function before it has been **declared**, you get an error:
+
+```cpp
+int x() {
+    return y();  // ❌ Error: y not declared yet
+}
+
+int y() {
+    return 5;
+}
+```
+
+To fix this, we either:
+
+- reorder functions, or
+    
+- use a **forward declaration**.
+
+>🔹 Inside a class (OOP world):
+
+**Different rule applies.**  
+When you are inside a class/struct definition, the compiler treats **all member names as if they are already declared**, even if you define them later.
+
+So this works:
+
+```cpp
+struct Foo
+{
+    int z() { return m_data; }   // ✅ can use member variable before it's declared
+    int x() { return y(); }      // ✅ can use member function before it's declared
+
+    int m_data { y() };          // ✅ even works in default initializer (but careful!)
+    int y() { return 5; }
+};
+```
+
+Why?  
+Because the **class definition is parsed as a whole**, and the compiler already knows that `m_data` and `y()` are members of `Foo` before it checks the body of each member.
+
+>[!Warning]
+>Members are **initialized in the order of declaration**, not in the order you write them in initializers.
+>
+>Example of **bad usage**:
+```cpp
+struct Bad
+{
+    int m_bad1 { m_data }; // ❌ UB: m_bad1 initialized before m_data exists
+    int m_bad2 { fcn() };  // ❌ UB: calls fcn() before m_data initialized
+
+    int m_data { 5 };
+    int fcn() { return m_data; }
+};
+```
+>[!Warning]
+>Even though it looks like `m_bad1` is using `m_data`, at runtime `m_bad1` is initialized **first** (because it appears first in the declaration list). Since `m_data` doesn’t have a value yet, this is **undefined behavior**.
+
+--> Compile time process:
+
+>when the compiler encounters this:
+
+```cpp
+struct Foo
+{
+    int z() { return m_data; } // m_data not declared yet
+    int x() { return y(); }    // y not declared yet
+    int y() { return 5; }
+
+    int m_data{};
+};
+```
+
+>It will compile the equivalent of this:
+
+```cpp
+struct Foo
+{
+    int z(); // forward declaration of Foo::z()
+    int x(); // forward declaration of Foo::x()
+    int y(); // forward declaration of Foo::y()
+
+    int m_data{};
+};
+
+int Foo::z() { return m_data; } // m_data already declared above
+int Foo::x() { return y(); }    // y already declared above
+int Foo::y() { return 5; }
+```
+
+### Member functions can be overloaded
+
+>Just like non-member functions, member functions can be overloaded, so long as each member function can be differentiated.
+
+>[!Best Practice]
+>Member functions can be used with both structs and classes.
+>However, structs should avoid defining constructor member functions, as doing so makes them a non-aggregate.
+
+>[!Tip]
+>If your class type has no data members, prefer using a namespace.
+
+---
