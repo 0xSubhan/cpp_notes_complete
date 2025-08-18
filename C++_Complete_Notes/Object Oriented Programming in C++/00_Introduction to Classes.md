@@ -3,7 +3,7 @@
 ---
 
 ---
-## Introduction to Object Oriented Programming
+# Introduction to Object Oriented Programming
 
 ### Procedural Programming
 
@@ -268,5 +268,197 @@ To achieve this, OOP introduces four powerful principles:
 ### The term "object"
 
 >Note that the term “object” is overloaded a bit, and this causes some amount of confusion. In traditional programming, an object is a piece of memory to store values. And that’s it. In object-oriented programming, an “object” implies that it is both an object in the traditional programming sense, and that it combines both properties and behaviors. We will favor the traditional meaning of the term object in these tutorials, and prefer the term “class object” when specifically referring to OOP objects.
+
+---
+# Introduction to classes
+
+>As useful as structs are, structs have a number of deficiencies that can present challenges when trying to build large, complex programs (especially those worked on by multiple developers).
+
+### The class invariant problem
+
+>In the context of class types (which include structs, classes, and unions), a **class invariant** is a condition that must be true throughout the lifetime of an object in order for the object to remain in a valid state. An object that has a violated class invariant is said to be in an **invalid state**, and unexpected or undefined behavior may result from further use of that object.
+
+ >🔹 What is a Class Invariant?
+
+- **Invariant** = a condition that must **always** hold true for an object to be valid.
+    
+- If the invariant is broken → the object is in an **invalid state**, and using it may cause **bugs or undefined behavior**.
+
+>[!Rule]
+>Using an object whose class invariant has been violated may result in unexpected or undefined behavior.
+
+>First, consider the following struct:
+
+```cpp
+struct Pair
+{
+    int first {};
+    int second {};
+};
+```
+
+The `first` and `second` members can be independently set to any value, so `Pair` struct has no invariant.
+
+>Now consider the following almost-identical struct:
+
+```cpp
+struct Fraction
+{
+    int numerator { 0 };
+    int denominator { 1 };
+};
+```
+
+We know from mathematics that a fraction with a denominator of `0` is mathematically undefined. Therefore, we want to ensure the `denominator` member of a Fraction object is never set to `0`. If it is, then that Fraction object is in an invalid state, and undefined behavior may result from further use of that object.
+
+>For Example:
+
+```cpp
+#include <iostream>
+
+struct Fraction
+{
+    int numerator { 0 };
+    int denominator { 1 }; // class invariant: should never be 0
+};
+
+void printFractionValue(const Fraction& f)
+{
+     std::cout << f.numerator / f.denominator << '\n';
+}
+
+int main()
+{
+    Fraction f { 5, 0 };   // create a Fraction with a zero denominator
+    printFractionValue(f); // cause divide by zero error
+
+    return 0;
+}
+```
+
+In the above example, we used comment to document that using 0 in denominator will make set the object to invalid state and also we have given default value 1 so that if user doesn't provide initialization value then it will be set to 1 not 0 which will set it to invalid state.
+But it doesnt protect the object to be explicitly set to 0.
+
+And that is exactly what we see later, when we call `printFractionValue(f)`: the program terminates due to a divide-by-zero error.
+
+>We can put assertion in print function but it doesnt solve the problem because before printing the object it was already in invalid state and it doesnt fix the problem.
+
+Given the relative simplicitly of the Fraction example, it shouldn’t be too difficult to simply avoid creating invalid Fraction objects. However, in a more complex code base that uses many structs, structs with many members, or structs whose members have complex relationships, understanding what combination of values might violate some class invariant may not be so obvious.
+
+### A more complex class invariant
+
+- A **class invariant** is a rule that must always hold true for an object to be valid.
+    
+- For `Fraction`, it was simple: `denominator != 0`.
+    
+- For `Employee`, the invariant is more complex because **two members are related**.
+
+>🔹 The Employee Problem:
+
+```cpp
+struct Employee
+{
+    std::string name { };
+    char firstInitial { }; // should always be first char of name
+};
+```
+
+Expected Invariant:
+
+- `firstInitial == name[0]` (or `0` if the name is empty).
+    
+
+❌ Problem:
+
+- With this `struct`, **the user is responsible** for keeping `firstInitial` in sync.
+    
+
+Example:
+
+```cpp
+Employee e { "Alice", 'A' };   // okay
+e.name = "Bob";                // 🚨 forgot to update firstInitial
+std::cout << e.firstInitial;   // still 'A', invalid object!
+```
+
+Now the object is in an **invalid state** because its invariant (`firstInitial == name[0]`) was broken.
+
+>🔹 Why Is This Harder?
+
+- The `Fraction` invariant only involved **one member** (`denominator != 0`).
+    
+- Here, the invariant involves **two correlated members** (`name` and `firstInitial`).
+    
+- That means whenever **one changes, the other must change too**.
+    
+- If the user forgets → object becomes invalid.
+    
+
+👉 **Key insight:** _If maintaining an invariant requires the user to “remember” something, it will eventually break._
+
+>🔹 Why Structs Are Bad for This
+
+- Structs (used as plain aggregates) have:
+    
+    - Public members, directly modifiable.
+        
+    - No built-in mechanism to **enforce relationships** between members.
+        
+
+Even if you add helper functions (like `setName(Employee&, std::string)`), the user can still bypass them and directly modify `e.name`.
+
+So invariants that require **coordinated updates** across multiple members are **unsafe in plain structs**.
+
+==Structs (as aggregates) just don’t have the mechanics required to solve this problem in an elegant way.
+
+### classes
+
+>Just like structs, a **class** is a program-defined compound type that can have many member variables with different types.
+
+>[!Key Insight]
+>From a technical standpoint, structs and classes are almost identical -- therefore, any example that is implemented using a struct could be implemented using a class, or vice-versa. However, from a practical standpoint, we use structs and classes differently.
+
+>Because a class is a program-defined data type, it must be defined before it can be used. Classes are defined similarly to structs, except we use the `class` keyword instead of `struct`. For example, here is a definition for a simple employee class:
+
+```cpp
+class Employee
+{
+    int m_id {};
+    int m_age {};
+    double m_wage {};
+};
+```
+
+To demonstrate how similar classes and structs can be, the following program is equivalent to the one we presented at the top of the lesson, but `Date` is now a class instead of a struct:
+
+```cpp
+#include <iostream>
+
+class Date       // we changed struct to class
+{
+public:          // and added this line, which is called an access specifier
+    int m_day{}; // and added "m_" prefixes to each of the member names
+    int m_month{};
+    int m_year{};
+};
+
+void printDate(const Date& date)
+{
+    std::cout << date.m_day << '/' << date.m_month << '/' << date.m_year;
+}
+
+int main()
+{
+    Date date{ 4, 10, 21 };
+    printDate(date);
+
+    return 0;
+}
+```
+class is by default private, which we will cover soon.
+
+>[!Key Insight]
+>You have already been using class objects, perhaps without knowing it. Both `std::string` and `std::string_view` are defined as classes. In fact, most of the non-aliased types in the standard library are defined as classes!
+Classes are really the heart and soul of C++ -- they are so foundational that C++ was originally named “C with classes”! Once you are familiar with classes, much of your time in C++ will be spent writing, testing, and using them.
 
 ---
