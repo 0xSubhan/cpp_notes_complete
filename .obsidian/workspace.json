@@ -20,8 +20,23 @@
               "icon": "lucide-file",
               "title": "Chapter 13 - Compound Types Enums and Structs"
             }
+          },
+          {
+            "id": "9a36389743b7678b",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "C++_Complete_Notes/Object Oriented Programming in C++/00_Introduction to Classes.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "00_Introduction to Classes"
+            }
           }
-        ]
+        ],
+        "currentTab": 1
       }
     ],
     "direction": "vertical"
@@ -170,8 +185,13 @@
       "command-palette:Open command palette": false
     }
   },
-  "active": "f57afa3d5d6975e1",
+  "active": "9a36389743b7678b",
   "lastOpenFiles": [
+    "C++_Complete_Notes/Chapter 13 - Compound Types Enums and Structs.md",
+    "C++_Complete_Notes/Object Oriented Programming in C++/00_Introduction to Classes.md",
+    "C++_Complete_Notes/Object Oriented Programming in C++",
+    "OOP_Complete",
+    "C++_Complete_Notes/Chapter 14 - Introduction to Classes.md",
     "C++_Complete_Notes/Chapter 06 - Operators.md",
     "C++_Complete_Notes/Chapter 04 - Fundamental Data Types.md",
     "C++_Complete_Notes/Chapter 03 - Debugging C++ Programs.md",
@@ -182,7 +202,6 @@
     "C++_Complete_Notes/Chapter 07 - Scope, Duration, and Linkage.md",
     "C++_Complete_Notes/Chapter 05 - Constants and Strings.md",
     "C++_Complete_Notes/Chapter 02 - C++ Basics  Functions and Files.md",
-    "C++_Complete_Notes/Chapter 13 - Compound Types Enums and Structs.md",
     "C++_Complete_Notes/Chapter 12 - Compound Types  References and Pointers.md",
     "C++_Complete_Notes/Chapter 11 - Function Overloading and Function Templates.md",
     "****.md",
@@ -199,11 +218,8 @@
     "learncpp.com/Chapter 0 Introduction",
     "learncpp.com",
     "C++_Complete_Notes/Chapter 0 Introduction/0.9 & 0.10 Build Configurations and Compiler extension.md",
-    "C++_Complete_Notes/Chapter 0 Introduction/0.4 and 0.5 Introduction to C++ development.md",
-    "C++_Complete_Notes/Chapter 0 Introduction/0.3 Introduction to C-C++.md",
     "C++_Complete_Notes/Chapter 0 Introduction",
     "C++_Complete_Notes",
-    "Untitled",
     "Pasted image 20250519184156.png",
     "learncpp.com/Chapter 3",
     "Pasted image 20250506200737.png",
@@ -212,7 +228,6 @@
     "learncpp.com/Chapter 1 Basics",
     "LinkingObjects-min.webp",
     "Development-min.webp",
-    "learncpp.com/Material",
     "Compiling-min.webp",
     "Interpreting-min.webp",
     "Compiling-min 1.webp",

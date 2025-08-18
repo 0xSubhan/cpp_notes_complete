@@ -4315,5 +4315,4 @@ Mob<WaifuType>   waifuMob;
 2. **Default safe init** → Each type will still fall back to its `enum`’s first/default value.
     
 3. **Reusable** → One generic `Mob` definition instead of writing different ones.
-
 ---
