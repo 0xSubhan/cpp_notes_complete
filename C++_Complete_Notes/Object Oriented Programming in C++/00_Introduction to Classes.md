@@ -706,3 +706,307 @@ int Foo::y() { return 5; }
 >If your class type has no data members, prefer using a namespace.
 
 ---
+# Const class objects and const member functions
+
+>class type objects (struct, classes, and unions) can also be made const by using the `const` keyword. Such objects must also be initialized at the time of creation.
+
+```cpp
+struct Date
+{
+    int year {};
+    int month {};
+    int day {};
+};
+
+int main()
+{
+    const Date today { 2020, 10, 14 }; // const class type object
+
+    return 0;
+}
+```
+
+Just like with normal variables, you’ll generally want to make your class type objects const (or constexpr) when you need to ensure they aren’t modified after creation.
+
+### Modifying the data members of const objects is disallowed
+
+>Once a const class has been initialized then we cannot modify the values of its member even if its member function is changing its own member value, it is disallowed.
+
+Example:
+
+```cpp
+struct Date
+{
+    int year {};
+    int month {};
+    int day {};
+
+    void incrementDay()
+    {
+        ++day;
+    }
+};
+
+int main()
+{
+    const Date today { 2020, 10, 14 }; // const
+
+    today.day += 1;        // compile error: can't modify member of const object
+    today.incrementDay();  // compile error: can't call member function that modifies member of const object
+
+    return 0;
+}
+```
+
+### Const objects may not call non-const member functions
+
+>You may be surprised to find that this code also causes a compilation error:
+
+```cpp
+#include <iostream>
+
+struct Date
+{
+    int year {};
+    int month {};
+    int day {};
+
+    void print()
+    {
+        std::cout << year << '/' << month << '/' << day;
+    }
+};
+
+int main()
+{
+    const Date today { 2020, 10, 14 }; // const
+
+    today.print();  // compile error: can't call non-const member function
+
+    return 0;
+}
+```
+
+Even though `print()` does not try to modify a member variable, our call to `today.print()` is still a const violation. This happens because the `print()` member function itself is not declared as const. The compiler won’t let us call a non-const member function on a const object.
+
+### Const member functions
+
+>To address the above issue, we need to make `print()` a const member function. A **const member function** is a member function that guarantees it will not modify the object or call any non-const member functions (as they may modify the object).
+
+Making `print()` a const member function is easy -- we simply append the `const` keyword to the function prototype, after the parameter list, but before the function body:
+
+```cpp
+#include <iostream>
+
+struct Date
+{
+    int year {};
+    int month {};
+    int day {};
+
+    void print() const // now a const member function
+    {
+        std::cout << year << '/' << month << '/' << day;
+    }
+};
+
+int main()
+{
+    const Date today { 2020, 10, 14 }; // const
+
+    today.print();  // ok: const object can call const member function
+
+    return 0;
+}
+```
+
+In the above example, `print()` has been made a const member function, which means we can call it on const objects (such as `today`).
+
+==A const member function that attempts to change a data member or call a non-const member function will cause a compiler error to occur. For example:
+
+```cpp
+struct Date
+{
+    int year {};
+    int month {};
+    int day {};
+
+    void incrementDay() const // made const
+    {
+        ++day; // compile error: const function can't modify member
+    }
+};
+
+int main()
+{
+    const Date today { 2020, 10, 14 }; // const
+
+    today.incrementDay();
+
+    return 0;
+}
+```
+
+In this example, `incrementDay()` has been marked as a const member function, but it attempts to change `day`. This will cause a compiler error.
+
+>[!Key Insight]
+>A const member function may not: modify the implicit object, call non-const member functions.  
+A const member function may: modify objects that aren’t the implicit object, call const member functions, call non-member functions.
+
+==In C++, when you mark a **member function** as `const`, you’re not saying the _function itself_ is constant — you’re saying the function promises **not to modify the object it’s called on**.
+That’s why the `const` qualifier goes **after** the parameter list
+
+### Const member functions may be called on non-const objects
+
+Const member functions may also be called on non-const objects.
+
+```cpp
+#include <iostream>
+
+struct Date
+{
+    int year {};
+    int month {};
+    int day {};
+
+    void print() const // const
+    {
+        std::cout << year << '/' << month << '/' << day;
+    }
+};
+
+int main()
+{
+    Date today { 2020, 10, 14 }; // non-const
+
+    today.print();  // ok: can call const member function on non-const object
+
+    return 0;
+}
+```
+
+>[!Best Practice]
+>A member function that does not (and will not ever) modify the state of the object should be made const, so that it can be called on both const and non-const objects.
+
+### Const objects via pass by const reference
+
+>When you pass an object to a function by **const reference** (`const Date& date`), that function promises **not to modify the passed object**.
+
+That means:
+
+- Inside `doSomething`, `date` is effectively a **const Date object**.
+    
+- And on **const objects**, you are only allowed to call **const member functions** (those that promise not to modify the object).
+    
+
+So if `print()` is not declared `const`, the compiler says:
+
+> "I can’t guarantee that `print()` won’t change the object. Since `date` is const, I can’t allow this call."
+
+>[!Error]
+```cpp
+#include <iostream>
+
+struct Date
+{
+    int year {};
+    int month {};
+    int day {};
+
+    void print() // non-const
+    {
+        std::cout << year << '/' << month << '/' << day;
+    }
+};
+
+void doSomething(const Date& date)
+{
+    date.print();
+}
+
+int main()
+{
+    Date today { 2020, 10, 14 }; // non-const
+    today.print();
+
+    doSomething(today);
+
+    return 0;
+}
+```
+
+>[!Fix]
+```cpp
+#include <iostream>
+
+struct Date
+{
+    int year {};
+    int month {};
+    int day {};
+
+    void print() const // now const
+    {
+        std::cout << year << '/' << month << '/' << day;
+    }
+};
+
+void doSomething(const Date& date)
+{
+    date.print();
+}
+
+int main()
+{
+    Date today { 2020, 10, 14 }; // non-const
+    today.print();
+
+    doSomething(today);
+
+    return 0;
+}
+```
+
+>[!Analogy]
+>Think of it like lending your friend your diary:
+>>- If you lend it with `const` → you’re saying: _“You can read it, but don’t write in it.”_
+>>- If you don’t use `const` → they might change it.
+
+### Member function const and non-const overloading
+
+>Finally, although it is not done very often, it is possible to overload a member function to have a const and non-const version of the same function. This works because the const qualifier is considered part of the function’s signature, so two functions which differ only in their const-ness are considered distinct.
+
+```cpp
+#include <iostream>
+
+struct Something
+{
+    void print()
+    {
+        std::cout << "non-const\n";
+    }
+
+    void print() const
+    {
+        std::cout << "const\n";
+    }
+};
+
+int main()
+{
+    Something s1{};
+    s1.print(); // calls print()
+
+    const Something s2{};
+    s2.print(); // calls print() const
+
+    return 0;
+}
+```
+
+This prints:
+
+non-const
+const
+
+---
