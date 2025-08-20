@@ -1010,3 +1010,278 @@ non-const
 const
 
 ---
+# Public and private members and access specifiers
+
+>[!Important Analogy]
+>Let’s say you’re walking down the street on a brisk autumn day, eating a burrito. You want somewhere to sit, so you look around. To your left is a park, with mowed grass and shade trees, a few uncomfortable benches, and screaming kids on the nearby playground. To your right is a stranger’s residence. Through the window, you see a comfy reclining chair and a crackling fireplace.
+With a heavy sigh, you choose the park.
+The key determinant for your choice is that the park is a public space, whereas the residence is private. You (and anyone else) are allowed to freely access public spaces. But only the members of the residence (or those given explicit permission to enter) are permitted to access the private residence.
+
+### Member access
+
+>A similar concept applies to the members of a class type. Each member of a class type has a property called an **access level** that determines who can access that member.
+
+C++ has three different access levels: _public_, _private_, and _protected_.
+
+>Whenever a member is accessed, the compiler checks whether the access level of the member permits that member to be accessed. If the access is not permitted, the compiler will generate a compilation error. This access level system is sometimes informally called **access controls**.
+
+### The member of a struct are public  by default
+
+>Members that have the _public_ access level are called _public members_. **Public members** are members of a class type that do not have any restrictions on how they can be accessed. Much like the park in our opening analogy, public members can be accessed by anyone (as long as they are in scope).
+
+>🔹 Access Specifiers in C++
+
+In C++, **struct** and **class** differ mainly in **default access control**:
+
+- **struct** → members are **public** by default.
+    
+- **class** → members are **private** by default.
+    
+
+That means if you don’t explicitly write `public:` or `private:`, the compiler assumes the default based on whether you’re using `struct` or `class`.
+
+>🔹 Public Members
+
+When something is **public**, it can be accessed:
+
+1. By **member functions** of the same struct/class.
+    
+2. By **non-member functions** (code outside the class).
+    
+3. By **other class types**.
+
+
+>🔹 “The Public”
+
+The phrase **“the public”** in this context means **any code that is not inside the struct/class itself**.
+
+- This includes non-member functions like `main()`
+    
+- Or functions in other classes.
+    
+
+So when `main()` accesses `today.day` or calls `today.print()`, it’s the **public** accessing **public members**.
+
+-->Example:
+
+```cpp
+#include <iostream>
+
+struct Date
+{
+    // struct members are public by default, can be accessed by anyone
+    int year {};       // public by default
+    int month {};      // public by default
+    int day {};        // public by default
+
+    void print() const // public by default
+    {
+        // public members can be accessed in member functions of the class type
+        std::cout << year << '/' << month << '/' << day;
+    }
+};
+
+// non-member function main is part of "the public"
+int main()
+{
+    Date today { 2020, 10, 14 }; // aggregate initialize our struct
+
+    // public members can be accessed by the public
+    today.day = 16; // okay: the day member is public
+    today.print();  // okay: the print() member function is public
+
+    return 0;
+}
+```
+
+In this example, members are accessed in three places:
+
+- Within member function `print()`, we access the `year`, `month`, and `day` members of the implicit object.
+- In `main()`, we directly access `today.day` to set its value.
+- In `main()`, we call member function `today.print()`.
+
+### The member of a class are private by default
+
+>Members that have the _private_ access level are called _private members_. **Private members** are members of a class type that can only be accessed by other members of the same class.
+
+Consider the following example, which is almost identical to the one above:
+
+```cpp
+#include <iostream>
+
+class Date // now a class instead of a struct
+{
+    // class members are private by default, can only be accessed by other members
+    int m_year {};     // private by default
+    int m_month {};    // private by default
+    int m_day {};      // private by default
+
+    void print() const // private by default
+    {
+        // private members can be accessed in member functions
+        std::cout << m_year << '/' << m_month << '/' << m_day;
+    }
+};
+
+int main()
+{
+    Date today { 2020, 10, 14 }; // compile error: can no longer use aggregate initialization
+
+    // private members can not be accessed by the public
+    today.m_day = 16; // compile error: the m_day member is private
+    today.print();    // compile error: the print() member function is private
+
+    return 0;
+}
+```
+
+In this example, members are accessed in the same three places:
+
+- Within member function `print()`, we access the `m_year`, `m_month`, and `m_day` members of the implicit object.
+- In `main()`, we directly access `today.m_day` to set its value.
+- In `main()`, we call member function `today.print()`.
+
+>However, if you compile this program, you will note that three compilation errors are generated.
+
+Within `main()`, the statements `today.m_day = 16` and `today.print()` now both generate compilation errors. This is because `main()` is part of the public, and the public is not allowed to directly access private members.
+
+Within `print()`, access to members `m_year`, `m_month`, and `m_day` is allowed. This is because `print()` is a member of the class, and members of the class are allowed to access private members.
+
+>[!Key Insight]
+>The members of a class are private by default. Private members can be accessed by other members of the class, but can not be accessed by the public.
+A class with private members is no longer an aggregate, and therefore can no longer use aggregate initialization.
+
+### Naming your private member variables
+
+>[!Best Practice]
+>Consider naming your private data members starting with an “m_” prefix to help distinguish them from the names of local variables, function parameters, and member functions.
+Public members of classes may also follow this convention if desired. However, the public members of structs typically do not use this prefix since structs generally do not have many member functions (if any).
+
+### Setting access levels via access specifiers
+
+>By default, the members of structs (and unions) are public, and the members of classes are private.
+
+However, we can explicitly set the access level of our members by using an **access specifier**. An access specifier sets the access level of _all members_ that follow the specifier. C++ provides three access specifiers: `public:`, `private:`, and `protected:`.
+
+In the following example, we use both the `public:` access specifier to make sure the `print()` member function can be used by the public, and the `private:` access specifier to make our data members private.
+
+```cpp
+class Date
+{
+// Any members defined here would default to private
+
+public: // here's our public access specifier
+
+    void print() const // public due to above public: specifier
+    {
+        // members can access other private members
+        std::cout << m_year << '/' << m_month << '/' << m_day;
+    }
+
+private: // here's our private access specifier
+
+    int m_year { 2020 };  // private due to above private: specifier
+    int m_month { 14 }; // private due to above private: specifier
+    int m_day { 10 };   // private due to above private: specifier
+};
+
+int main()
+{
+    Date d{};
+    d.print();  // okay, main() allowed to access public members
+
+    return 0;
+}
+```
+
+This example compiles. Because `print()` is a public member due to the `public:` access specifier, `main()` (which is part of the public) is allowed to access it.
+
+>Because we have private members, we can not aggregate initialize `d`. For this example, we’re using default member initialization instead (as a temporary workaround).
+
+| Access level | Access specifier | Member access | Derived class access | Public access |
+| ------------ | ---------------- | ------------- | -------------------- | ------------- |
+| Public       | public:          | yes           | yes                  | yes           |
+| Protected    | protected:       | yes           | yes                  | no            |
+| Private      | private:         | yes           | no                   | no            |
+
+### Access level best practice for structs and classes
+
+>[!Best Practice]
+>Classes should generally make member variables private (or protected), and member functions public.
+Structs should generally avoid using access specifiers (all members will default to public).
+
+### Access levels work on a per-class basis
+
+>One nuance of C++ access levels that is often missed or misunderstood is that access to members is defined on a per-class basis, not on a per-object basis.
+
+You already know that a member function can directly access private members (of the implicit object). However, because access levels are per-class, not per-object, a member function can also directly access the private members of ANY other object of the same class type that is in scope.
+
+Let’s illustrate this with an example:
+
+```cpp
+#include <iostream>
+#include <string>
+#include <string_view>
+
+class Person
+{
+private:
+    std::string m_name{};
+
+public:
+    void kisses(const Person& p) const
+    {
+        std::cout << m_name << " kisses " << p.m_name << '\n';
+    }
+
+    void setName(std::string_view name)
+    {
+        m_name = name;
+    }
+};
+
+int main()
+{
+    Person joe;
+    joe.setName("Joe");
+
+    Person kate;
+    kate.setName("Kate");
+
+    joe.kisses(kate);
+
+    return 0;
+}
+```
+
+This prints:
+
+Joe kisses Kate
+
+There are a few things to note here.
+
+First, `m_name` has been made private, so it can only be accessed by members of the `Person` class (not the public).
+
+Second, because our class has private members, it is not an aggregate, and we can’t use aggregate initialization to initialize our Person objects. As a workaround (until we cover a proper solution to this issue), we’ve created a public member function named `setName()` that allows us to assign a name to our Person objects.
+
+==Third, because `kisses()` is a member function, it has direct access to private member `m_name`. However, you might be surprised to see that it also has direct access to `p.m_name`! This works because `p` is a `Person` object, and `kisses()` can access the private members of any `Person` object in scope!
+
+### The technical and practical difference between structs and classes
+
+>A class defaults its members to private, whereas a struct defaults its members to public.
+
+In practice, we use structs and classes differently.
+
+As a rule of thumb, use a struct when all of the following are true:
+
+- You have a simple collection of data that doesn’t benefit from restricting access.
+- Aggregate initialization is sufficient.
+- You have no class invariants, setup needs, or cleanup needs.
+
+A few examples of where structs might be used: constexpr global program data, a point struct (a simple collection of int members that don’t benefit from being made private), structs used to return a set of data from a function.
+
+Use a class otherwise.
+
+We want our structs to be aggregates. So if you use any capabilities that makes your struct a non-aggregate, you should probably be using a class instead (and following all of the best practices for classes).
+
+---
