@@ -1285,3 +1285,120 @@ Use a class otherwise.
 We want our structs to be aggregates. So if you use any capabilities that makes your struct a non-aggregate, you should probably be using a class instead (and following all of the best practices for classes).
 
 ---
+# Access functions
+
+>An **access function** is a trivial public member function whose job is to retrieve or change the value of a private member variable for that object.
+
+--> Getters returns the private member variable and setters set the private member variable value.
+
+==Getters are usually made const, so they can be called on both const and non-const objects. Setters should be non-const, so they can modify the data members.
+
+>Example:
+
+```cpp
+#include <iostream>
+
+class Date
+{
+private:
+    int m_year { 2020 };
+    int m_month { 10 };
+    int m_day { 14 };
+
+public:
+    void print()
+    {
+        std::cout << m_year << '/' << m_month << '/' << m_day << '\n';
+    }
+
+    int getYear() const { return m_year; }        // getter for year
+    void setYear(int year) { m_year = year; }     // setter for year
+
+    int getMonth() const  { return m_month; }     // getter for month
+    void setMonth(int month) { m_month = month; } // setter for month
+
+    int getDay() const { return m_day; }          // getter for day
+    void setDay(int day) { m_day = day; }         // setter for day
+};
+
+int main()
+{
+    Date d{};
+    d.setYear(2021);
+    std::cout << "The year is: " << d.getYear() << '\n';
+
+    return 0;
+}
+```
+The year is: 2021
+
+>[!Tip]
+Use a “set” prefix on your setters to make it more obvious that they are changing the state of the object.
+
+### Getters should return by value or by const lvalue reference
+
+>[!Best Practice]
+>Getters should provide “read-only” access to data. Therefore, the best practice is that they should return by either value (if making a copy of the member is inexpensive) or by const lvalue reference (if making a copy of the member is expensive).
+
+### Access functions concerns
+
+>🔹 The concern with access functions
+
+The idea of OOP is that a class should represent **behavior**, not just a bag of data.  
+If you start writing getters and setters for every private member, your class becomes like a `struct` in disguise — you’re just exposing data indirectly, which goes against _encapsulation_. (We will conver it soon!)
+
+That’s why many developers argue:  
+👉 “If you need tons of getters/setters, maybe your design is wrong.”
+
+#### 🔹 The pragmatic approach (from the text)
+
+1. **If your class has no invariants** (no rules about what values its members must follow)  
+    → and you find yourself writing accessors for everything → maybe just use a `struct` with public members.  
+    Example:
+
+```cpp
+struct Point {
+    int x{};
+    int y{};
+};
+```
+
+Here, getters/setters would add no real value.
+
+2. **Prefer behaviors over accessors**  
+    Instead of raw `get`/`set`, think about _actions_.  
+    Example:  
+    ❌ `setAlive(false)`  
+    ✅ `kill()`  
+    ❌ `setAlive(true)`  
+    ✅ `revive()`
+    
+    Why? Because `kill()` and `revive()` are meaningful operations in the context of a game. They also leave room for logic (e.g., when killed, drop inventory, play animation, etc.), while `setAlive(false)` is just a dumb data assignment.
+
+3. **Only provide accessors when they make sense**
+	Sometimes, you _do_ need them. For example:
+
+```cpp
+class BankAccount {
+private:
+    double balance{};
+public:
+    double getBalance() const { return balance; }  // makes sense, public needs it
+    void deposit(double amount) { balance += amount; }  
+};
+```
+Here, `getBalance()` is natural — clients of `BankAccount` will reasonably need to know the balance.
+
+#### 🔑 Key insight
+
+- **Accessors are not evil** → but overusing them can turn your class into a glorified `struct`.
+    
+- **Good design** favors meaningful actions (methods) over exposing raw data.
+    
+- Use accessors only when _outside code actually needs to know or modify a value_.
+
+
+>[!Note]
+>Access functions refers to getters and setters member functions!
+
+---
