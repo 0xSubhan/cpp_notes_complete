@@ -1786,3 +1786,721 @@ const std::string& getName() const { return m_name; }
 ```
 
 ---
+# The benefits of data hiding (Encapsulation)
+
+>we mentioned that the member variables of a class are typically made private. Programmers who are learning about classes for the first time often have a hard time understanding why you’d want to do this. After all, making your variables private means they can’t be accessed by the public. At best, this makes for more work when writing your classes. At worst, it may seem completely pointless (especially if we’re providing public access functions to the private member data).
+
+The answer to this question is so foundational that we’re going to spend an entire lesson on the topic!
+
+>[!Analogy]
+>In modern life, we have access to many mechanical or electronic devices. You turn your TV on/off with a remote control. You make your car move forward by pressing the gas pedal. You turn on your lights by flipping a switch. All of these devices have something in common: They provide a simple user interface (a set of buttons, a pedal, a switch, etc…) that allows you to perform key actions.
+How these devices actually operate is hidden away from you. When you press the button on your remote control, you don’t need to know how the remote is communicating with your TV. When you press the gas pedal on your car, you don’t need to know how the combustion engine makes the wheels turn. When you take a picture, you don’t need to know how the sensors gather light and turn that light into a pixelated image.
+This separation of interface and implementation is extremely useful because it allows us to use objects without having to understand how they work -- instead, we only have to understand how to interact with them. This vastly reduces the complexity of using these objects, and increases the number of objects we’re capable of interacting with.
+
+### Implementation and interfaces in class types
+
+#### 🔹 1. What is the **interface** of a class?
+
+- The **interface** is _how the outside world interacts_ with the class.
+    
+- In C++, that means the **public members**:
+    
+    - public functions (getters, setters, behaviors, actions)
+        
+    - sometimes public constants or types
+        
+
+👉 Think of it like the **remote control** for a TV:
+
+- Buttons (public functions) = what you’re allowed to press.
+    
+- You don’t care how the TV processes signals internally.
+    
+
+Example:
+
+```cpp
+class TV {
+public:
+    void turnOn();
+    void turnOff();
+    void changeChannel(int channel);
+};
+```
+
+Here:
+
+- `turnOn`, `turnOff`, `changeChannel` = **interface**
+    
+- A user of `TV` doesn’t need to know _how_ they’re implemented.
+
+#### 🔹 2. What is the implementation of a class?
+
+The implementation is how things actually work under the hood.
+
+This includes:
+
+private data members (e.g. bool m_powerOn, int m_channel)
+
+the code inside the member function bodies
+
+Example:
+
+```cpp
+class TV {
+private:
+    bool m_powerOn{false};
+    int m_channel{1};
+
+public:
+    void turnOn() { m_powerOn = true; }
+    void turnOff() { m_powerOn = false; }
+    void changeChannel(int channel) { m_channel = channel; }
+};
+```
+
+Here:
+
+- `m_powerOn`, `m_channel` and the logic inside functions = **implementation**
+    
+- A user of `TV` doesn’t need to know these exist.
+
+### Data hiding
+
+#### **1. What is Data Hiding?**
+
+- **Definition:**  
+    Data hiding means making the _implementation details_ (like how data is stored and manipulated internally) **inaccessible to users** of a class.
+    
+- **How:**
+    
+    - Mark **data members** as `private` → users can’t touch them directly.
+        
+    - Provide **public member functions** to interact with those data members → users must go through the class interface.
+        
+
+So instead of:
+
+```cpp
+person.name = "Ali";   // directly changing internals
+```
+
+You do:
+
+```cpp
+person.setName("Ali");  // via public interface
+```
+
+#### **2. Why do we do this?**
+
+- Prevents misuse: Users can’t directly corrupt the internal state.
+    
+- Flexibility: You can change how the data is stored internally (implementation) without breaking outside code that only relies on the interface.
+    
+- Encapsulation: Bundles data + behaviors into one logical unit.
+
+#### **3. Classes vs Structs**
+
+- **Classes:**  
+    Should use data hiding → by default, members are `private`. They’re meant for more structured, safe, reusable code.
+    
+- **Structs:**  
+    By convention, structs in C++ **don’t** use data hiding (their members are usually `public` by default). Structs are good for _plain old data (POD)_, like:
+
+```cpp
+struct Point {
+    int x{};
+    int y{};
+};
+```
+
+- No hidden logic, just data storage.
+
+#### **Encapsulation**
+
+🔹 **Concept:**  
+Encapsulation is about **wrapping/bundling data and the functions that operate on that data into a single unit (class)**.
+
+- Example:
+
+```cpp
+class Player {
+    int health {};              // data
+public:
+    void takeDamage(int d) {    // function operating on data
+        health -= d;
+    }
+};
+```
+
+Here, `health` + `takeDamage` live together in **one class** → that’s encapsulation.
+
+✅ Key idea: Encapsulation is about **packaging** (data + behavior together).  
+It does **not necessarily mean hiding anything**.
+
+#### **Data Hiding**
+
+🔹 **Concept:**  
+Data hiding is about **restricting access** to internal details so they can’t be misused. It’s achieved using **access specifiers** (`private`, `protected`) in C++.
+
+- Example (data hidden):
+
+```cpp
+class Player {
+private:
+    int health {};  // hidden
+
+public:
+    void takeDamage(int d) {   // controlled access
+        health -= d;
+    }
+};
+```
+
+Now, outsiders **cannot directly access** `health`.
+
+✅ Key idea: Data hiding is about **protection** (controlling what can and cannot be accessed).
+
+#### **Relationship**
+
+- Encapsulation = **putting things in a box** (class with data + methods).
+    
+- Data hiding = **locking the box** (restricting direct access to internal stuff).
+    
+
+👉 Encapsulation is possible **without** data hiding:
+
+```cpp
+struct Player {      // struct members are public by default
+    int health {};   // not hidden
+    void takeDamage(int d) {
+        health -= d;
+    }
+};
+```
+
+This is still encapsulation (data + method bundled), but no data hiding (user can do `player.health = -1000;`).
+
+==👉 Data hiding **requires encapsulation** (you need a class/struct to hide data inside).
+
+>In this tutorial series, we’ll assume all encapsulated classes implement data hiding.
+
+#### 🔑 Final Truth
+
+- **Encapsulation** can exist **without data hiding**.
+    
+- **Data hiding cannot exist without encapsulation** (since you need a class to hide things inside).
+
+### Data hiding make classes easier to use, and reduces complexity
+
+**Data hiding (achieved via encapsulation) shields the internal details of a class so the user only sees the interface, not the messy implementation behind it.**
+
+This makes the class:
+
+1. **Easier to use** – because you don’t need to know “how it works,” just “how to use it.”
+    
+2. **Less error-prone** – because users can’t accidentally mess with internal details.
+    
+3. **Less complex** – because you only need to learn a small, clean set of public functions.
+
+>Example:
+
+```cpp
+#include <iostream>
+#include <string_view>
+
+int main()
+{
+    std::string_view sv{ "Hello, world!" };
+    std::cout << sv.length(); // prints 13
+}
+```
+
+- **What you see (Interface)**:
+    
+    - You can create a `std::string_view`.
+        
+    - You can call `sv.length()` to get the length.
+        
+- **What you don’t see (Implementation)**:
+    
+    - How `std::string_view` stores the pointer and size of the string.
+        
+    - How `length()` is calculated internally.
+        
+    - What private members exist, their names, or their types.
+        
+
+👉 As a user, you **don’t need to care**. You just rely on the **public interface**.
+
+#### 🔹 Why this matters
+
+Imagine if you had to understand all the internals of `std::string`, `std::vector`, or `std::cout` before you could use them… 🤯
+
+- Your programs would be insanely complicated.
+    
+- You’d spend hours reading internal implementation details instead of focusing on solving your problem.
+    
+
+Instead, **encapsulation + data hiding** give you a clean, safe interface — you only need to know:
+
+- Which functions exist,
+    
+- What parameters they take,
+    
+- What values they return.
+    
+
+That’s it.
+
+✅ **Bottom line:**  
+**Data hiding reduces complexity** because it allows you to work with classes as _black boxes_. You don’t care about _how they work inside_, only _what they can do for you_.
+
+### Data hiding allows us to maintain invariants
+
+```cpp
+#include <iostream>
+#include <string>
+
+struct Employee // members are public by default
+{
+    std::string name{ "John" };
+    char firstInitial{ 'J' }; // should match first initial of name
+
+    void print() const
+    {
+        std::cout << "Employee " << name << " has first initial " << firstInitial << '\n';
+    }
+};
+
+int main()
+{
+    Employee e{}; // defaults to "John" and 'J'
+    e.print();
+
+    e.name = "Mark"; // change employee's name to "Mark"
+    e.print(); // prints wrong initial
+
+    return 0;
+}
+```
+
+>Explanation:
+
+#### 🔹 What’s an **invariant**?
+
+- An **invariant** is a condition that must **always hold true** for an object to remain in a valid state.
+    
+- For example, in your `Employee` class:
+
+```cpp
+std::string name;
+char firstInitial;  // invariant: should always match first letter of name
+```
+
+- 👉 The invariant is: `firstInitial == name[0]`.  
+    If this condition breaks, the object is in an **invalid or inconsistent state**.
+
+#### 🔹 Problem with public members (no data hiding)
+
+In the **struct version**:
+
+```cpp
+Employee e{};
+e.name = "Mark";  // name changes, but firstInitial is still 'J'
+```
+
+- Because `name` is public, users of the class can directly modify it.
+    
+- But when they do so, **they forget to update** `firstInitial`.
+    
+- Result: The invariant (`firstInitial == name[0]`) is broken.
+    
+- Now, `print()` produces a **wrong output**.
+    
+
+⚠️ This means that the correctness of your program depends on the **user remembering internal rules** — which is error-prone.
+
+#### 🔹 Solution with data hiding
+
+In the **class version**:
+
+```cpp
+class Employee {
+    std::string m_name{};
+    char m_firstInitial{};
+
+public:
+    void setName(std::string_view name) {
+        m_name = name;
+        m_firstInitial = name.front();
+    }
+};
+```
+
+- The data members are now **private**.
+    
+- The user can’t touch them directly.
+    
+- The only way to set a name is via `setName()`.
+    
+- And `setName()` **enforces the invariant** by updating both `m_name` and `m_firstInitial`.
+    
+
+✅ Result:
+
+- Invariants are **automatically maintained**.
+    
+- The user can’t mess it up even accidentally.
+    
+- Complexity is reduced, and reliability is increased.
+
+#### 🔹 Why data hiding helps maintain invariants
+
+1. **Prevents direct access** → Users can’t bypass your logic.
+    
+2. **Centralizes updates** → All changes go through your controlled functions.
+    
+3. **Automatic enforcement** → Invariants stay true without user effort.
+
+### Data hiding allows us to do better error detection (and handling)
+
+>In the above program, the invariant that `m_firstInitial` must match the first character of `m_name` exists because `m_firstInitial` exists independently of `m_name`. We can remove this particular invariant by replacing data member `m_firstInitial` with a member function that returns the first initial:
+
+```cpp
+#include <iostream>
+#include <string>
+
+class Employee
+{
+    std::string m_name{ "John" };
+
+public:
+    void setName(std::string_view name)
+    {
+        m_name = name;
+    }
+
+    // use std::string::front() to get first letter of `m_name`
+    char firstInitial() const { return m_name.front(); }
+
+    void print() const
+    {
+        std::cout << "Employee " << m_name << " has first initial " << firstInitial() << '\n';
+    }
+};
+
+int main()
+{
+    Employee e{}; // defaults to "John"
+    e.setName("Mark");
+    e.print();
+
+    return 0;
+}
+```
+
+However, this program has another class invariant. Take a moment and see if you can determine what it is. We’ll wait here and watch this dry paint…
+
+The answer is that `m_name` shouldn’t be an empty string (because every `Employee` should have a name). If `m_name` is set to an empty string, nothing bad will happen immediately. But if `firstInitial()` is then called, the `front()` member of `std::string` will try to get the first letter of the empty string, and that leads to undefined behavior.
+
+Ideally, we’d like to prevent `m_name` from ever being empty.
+
+If the user had public access to the `m_name` member, they could just set `m_name = ""`, and there’s nothing we can do to prevent that from happening.
+
+However, because we’re forcing the user to set `m_name` through the public interface function `setName()`, we can have `setName()` validate that the user has passed in a valid name. If the name is non-empty, then we can assign it to `m_name`. If the name is an empty string, we can do any number of things in response:
+
+- Ignore the request to set the name to “” and return to the caller.
+- Assert out.
+- Throw an exception.
+
+The point here is that we can detect the misuse, and then handle it however we think is most appropriate. How we best handle such cases effectively is a topic for another day.
+
+### Data hiding makes it possible to change implementation details without breaking existing programs
+
+Consider this simple example:
+
+```cpp
+#include <iostream>
+
+struct Something
+{
+    int value1 {};
+    int value2 {};
+    int value3 {};
+};
+
+int main()
+{
+    Something something;
+    something.value1 = 5;
+    std::cout << something.value1 << '\n';
+}
+```
+
+While this program works fine, what would happen if we decided to change the implementation details of the class, like this?
+
+```cpp
+#include <iostream>
+
+struct Something
+{
+    int value[3] {}; // uses an array of 3 values
+};
+
+int main()
+{
+    Something something;
+    something.value1 = 5;
+    std::cout << something.value1 << '\n';
+}
+```
+
+We haven’t covered arrays yet, but don’t worry about that. The point here is that this program no longer compiles because the member named `value1` no longer exists, and a statement in `main()` is still using that identifier.
+
+Data hiding gives us the ability to change how classes are implemented without breaking the programs that use them.
+
+Here is the encapsulated version of the original version of this class that uses functions to access `m_value1`:
+
+```cpp
+#include <iostream>
+
+class Something
+{
+private:
+    int m_value1 {};
+    int m_value2 {};
+    int m_value3 {};
+
+public:
+    void setValue1(int value) { m_value1 = value; }
+    int getValue1() const { return m_value1; }
+};
+
+int main()
+{
+    Something something;
+    something.setValue1(5);
+    std::cout << something.getValue1() << '\n';
+}
+```
+
+Now, let’s change the class’s implementation back to an array:
+
+```cpp
+#include <iostream>
+
+class Something
+{
+private:
+    int m_value[3]; // note: we changed the implementation of this class!
+
+public:
+    // We have to update any member functions to reflect the new implementation
+    void setValue1(int value) { m_value[0] = value; }
+    int getValue1() const { return m_value[0]; }
+};
+
+int main()
+{
+    // But our programs that use the class do not need to be updated!
+    Something something;
+    something.setValue1(5);
+    std::cout << something.getValue1() << '\n';
+}
+```
+
+Because we did not change the public interface of the class, our program that uses that interface did not need to change at all, and still functions identically.
+
+Analogously, if gnomes snuck into your house at night and replaced the internals of your TV remote with a different (but compatible) technology, you probably wouldn’t even notice!
+
+### Classes with interfaces are easier to debug
+
+And finally, encapsulation can help you debug a program when something goes wrong. Often when a program does not work correctly, it is because one of our member variables has been given an incorrect value. If everyone is able to set the member variable directly, tracking down which piece of code actually modified the member variable to the wrong value can be difficult. This can involve breakpointing every statement that modifies the member variable -- and there can be lots of them.
+
+However, if a member can only be changed through a single member function, then you can simply breakpoint that single function and watch as each caller changes the value. This can make it much easier to determine who the culprit is.
+
+### Prefer non-member functions to member functions 
+
+#### 🔹 Key Idea
+
+>In C++, **not every function that uses a class needs to be a member of that class**.  
+If a function can be written **without direct access** to private data, it’s usually better to make it a **non-member function**.
+
+#### 🔹 Why prefer non-member functions?
+
+Here are the main reasons (with explanations):
+
+1. **Smaller class interface**
+    
+    - Member functions become part of the **public interface**.
+        
+    - The bigger the interface, the more complex the class is to understand and maintain.
+        
+    - By keeping functions outside when possible, your class stays lean.
+        
+2. **Better encapsulation while hiding the implementaion detail**
+    
+    - Non-member functions can only use the class’s **public interface** (like getters/setters).
+        
+    - They can’t "cheat" by directly touching private data, so they enforce good encapsulation.
+    
+	- If `m_flavor` later changes to `m_tasteProfile` or `enum class Flavor`, `print()` breaks.
+    
+	- The class is now **less flexible**, because external logic (printing) is coupled to internal data.
+        
+3. **Less coupling**
+    
+    - If you later change the internal implementation of the class, non-member functions don’t need to be revisited (as long as the public interface stays the same).
+        
+    - Member functions might need changes because they are tied to the internals.
+        
+4. **Flexibility & reusability**
+    
+    - Non-member functions can be **customized per application** without modifying the class itself.
+        
+    - Example: different programs might want to print `Yogurt` differently — this is easy if `print()` is non-member.
+        
+5. **Easier to debug**
+    
+    - Non-member functions are just free functions. They are easier to isolate and test compared to member functions that are entangled with class internals.
+
+>[!Best Practice]
+>Prefer implementing functions as non-members when possible (especially functions that contain application specific data or logic).
+
+>Let’s illustrate this with three similar examples, in order from worst to best:
+
+```cpp
+#include <iostream>
+#include <string>
+
+class Yogurt
+{
+    std::string m_flavor{ "vanilla" };
+
+public:
+    void setFlavor(std::string_view flavor)
+    {
+        m_flavor = flavor;
+    }
+
+    const std::string& getFlavor() const { return m_flavor; }
+
+    // Worst: member function print() uses direct access to m_flavor when getter exists
+    void print() const
+    {
+        std::cout << "The yogurt has flavor " << m_flavor << '\n';
+    }
+};
+
+int main()
+{
+    Yogurt y{};
+    y.setFlavor("cherry");
+    y.print();
+
+    return 0;
+}
+```
+
+The above is the worst version. The `print()` member function directly accesses `m_flavor` when a getter for the flavor already exists. If the class implementation is ever updated, `print()` will also probably need to be modified. The string printed by `print()` is application-specific (another application using this class may want to print something else, which will require cloning or modifying the class).
+
+```cpp
+#include <iostream>
+#include <string>
+
+class Yogurt
+{
+    std::string m_flavor{ "vanilla" };
+
+public:
+    void setFlavor(std::string_view flavor)
+    {
+        m_flavor = flavor;
+    }
+
+    const std::string& getFlavor() const { return m_flavor; }
+
+    // Better: member function print() has no direct access to members
+    void print(std::string_view prefix) const
+    {
+        std::cout << prefix << ' ' << getFlavor() << '\n';
+    }
+};
+
+int main()
+{
+    Yogurt y{};
+    y.setFlavor("cherry");
+    y.print("The yogurt has flavor");
+
+    return 0;
+}
+```
+
+The above version is better, but still not great. `print()` is still a member function, but at least it now does not directly access any data members. If the class implementation is ever updated, `print()` will need to be evaluated to determine whether it needs an update (but it will not). The prefix for the `print()` function is now parameterized, which allows us to move the prefix into non-member function `main()`. But the function still imposes constraints on how things are printed (e.g. it always prints as prefix, space, flavor, newline). If that does not meet the needs of a given application, another function will need to be added.
+
+```cpp
+#include <iostream>
+#include <string>
+
+class Yogurt
+{
+    std::string m_flavor{ "vanilla" };
+
+public:
+    void setFlavor(std::string_view flavor)
+    {
+        m_flavor = flavor;
+    }
+
+    const std::string& getFlavor() const { return m_flavor; }
+};
+
+// Best: non-member function print() is not part of the class interface
+void print(const Yogurt& y)
+{
+        std::cout << "The yogurt has flavor " << y.getFlavor() << '\n';
+}
+
+int main()
+{
+    Yogurt y{};
+    y.setFlavor("cherry");
+    print(y);
+
+    return 0;
+}
+```
+
+The above version is the best. `print()` is now a non-member function. It does not directly access any members. If the class implementation ever changes, `print()` will not need to be evaluated at all. Additionally, each application can provide it’s own `print()` function that prints exactly how that application wants to.
+
+#### 🔹 When to use member vs non-member?
+
+✅ **Use a member function when**:
+
+- It must be (e.g. constructors, destructors, virtual functions, operators like `operator[]`).
+    
+- The function needs **direct access** to private/protected data.
+    
+- The function is essential to the "identity" of the class (e.g. `push_back()` in `std::vector`).
+    
+
+✅ **Use a non-member function when**:
+
+- The function can be implemented entirely using the public interface.
+    
+- The function is more about **application logic** than core functionality of the class.
+    
+- You want to keep the class’s interface small and clean.
+
+### The order of class member declaration
+
+>When writing code outside of a class, we are required to declare variables and functions before we can use them. However, inside a class, this limitation does not exist. As noted in lesson [14.3 -- Member functions](https://www.learncpp.com/cpp-tutorial/member-functions/), we can order our members in any order we like.
+
+So how should we order them?
+
+>[!Best Practice]
+>Declare public members first, protected members next, and private members last. This spotlights the public interface and de-emphasizes implementation details.
+
+---
