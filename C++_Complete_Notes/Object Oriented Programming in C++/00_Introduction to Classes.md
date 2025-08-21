@@ -2503,4 +2503,230 @@ So how should we order them?
 >[!Best Practice]
 >Declare public members first, protected members next, and private members last. This spotlights the public interface and de-emphasizes implementation details.
 
+>[!Define Encapsulation]
+>Encapsulation in C++ is a fundamental principle of Object-Oriented Programming (OOP) that involves bundling data (attributes) and the methods (functions) that operate on that data into a single unit, known as a class. This concept serves two primary purposes:
+>
+>>- **Data Hiding:** Encapsulation allows for the protection of sensitive data within a class by restricting direct external access. This is achieved by declaring data members as `private` or `protected`, making them inaccessible from outside the class. Access and modification of this hidden data are then controlled through public methods (often called "getter" and "setter" methods). This prevents unintended or unauthorized manipulation of the object's internal state. 
+>>-  **Modularity and Organization:** By grouping related data and functions within a class, encapsulation promotes a more organized and modular code structure. Each class represents a self-contained unit, responsible for its own data and behavior. This improves code readability, maintainability, and reusability, as changes within one encapsulated unit are less likely to impact other parts of the program.
+
+---
+# Introduction to constructors
+
+>as soon as we make any member variables private (to hide our data), our class type is no longer an aggregate (because aggregates cannot have private members). And that means we’re no longer able to use aggregate initialization:
+
+>[!Error]
+```cpp
+class Foo // Foo is not an aggregate (has private members)
+{
+    int m_x {};
+    int m_y {};
+};
+
+int main()
+{
+    Foo foo { 6, 7 }; // compile error: can not use aggregate initialization
+
+    return 0;
+}
+```
+
+>Not allowing class types with private members to be initialized via aggregate initialization makes sense for a number of reasons:
+
+- Aggregate initialization requires knowing about the implementation of the class (since you have to know what the members are, and what order they were defined in), which we’re intentionally trying to avoid when we hide our data members.
+- If our class had some kind of invariant, we’d be relying on the user to initialize the class in a way that preserves the invariant.
+
+### Constructors
+
+>A **constructor** is a special member function that is automatically called after a non-aggregate class type object is created.
+
+When a non-aggregate class type object is defined, the compiler looks to see if it can find an accessible constructor that is a match for the initialization values provided by the caller (if any).
+
+- If an accessible matching constructor is found, memory for the object is allocated, and then the constructor function is called.
+- If no accessible matching constructor can be found, a compilation error will be generated.
+
+>[!Key Insight About memory allocation in constructor]
+>Many beginners think:
+> “When I call a constructor, it creates the object.”
+But that’s not quite true.  
+>
+Actually:
+>
+>1. **The compiler** creates (allocates) the object.  
+>2. **The constructor** just initializes that object’s data members.
+>
+So the **constructor does not create** the object — it just _prepares_ it.
+>
+>So the order is:
+>
+>- **Allocate memory → Call constructor**  
+>    NOT:
+  >  
+>- **Constructor magically creates object**
+>
+>**so what happens to that allocated memory if constructor isnt found?**
+>
+>It’s easy to think: “First memory is allocated, then constructor is called, so what happens to the memory if the constructor is missing?”
+But here’s the thing:  
+That "allocation first" step is only the _conceptual model_.  
+If the compiler determines at compile-time that it cannot call a constructor → it **won’t even generate code to allocate the memory**.
+So the bad state “allocated but not initialized” never happens in this case — the compiler saves you.
+
+>Beyond determining how an object may be created, constructors generally perform two functions:
+
+- They typically perform initialization of any member variables (via a member initialization list)
+- They may perform other setup functions (via statements in the body of the constructor). This might include things such as error checking the initialization values, opening a file or database, etc…
+
+After the constructor finishes executing, we say that the object has been “constructed”, and the object should now be in a consistent, usable state.
+
+Note that aggregates are not allowed to have constructors -- so if you add a constructor to an aggregate, it is no longer an aggregate.
+
+### Naming constructors
+
+Unlike normal member functions, constructors have specific rules for how they must be named:
+
+- Constructors must have the same name as the class (with the same capitalization). For template classes, this name excludes the template parameters.
+- Constructors have no return type (not even `void`).
+
+Because constructors are typically part of the interface for your class, they are usually public.
+
+### A basic constructor example
+
+```cpp
+#include <iostream>
+
+class Foo
+{
+private:
+    int m_x {};
+    int m_y {};
+
+public:
+    Foo(int x, int y) // here's our constructor function that takes two initializers
+    {
+        std::cout << "Foo(" << x << ", " << y << ") constructed\n";
+    }
+
+    void print() const
+    {
+        std::cout << "Foo(" << m_x << ", " << m_y << ")\n";
+    }
+};
+
+int main()
+{
+    Foo foo{ 6, 7 }; // calls Foo(int, int) constructor
+    foo.print();
+
+    return 0;
+}
+```
+Foo(6, 7) constructed
+Foo(0, 0)
+
+>At runtime, when `foo` is instantiated, memory for `foo` is allocated, and then the `Foo(int, int)` constructor is called with parameter `x` initialized to `6` and parameter `y` initialized to `7`. The body of the constructor function then executes and prints `Foo(6, 7) constructed`.
+
+### Constructor implicit conversion of arguments
+
+>In lesson "Implicit type conversion", we noted that the compiler will perform implicit conversion of arguments in a function call (if needed) in order to match a function definition where the parameters are a different type, its same for constructors:
+
+```cpp
+void foo(int, int)
+{
+}
+
+int main()
+{
+    foo('a', true); // will match foo(int, int)
+
+    return 0;
+}
+```
+
+### Constructors should not be const
+
+>A constructor needs to be able to initialize the object being constructed -- therefore, a constructor must not be const.
+
+```cpp
+#include <iostream>
+
+class Something
+{
+private:
+    int m_x{};
+
+public:
+    Something() // constructors must be non-const
+    {
+        m_x = 5; // okay to modify members in non-const constructor
+    }
+
+    int getX() const { return m_x; } // const
+};
+
+int main()
+{
+    const Something s{}; // const object, implicitly invokes (non-const) constructor
+
+    std::cout << s.getX(); // prints 5
+
+    return 0;
+}
+```
+
+#### 🔹 Usual rule
+
+Normally in C++:
+
+- If you declare an object as `const`, you **cannot call non-const member functions** on it.  
+    Why? → Because those functions might modify the object, and `const` promises immutability.
+
+```cpp
+struct Foo {
+    void change() { } // non-const
+};
+
+int main() {
+    const Foo f{};
+    f.change(); // ❌ Error: cannot call non-const function on const object
+}
+```
+
+#### 🔹 Special rule for constructors
+
+But constructors are special.
+
+The standard says:
+
+> _An object is not considered `const` until its constructor has finished running._
+
+That means:
+
+- When a `const` object is **being constructed**, the `const` qualifier is not yet enforced.
+    
+- The object becomes `const` **only after** the constructor finishes.
+
+#### 🔹 Why?
+
+Because during construction, you **must** initialize and set up the object’s state.  
+If `const` applied immediately, you wouldn’t even be able to assign values to its members inside the constructor!
+
+```cpp
+struct Foo {
+    int x;
+    Foo(int val) {
+        x = val; // allowed, even if object is const
+    }
+};
+
+int main() {
+    const Foo f{42}; // okay
+}
+```
+
+If `const` applied immediately, `x = val;` would be illegal.
+
+### Constructors vs setters
+
+Constructors are designed to initialize an entire object at the point of instantiation. Setters are designed to assign a value to a single member of an existing object.
+
 ---
