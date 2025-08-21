@@ -2730,3 +2730,418 @@ If `const` applied immediately, `x = val;` would be illegal.
 Constructors are designed to initialize an entire object at the point of instantiation. Setters are designed to assign a value to a single member of an existing object.
 
 ---
+# Constructor member initializer lists
+
+### Member initialization via a member initialization list
+
+#### 🔹 What is a _member initialization list_?
+
+A **member initialization list** is a special syntax in constructors that lets you **directly initialize class members** at the moment the object is created.
+
+It looks like this:
+
+```cpp
+ClassName(parameters)
+    : member1{value1}, member2{value2}, member3{value3}
+{
+    // constructor body
+}
+```
+
+Notice:
+
+- Starts with a `:` after the constructor parameter list.
+    
+- Members are separated by commas `,`.
+    
+- Uses **direct initialization** (`{}` or `()`), **not** `=`.
+
+#### 🔹 Why not just assign in the constructor body?
+
+Because there is an **important difference** between:
+
+1. **Initialization** (happens before the constructor body runs).
+    
+2. **Assignment** (happens inside the constructor body, after the member is already initialized with a default value).
+    
+
+Example:
+
+```cpp
+class Foo {
+private:
+    int m_x{};
+    int m_y{};
+
+public:
+    // Constructor using assignment
+    Foo(int x, int y) {
+        m_x = x; // assignment (m_x was already default-initialized first!)
+        m_y = y;
+    }
+
+    // Constructor using member initializer list
+    Foo(int x, int y)
+        : m_x{x}, m_y{y} // direct initialization
+    {}
+};
+```
+
+🔑 Key difference:
+
+- In the first case, `m_x` and `m_y` are **default-initialized first** (to `0` here), and then assigned new values (`x`, `y`).
+    
+- In the second case, `m_x` and `m_y` are **directly initialized** with `x` and `y`.
+
+>***data members are initialized before the constructor body runs***
+
+Here’s the sequence when you create an object:
+
+1. **Memory allocation** happens for the object.
+    
+2. **Member initialization list** (if provided) is executed: each member is initialized in the order they are declared in the class (not the order in the list).
+    
+3. After all members are initialized, **the constructor body runs**.
+
+> Direct initialization avoids creating a “default” value first and then overwriting it.  
+    → Faster, especially for expensive objects (like strings, vectors).
+
+### Member initializer list formatting
+
+>The following styles are all valid (and you’re likely to see all three in practice):
+
+```cpp
+Foo(int x, int y) : m_x { x }, m_y { y }
+{
+}
+```
+
+```cpp
+Foo(int x, int y) :
+    m_x { x },
+    m_y { y }
+{
+}
+```
+
+```cpp
+Foo(int x, int y)
+    : m_x { x }
+    , m_y { y }
+{
+}
+```
+
+>Our recommendation is to use the third style above.
+
+### Member initialization order
+
+```cpp
+#include <algorithm> // for std::max
+#include <iostream>
+
+class Foo
+{
+private:
+    int m_x{};
+    int m_y{};
+
+public:
+    Foo(int x, int y)
+        : m_y { std::max(x, y) }, m_x { m_y } // issue on this line
+    {
+    }
+
+    void print() const
+    {
+        std::cout << "Foo(" << m_x << ", " << m_y << ")\n";
+    }
+};
+
+int main()
+{
+    Foo foo { 6, 7 };
+    foo.print();
+
+    return 0;
+}
+```
+
+#### 🔹 Rule in C++
+
+- **Members are always initialized in the order they are defined in the class**, **not** the order you write them in the initializer list.
+    
+- This is mandated by the C++ standard.
+
+```cpp
+class Foo
+{
+private:
+    int m_x{};
+    int m_y{};
+
+public:
+    Foo(int x, int y)
+        : m_y { std::max(x, y) }, m_x { m_y } // LOOKS like m_y before m_x
+    {
+    }
+};
+
+```
+
+- Class definition order:
+    
+    1. `m_x`
+        
+    2. `m_y`
+        
+- So actual initialization order is:
+    
+    1. `m_x` → initialized first
+        
+    2. `m_y` → initialized second
+
+#### What goes wrong here
+
+```cpp
+: m_y { std::max(x, y) }, m_x { m_y }
+```
+
+- Looks like `m_y` is set first, then `m_x`.
+    
+- But actually, **`m_x` initializes first** → and it tries to copy `m_y`.
+    
+- But `m_y` isn’t initialized yet → so `m_x` gets garbage (uninitialized value).
+    
+- Then `m_y` gets the proper value.
+    
+
+That’s why you got:
+
+```cpp
+Foo(-858993460, 7) // garbage, 7
+```
+
+#### 🔹 Best Practices
+
+1. **List initializers in class order**
+
+```cpp
+Foo(int x, int y)
+    : m_x { std::max(x, y) }, m_y { m_x } // safe
+{}
+```
+
+- - Now, since `m_x` is defined first in the class, and listed first in the initializer list, it matches.
+        
+    - `m_x` gets initialized with `std::max(x, y)` first.
+        
+    - Then `m_y` uses `m_x`.
+        
+    
+    ✅ Safe and predictable.
+    
+- **Avoid member dependencies if possible**  
+    If you don’t rely on one member’s value to initialize another, this problem can’t occur.
+    
+    Example:
+
+```cpp
+Foo(int x, int y)
+    : m_x { std::max(x, y) }, m_y { std::max(x, y) }
+{}
+```
+
+- Both members independently initialized.
+        
+- No dependency → no surprises.
+
+>[!Best Practice]
+>Member variables in a member initializer list should be listed in order that they are defined in the class.
+
+### Member initializer list vs default member initializers
+
+Members can be initialized in a few different ways:
+
+- If a member is listed in the member initializer list, that initialization value is used
+- Otherwise, if the member has a default member initializer, that initialization value is used
+- Otherwise, the member is default-initialized.
+
+This means that if a member has both a default member initializer and is listed in the member initializer list for the constructor, the member initializer list value takes precedence.
+
+Here’s an example showing all three initialization methods:
+
+```cpp
+#include <iostream>
+
+class Foo
+{
+private:
+    int m_x {};    // default member initializer (will be ignored)
+    int m_y { 2 }; // default member initializer (will be used)
+    int m_z;      // no initializer
+
+public:
+    Foo(int x)
+        : m_x { x } // member initializer list
+    {
+        std::cout << "Foo constructed\n";
+    }
+
+    void print() const
+    {
+        std::cout << "Foo(" << m_x << ", " << m_y << ", " << m_z << ")\n";
+    }
+};
+
+int main()
+{
+    Foo foo { 6 };
+    foo.print();
+
+    return 0;
+}
+```
+Foo constructed
+Foo(6, 2, -858993460)
+
+>Here’s what’s happening. When `foo` is constructed, only `m_x` appears in the member initializer list, so `m_x` is first initialized to `6`. `m_y` is not in the member initialization list, but it does have a default member initializer, so it is initialized to `2`. `m_z` is neither in the member initialization list, nor does it have a default member initializer, so it is default-initialized (which for fundamental types, means it is left uninitialized). Thus, when we print the value of `m_z`, we get undefined behavior.
+
+### Constructor function bodies
+
+>The bodies of constructors functions are most often left empty. This is because we primarily use constructor for initialization, which is done via the member initializer list. If that is all we need to do, then we don’t need any statements in the body of the constructor.
+
+However, because the statements in the body of the constructor execute after the member initializer list has executed, we can add statements to do any other setup tasks required. In the above examples, we print something to the console to show that the constructor executed, but we could do other things like open a file or database, allocate memory, etc…
+
+New programmers sometimes use the body of the constructor to assign values to members:
+
+```cpp
+#include <iostream>
+
+class Foo
+{
+private:
+    int m_x { 0 };
+    int m_y { 1 };
+
+public:
+    Foo(int x, int y)
+    {
+        m_x = x; // incorrect: this is an assignment, not an initialization
+        m_y = y; // incorrect: this is an assignment, not an initialization
+    }
+
+    void print() const
+    {
+        std::cout << "Foo(" << m_x << ", " << m_y << ")\n";
+    }
+};
+
+int main()
+{
+    Foo foo { 6, 7 };
+    foo.print();
+
+    return 0;
+}
+```
+
+Although in this simple case this will produce the expected result, in case where members are required to be initialized (such as for data members that are const or references) assignment will not work.
+
+>[!Key Insight]
+>Once the member initializer list has finished executing, the object is considered initialized. Once the function body has finished executing, the object is considered constructed.
+
+>[!Best Practice]
+>Prefer using the member initializer list to initialize your members over assigning values in the body of the constructor.
+
+### Detecting and handling invalid arguments to constructors
+
+#### 1. The Problem
+
+- A `Fraction` needs a **denominator ≠ 0** (otherwise invalid).
+    
+- If user does:
+
+```cpp
+Fraction f{1, 0}; 
+```
+
+- → object becomes semantically invalid (denominator = 0).
+    
+
+That violates the **class invariant**: `m_denominator != 0`.
+
+#### 2. Why not fix it in the initializer list?
+
+In the initializer list:
+
+```cpp
+Fraction(int numerator, int denominator) :
+    m_numerator{numerator}, m_denominator{denominator != 0 ? denominator : ???}
+{ }
+```
+
+- We can _detect_ `denominator == 0`, but we can’t really _handle_ it properly.
+    
+- If we silently replace `0` with something else (say `1`), the user gets an object **different from what they asked for**, without being told.
+    
+- That’s unsafe and misleading.
+    
+
+So → initializer list is not suitable for error handling.
+
+### 3. Why constructor body is better
+
+In the constructor body, we can use **statements**:
+
+```cpp
+Fraction(int numerator, int denominator) :
+    m_numerator{numerator}, m_denominator{denominator}
+{
+    if (denominator == 0)
+        // handle error here
+}
+```
+
+Options here:
+
+- `assert(denominator != 0);` → catches errors in debug builds, but useless in production.
+    
+- Runtime handling needed → leads us to "constructor failure".
+
+#### 4. When constructors fail
+
+If arguments are invalid, **constructor cannot make a valid object** → the constructor "fails".
+
+How to handle such failure? Four general strategies (same as with normal functions):
+
+1. **Resolve internally** → not possible, since we don’t know what a "fixed denominator" should be.
+    
+2. **Return error to caller** → constructors can’t return values, so not feasible.  
+    (A hack is `isValid()` method, but caller might forget to check → unsafe).
+    
+3. **Halt program** → rarely acceptable in real applications.
+    
+4. **Throw exception** → aborts construction process entirely → prevents invalid objects from existing.
+    
+#### 5. Key insight
+
+- The **best option** in most cases is:  
+    **Throw an exception inside the constructor when invalid arguments are passed.**
+    
+
+That way:
+
+- Construction stops immediately.
+    
+- Caller never gets a broken object.
+    
+- Error can be caught and handled at a higher level.
+    
+
+✅ **So the main takeaway:**  
+If a constructor gets invalid arguments and cannot create a valid object, the best way to handle it is to **throw an exception**.
+
+### [For Advanced Readers](https://www.learncpp.com/cpp-tutorial/constructor-member-initializer-lists/#:~:text=For%20advanced%20readers,COPY)
+
+---
