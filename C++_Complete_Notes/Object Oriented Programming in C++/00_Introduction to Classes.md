@@ -2509,6 +2509,164 @@ So how should we order them?
 >>- **Data Hiding:** Encapsulation allows for the protection of sensitive data within a class by restricting direct external access. This is achieved by declaring data members as `private` or `protected`, making them inaccessible from outside the class. Access and modification of this hidden data are then controlled through public methods (often called "getter" and "setter" methods). This prevents unintended or unauthorized manipulation of the object's internal state. 
 >>-  **Modularity and Organization:** By grouping related data and functions within a class, encapsulation promotes a more organized and modular code structure. Each class represents a self-contained unit, responsible for its own data and behavior. This improves code readability, maintainability, and reusability, as changes within one encapsulated unit are less likely to impact other parts of the program.
 
+#### Where _abstraction_ fits in here
+
+The lesson is essentially teaching **abstraction through data hiding.**
+
+1. **Interface vs Implementation**
+    
+    - The **interface** = the _public functions_ of the class. This is what the _user of the class_ sees and uses.
+        
+    - The **implementation** = the _private members and function bodies_ that actually make the class work.
+        
+    
+    Abstraction means: _you only care about the interface, not the implementation details_.
+    
+    Example from the lesson:
+
+```cpp
+std::string_view sv{ "Hello, world!" };
+std::cout << sv.length();
+```
+
+2. **Data hiding (information hiding / data abstraction)**
+
+	- By making data members `private`, the class **forces users to interact only through the interface.**
+    
+	- This _hides complexity_ (users don’t deal with invariants, validation, etc.).
+    
+
+	Example from the lesson with `Employee`:
+
+	- **Without data hiding (struct):** the user can directly change `name` and break invariants (`firstInitial` doesn’t update).
+    
+	- **With data hiding (class):** user must call `setName()`, and the function ensures invariants are preserved.
+    
+
+→ Abstraction = the user doesn’t worry about how `setName` maintains invariants. They just know “I can set a name.”
+
+3. **Why this is abstraction in OOP terms**
+
+	- In OOP, abstraction = _present only the essential features, hide unnecessary details_.
+    
+	- This lesson shows exactly that:
+    
+	    - The **essential features** are the public functions (`setName`, `getValue1`, etc.).
+        
+	    - The **hidden details** are the private members and internal logic.
+        
+
+By separating **what the class does** (interface) from **how it does it** (implementation), you reduce complexity and let users focus only on the _behavior they need_.
+
+#### 🔑 Encapsulation vs Abstraction in C++
+
+##### **1. Encapsulation**
+
+- **Meaning:** Wrapping _data members_ + _functions that operate on them_ into a single unit (class).
+    
+- **Focus:** _How things are grouped and protected._
+    
+- **Mechanism in C++:**
+    
+    - Access specifiers (`private`, `protected`, `public`)
+        
+    - Class boundaries
+        
+
+👉 Example:
+
+```cpp
+class Employee
+{
+private:
+    std::string name;   // hidden
+    char firstInitial;  // hidden
+
+public:
+    void setName(std::string n)  // exposed
+    {
+        name = n;
+        firstInitial = n.empty() ? '?' : n[0];
+    }
+};
+```
+
+- Data + methods = encapsulated in one unit.
+    
+- Encapsulation also gives **data hiding** (via `private`).
+
+##### **2. Abstraction**
+
+- **Meaning:** Showing only _essential features_ to the user while hiding unnecessary details.
+    
+- **Focus:** _What the class does, not how it does it._
+    
+- **Mechanism in C++:**
+    
+    - Public interface (functions) vs hidden implementation (private members).
+        
+    - Also via abstract classes & virtual functions (later).
+        
+
+👉 Example with `Employee`:
+
+```cpp
+Employee e;
+e.setName("John");  // user only cares about "setName"
+```
+
+- User doesn’t know (or need to know) how `firstInitial` is maintained.
+    
+- They only see the abstraction: “set the name”.
+
+##### ✅ How they relate
+
+- **Encapsulation is the tool.**  
+    → You put things inside a class and restrict access.
+    
+- **Abstraction is the outcome.**  
+    → The user sees a clean interface and doesn’t worry about the messy details inside.
+    
+
+Another way to phrase it:
+
+- Encapsulation = _hiding implementation by restricting access._
+    
+- Abstraction = _focusing on essential behavior and ignoring implementation._
+
+>[!Summary]
+>🔹 Abstraction in OOP
+>>**Hiding implementation** → The user doesn’t see the internal details (the “how”).
+>>**Providing only an interface** → The user only sees what operations they can perform (the “what”).
+>>**Explaining how to use that interface** → Documentation / function names / class design guide the user to interact correctly.
+>>
+
+>Example:
+
+```cpp
+class Database {
+public:
+    void connect(std::string_view connStr);
+    void executeQuery(std::string_view query);
+    void disconnect();
+    
+private:
+    // internal details hidden
+    int socketId;
+    void authenticate();
+    void parseResponse();
+};
+```
+
+- User only knows **the interface**: `connect()`, `executeQuery()`, `disconnect()`.
+    
+- They don’t know (or care) about **implementation**: sockets, authentication, parsing.
+    
+- This is **abstraction**: showing **what can be done**, hiding **how it’s done**.
+
+👉 Encapsulation made it possible (by putting everything inside the class + hiding private parts).  
+👉 Abstraction is the _effect_: the user sees only a clean, simplified view.
+
 ---
 # Introduction to constructors
 
