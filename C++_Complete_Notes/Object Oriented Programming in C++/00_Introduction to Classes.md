@@ -2667,6 +2667,24 @@ private:
 👉 Encapsulation made it possible (by putting everything inside the class + hiding private parts).  
 👉 Abstraction is the _effect_: the user sees only a clean, simplified view.
 
+>Conclusion:
+
+- **Data hiding** → A _mechanism_.
+    
+    - Achieved by marking members `private` / `protected`.
+        
+    - Purpose: protect internal state from direct external access.
+        
+    - Example: `private int balance;`
+        
+- **Abstraction** → An _effect / design principle_.
+    
+    - Achieved by exposing only the **necessary interface** (public methods) and **hiding implementation details**.
+        
+    - Purpose: let users focus on _what_ an object does, not _how_ it does it.
+        
+    - Example: `deposit()` and `withdraw()` methods, without showing how money is stored internally.
+
 ---
 # Introduction to constructors
 
@@ -3301,5 +3319,394 @@ That way:
 If a constructor gets invalid arguments and cannot create a valid object, the best way to handle it is to **throw an exception**.
 
 ### [For Advanced Readers](https://www.learncpp.com/cpp-tutorial/constructor-member-initializer-lists/#:~:text=For%20advanced%20readers,COPY)
+
+---
+# Default constructors and default arguments
+
+>A **default constructor** is a constructor that accepts no arguments. Typically, this is a constructor that has been defined with no parameters.
+
+```cpp
+#include <iostream>
+
+class Foo
+{
+public:
+    Foo() // default constructor
+    {
+        std::cout << "Foo default constructed\n";
+    }
+};
+
+int main()
+{
+    Foo foo{}; // No initialization values, calls Foo's default constructor
+
+    return 0;
+}
+```
+
+When the above program runs, an object of type `Foo` is created. Since no initialization values have been provided, the default constructor `Foo()` is called
+
+>[!Best Practice]
+>Prefer value initialization over default initialization for all class types.
+
+### Constructors with default arguments
+
+>As with all functions, the rightmost parameters of constructors can have default arguments.
+
+```cpp
+#include <iostream>
+
+class Foo
+{
+private:
+    int m_x { };
+    int m_y { };
+
+public:
+    Foo(int x=0, int y=0) // has default arguments
+        : m_x { x }
+        , m_y { y }
+    {
+        std::cout << "Foo(" << m_x << ", " << m_y << ") constructed\n";
+    }
+};
+
+int main()
+{
+    Foo foo1{};     // calls Foo(int, int) constructor using default arguments
+    Foo foo2{6, 7}; // calls Foo(int, int) constructor
+
+    return 0;
+}
+```
+
+This prints:
+
+Foo(0, 0) constructed
+Foo(6, 7) constructed
+
+==If all of the parameters in a constructor have default arguments, the constructor is a default constructor (because it can be called with no arguments).
+
+### Overloaded constructors
+
+>Because constructors are functions, they can be overloaded. That is, we can have multiple constructors so that we can construct objects in different ways:
+
+```cpp
+#include <iostream>
+
+class Foo
+{
+private:
+    int m_x {};
+    int m_y {};
+
+public:
+    Foo() // default constructor
+    {
+        std::cout << "Foo constructed\n";
+    }
+
+    Foo(int x, int y) // non-default constructor
+        : m_x { x }, m_y { y }
+    {
+        std::cout << "Foo(" << m_x << ", " << m_y << ") constructed\n";
+    }
+};
+
+int main()
+{
+    Foo foo1{};     // Calls Foo() constructor
+    Foo foo2{6, 7}; // Calls Foo(int, int) constructor
+
+    return 0;
+}
+```
+
+A corollary of the above is that a class should only have one default constructor. If more than one default constructor is provided, the compiler will be unable to disambiguate which should be used:
+
+```cpp
+#include <iostream>
+
+class Foo
+{
+private:
+    int m_x {};
+    int m_y {};
+
+public:
+    Foo() // default constructor
+    {
+        std::cout << "Foo constructed\n";
+    }
+
+    Foo(int x=1, int y=2) // default constructor
+        : m_x { x }, m_y { y }
+    {
+        std::cout << "Foo(" << m_x << ", " << m_y << ") constructed\n";
+    }
+};
+
+int main()
+{
+    Foo foo{}; // compile error: ambiguous constructor function call
+
+    return 0;
+}
+```
+
+In the above example, we instantiate `foo` with no arguments, so the compiler will look for a default constructor. It will find two, and be unable to disambiguate which constructor should be used. This will result in a compile error.
+
+### An implicit default constructor
+
+If a non-aggregate class type object has no user-declared constructors, the compiler will generate a public default constructor (so that the class can be value or default initialized). This constructor is called an **implicit default constructor**.
+
+Consider the following example:
+
+```cpp
+#include <iostream>
+
+class Foo
+{
+private:
+    int m_x{};
+    int m_y{};
+
+    // Note: no constructors declared
+};
+
+int main()
+{
+    Foo foo{};
+
+    return 0;
+}
+```
+
+>The implicit default constructor is useful mostly when we have classes that have no data members. If a class has data members, we’ll probably want to make them initializable with values provided by the user, and the implicit default constructor isn’t sufficient for that.
+
+### Using `= default` to generate an explicitly defaulted default constructor
+
+>In cases where we would write a default constructor that is equivalent to the implicitly generated default constructor, we can instead tell the compiler to generate a default constructor for us. This constructor is called an **explicitly defaulted default constructor**, and it can be generated by using the `= default` syntax:
+
+```cpp
+#include <iostream>
+
+class Foo
+{
+private:
+    int m_x {};
+    int m_y {};
+
+public:
+    Foo() = default; // generates an explicitly defaulted default constructor
+
+    Foo(int x, int y)
+        : m_x { x }, m_y { y }
+    {
+        std::cout << "Foo(" << m_x << ", " << m_y << ") constructed\n";
+    }
+};
+
+int main()
+{
+    Foo foo{}; // calls Foo() default constructor
+
+    return 0;
+}
+```
+
+>[!Best Practice]
+>Prefer an explicitly defaulted default constructor (`= default`) over a default constructor with an empty body.
+
+### Explicitly defaulted default constructor vs empty user-defined constructor
+
+#### 1. **Two ways to provide a default constructor**
+
+- **User-defined default constructor**
+
+```cpp
+User() {}   // an empty user-defined constructor
+```
+
+- Even if it does nothing, _this counts as user code_.
+    
+- **Explicitly defaulted constructor**
+
+```cpp
+Default() = default;   // compiler-provided behavior
+```
+
+This is the same as letting the compiler generate it implicitly — except you’re explicitly saying "I want the compiler default".
+
+#### 2. **Difference during value initialization (`T obj{}`)**
+
+##### Case A: **User-defined constructor (even if empty)**
+
+- Value initialization **does NOT zero-initialize** members first.
+    
+- It jumps straight to calling your constructor body.
+    
+- If you don’t manually initialize members, they remain **indeterminate** (garbage).
+    
+
+That’s why in your code:
+
+```cpp
+User user{}; 
+// m_a = uninitialized garbage
+// m_b = 0 (because of {} default member initializer)
+```
+
+Output example:
+
+```cpp
+782510864 0
+```
+
+##### Case B: **Explicitly defaulted (`= default`) or Implicit**
+
+- Value initialization **does zero-initialize first**.
+    
+- Then the compiler-generated constructor runs.
+    
+- So uninitialized members become **0**, not garbage.
+    
+
+That’s why:
+
+```cpp
+Default def{};
+Implicit imp{};
+// m_a = 0
+// m_b = 0
+```
+
+Output:
+
+```cpp
+0 0
+0 0
+```
+
+#### 3. **Why this distinction exists**
+
+- **User-provided constructor** (even empty) → compiler assumes "the programmer knows what they’re doing" → skips zero-initialization for performance.
+    
+- **Compiler-provided constructor** (`= default` or implicit) → C++ standard says "be safe" → zero-initialize before default-init.
+
+#### 4. **Practical Implication**
+
+- If you write your own constructor (even empty), **you must initialize all members yourself**, or risk UB.
+    
+- If you use `= default`, you get safety (zero-init first).
+    
+- **Best practice:** Always give your data members default initializers:
+
+```cpp
+class Safe {
+    int m_a{};   // guarantees zero-init
+    int m_b{};  
+};
+```
+
+→ Now no matter what kind of constructor you use, your members start from a known state.
+
+✅ **Summary:**
+
+- `User() {}` → **no zero-init**, members left uninitialized unless you do it yourself.
+    
+- `User() = default;` or implicit → **zero-init first**, then default-init.
+    
+- Best practice: always initialize members with `= {}` or constructor initializer list.
+
+>[!Important]
+>Always give your data members default initializers:
+
+### Only create a default constructor when it makes sense
+
+A default constructor allows us to create objects of a non-aggregate class type with no user-provided initialization values. Thus, a class should only provide a default constructor when it makes sense for objects of a class type to be created using all default values.
+
+For example:
+
+```cpp
+#include <iostream>
+
+class Fraction
+{
+private:
+    int m_numerator{ 0 };
+    int m_denominator{ 1 };
+
+public:
+    Fraction() = default;
+    Fraction(int numerator, int denominator)
+        : m_numerator{ numerator }
+        , m_denominator{ denominator }
+    {
+    }
+
+    void print() const
+    {
+        std::cout << "Fraction(" << m_numerator << ", " << m_denominator << ")\n";
+    }
+};
+
+int main()
+{
+    Fraction f1 {3, 5};
+    f1.print();
+
+    Fraction f2 {}; // will get Fraction 0/1
+    f2.print();
+
+    return 0;
+}
+```
+
+For a class representing a fraction, it makes sense to allow the user to create Fraction objects with no initializers (in which case, the user will get the fraction 0/1).
+
+Now consider this class:
+
+```cpp
+#include <iostream>
+#include <string>
+#include <string_view>
+
+class Employee
+{
+private:
+    std::string m_name{ };
+    int m_id{ };
+
+public:
+    Employee(std::string_view name, int id)
+        : m_name{ name }
+        , m_id{ id }
+    {
+    }
+
+    void print() const
+    {
+        std::cout << "Employee(" << m_name << ", " << m_id << ")\n";
+    }
+};
+
+int main()
+{
+    Employee e1 { "Joe", 1 };
+    e1.print();
+
+    Employee e2 {}; // compile error: no matching constructor
+    e2.print();
+
+    return 0;
+}
+```
+
+For a class representing an employee, it doesn’t make sense to allow creation of employees with no name. Thus, such a class should not have a default constructor, so that a compilation error will result if the user of the class tries to do so.
+
+>[!Tip]
+>The implicit default constructor will only be created if there isn't any other constructor otherwise if we try to create object with empty list initializer then we will get an error.
 
 ---
