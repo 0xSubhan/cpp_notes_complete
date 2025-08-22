@@ -4,11 +4,11 @@
     "type": "split",
     "children": [
       {
-        "id": "c3e7ae9f72296474",
+        "id": "056c84ef08b36174",
         "type": "tabs",
         "children": [
           {
-            "id": "9a688ccb8c29a9d6",
+            "id": "7073a50a4a1cdc93",
             "type": "leaf",
             "state": {
               "type": "markdown",
@@ -171,10 +171,10 @@
       "command-palette:Open command palette": false
     }
   },
-  "active": "9a688ccb8c29a9d6",
+  "active": "7073a50a4a1cdc93",
   "lastOpenFiles": [
-    "Untitled.md",
     "C++_Complete_Notes/Object Oriented Programming in C++/00_Introduction to Classes.md",
+    "Untitled.md",
     "Untitled 1.md",
     "C++_Complete_Notes/Chapter 13 - Compound Types Enums and Structs.md",
     "C++_Complete_Notes/Object Oriented Programming in C++",

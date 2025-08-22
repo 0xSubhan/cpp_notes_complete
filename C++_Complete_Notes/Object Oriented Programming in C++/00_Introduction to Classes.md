@@ -3710,3 +3710,444 @@ For a class representing an employee, it doesn’t make sense to allow creation 
 >The implicit default constructor will only be created if there isn't any other constructor otherwise if we try to create object with empty list initializer then we will get an error.
 
 ---
+# Delegating constructors
+
+```cpp
+#include <iostream>
+#include <string>
+#include <string_view>
+
+class Employee
+{
+private:
+    std::string m_name { "???" };
+    int m_id { 0 };
+    bool m_isManager { false };
+
+public:
+    Employee(std::string_view name, int id) // Employees must have a name and an id
+        : m_name{ name }, m_id { id }
+    {
+        std::cout << "Employee " << m_name << " created\n";
+    }
+
+    Employee(std::string_view name, int id, bool isManager) // They can optionally be a manager
+        : m_name{ name }, m_id{ id }, m_isManager { isManager }
+    {
+        std::cout << "Employee " << m_name << " created\n";
+    }
+};
+
+int main()
+{
+    Employee e1{ "James", 7 };
+    Employee e2{ "Dave", 42, true };
+}
+```
+
+#### 🔹 Problem
+
+In the original example, you had **two constructors**:
+
+```cpp
+Employee(std::string_view name, int id)
+    : m_name{ name }, m_id { id }
+{
+    std::cout << "Employee " << m_name << " created\n";
+}
+
+Employee(std::string_view name, int id, bool isManager)
+    : m_name{ name }, m_id{ id }, m_isManager { isManager }
+{
+    std::cout << "Employee " << m_name << " created\n";
+}
+```
+
+- Both constructors **repeat the same `std::cout` line**.
+    
+- Both constructors also **initialize `m_name` and `m_id`** in the same way.
+    
+
+This duplication makes code harder to maintain. For example: if you later want to change how employees are printed, you must update **both constructors**. That’s against DRY.
+
+#### 🔹 First Improvement (Helper Function)
+
+Introduce a helper function:
+
+```cpp
+void printCreated() const
+{
+    std::cout << "Employee " << m_name << " created\n";
+}
+```
+
+Now both constructors call it:
+
+```cpp
+Employee(std::string_view name, int id)
+    : m_name{ name }, m_id { id }
+{
+    printCreated();
+}
+
+Employee(std::string_view name, int id, bool isManager)
+    : m_name{ name }, m_id{ id }, m_isManager { isManager }
+{
+    printCreated();
+}
+```
+
+✅ This reduces redundancy of the `std::cout` line.  
+❌ But both constructors still duplicate initialization of `m_name` and `m_id`.
+
+>It’s generally not a good idea to have a constructor print something (except for debugging purposes), as this means you can’t create an object using that constructor in cases where you do not want to print something. We’re doing it in this example to help illustrate what’s happening.
+
+### Calling a constructor in the body of a function creates a temporary object
+
+```cpp
+#include <iostream>
+#include <string>
+#include <string_view>
+
+class Employee
+{
+private:
+    std::string m_name { "???" };
+    int m_id { 0 };
+    bool m_isManager { false };
+
+public:
+    Employee(std::string_view name, int id)
+        : m_name{ name }, m_id { id } // this constructor initializes name and id
+    {
+        std::cout << "Employee " << m_name << " created\n"; // our print statement is back here
+    }
+
+    Employee(std::string_view name, int id, bool isManager)
+        : m_isManager { isManager } // this constructor initializes m_isManager
+    {
+        // Call Employee(std::string_view, int) to initialize m_name and m_id
+        Employee(name, id); // this doesn't work as expected!
+    }
+
+    const std::string& getName() const { return m_name; }
+};
+
+int main()
+{
+    Employee e2{ "Dave", 42, true };
+    std::cout << "e2 has name: " << e2.getName() << "\n"; // print e2.m_name
+}
+```
+
+But this doesn’t work correctly, as the program outputs the following:
+
+```cpp
+Employee Dave created
+e2 has name: ???
+```
+
+- **Problem:**  
+    If you call a constructor like a normal function inside another constructor’s body (e.g., `Employee(name, id);`), it **creates a temporary object**, not initializes the current object (`this`).
+    
+- **Why?**
+    
+    - Initialization of an object’s members happens **only in the member initializer list**, before the constructor body runs.
+        
+    - By the time you’re in the body, the current object is already initialized (default values or whatever you specified).
+        
+    - Calling `Employee(name, id)` inside the body just constructs a **new temporary Employee object**, initializes _that_, prints its message, then destroys it immediately.
+        
+    - Your actual object (`e2`) remains unchanged → members stay at defaults (`"???"`, `0`, etc.).
+
+```cpp
+Employee(std::string_view name, int id, bool isManager)
+    : m_isManager{isManager}  // only initializes m_isManager
+{
+    Employee(name, id); // creates & destroys a temporary, doesn’t touch *this
+}
+```
+
+- Output shows `Employee Dave created` (temporary)
+    
+- But `e2.m_name` is still `"???"` (original object never got updated).
+
+>[!Best Practice]
+>Constructors should not be called directly from the body of another function. Doing so will either result in a compilation error, or will direct-initialize a temporary object.
+
+### Delegating constructors
+
+#### **Definition**
+
+- A **delegating constructor** is a constructor that calls another constructor **from the same class** to handle initialization.
+    
+- This is also called **constructor chaining**.
+
+#### **How it works**
+
+- To delegate, you call another constructor in the **member initializer list**:
+
+```cpp
+Employee(std::string_view name)
+    : Employee{name, 0} // delegates to another constructor
+{
+}
+```
+
+#### **Rules**
+
+1. **Delegate or Initialize, not both**
+    
+    - A constructor can either:
+        
+        - Initialize members directly **OR**
+            
+        - Delegate to another constructor
+            
+    - But not both at the same time.
+        
+2. **Avoid Infinite Loops**
+    
+    - If constructor A delegates to B, and B delegates back to A → infinite recursion → program crash.
+        
+    - Ensure all chains eventually end at a **non-delegating constructor**.
+        
+3. **Common Pattern**
+    
+    - Constructors with **fewer parameters** often delegate to constructors with **more parameters**, providing default values.
+
+
+>Example:
+
+```cpp
+class Employee {
+private:
+    std::string m_name{"???"};
+    int m_id{0};
+
+public:
+    Employee(std::string_view name)
+        : Employee{name, 0}  // delegates to main constructor
+    { }
+
+    Employee(std::string_view name, int id)
+        : m_name{name}, m_id{id}  // main constructor (non-delegating)
+    {
+        std::cout << "Employee " << m_name << " created\n";
+    }
+};
+```
+
+#### **Execution Flow**
+
+For:
+
+```cpp
+Employee e1{"James"};
+```
+
+- `Employee(std::string_view)` is called with `"James"`.
+    
+- It **delegates** to `Employee(std::string_view, int)` with `("James", 0)`.
+    
+- The second constructor initializes members.
+    
+- Control returns to the first constructor (its body executes).
+    
+- Object is ready.
+
+#### **Downside**
+
+- Sometimes requires **duplicate default values** (e.g., hardcoding `0` for `m_id`) because you **cannot reference default member initializers** in delegation.
+    
+
+>[!Best Practice]
+>If you have multiple constructors, consider whether you can use delegating constructors to reduce duplicate code.
+
+### Reducing constructors using default arguments
+
+```cpp
+class Employee
+{
+private:
+    std::string m_name{};
+    int m_id{ 0 }; // default member initializer
+
+public:
+    // only one constructor
+    Employee(std::string_view name, int id = 0) 
+        : m_name{ name }, m_id{ id }
+    {
+        std::cout << "Employee " << m_name << " created\n";
+    }
+};
+```
+
+```cpp
+Employee e1{ "James" };     // id defaults to 0
+Employee e2{ "Dave", 42 };  // id explicitly set
+```
+
+### Key Idea
+
+- Instead of writing two constructors:
+
+```cpp
+Employee(std::string_view name);
+Employee(std::string_view name, int id);
+```
+
+- we **merge them into one** by giving `id` a **default argument**.
+    
+
+So if the caller doesn’t pass `id`, it defaults to `0`.
+
+#### 🔹 Best Practice
+
+- **Required parameters first** (leftmost).  
+    e.g. `name` must always be given.
+    
+- **Optional parameters later** (rightmost).  
+    e.g. `id` has a default value, so it goes last.
+    
+
+This order ensures the function call makes sense:
+
+```cpp
+Employee e1{"John"};        // required only
+Employee e2{"John", 99};    // required + optional
+```
+
+⚠️ **Cons:**
+
+- You **duplicate the default value** for `m_id`:
+    
+    - once as `int m_id{0};` (default member initializer),
+        
+    - again as `int id = 0` (default argument).
+        
+- If the default changes later (say from `0` → `-1`), you must update it in **two places** → possible inconsistency.
+
+### A conundrum: Redundant constructors vs redundant default values
+
+#### 1. Problem we are solving
+
+When writing constructors, we want:
+
+- ✅ Fewer constructors (less code, easier to maintain).
+    
+- ✅ No duplication of default values (so one change updates everywhere).
+    
+
+But in C++, you **cannot always have both** at the same time.
+
+#### 2. Two main techniques
+
+##### (A) **Delegating constructors**
+
+One constructor calls another to avoid repeating logic.
+
+```cpp
+class Employee {
+    std::string m_name{};
+    int m_id{0};   // default member initializer
+
+public:
+    Employee(std::string_view name, int id)
+        : m_name{name}, m_id{id} {}
+
+    Employee(std::string_view name) 
+        : Employee{name, 0} {}   // delegates
+};
+```
+
+- **Good**: Only one constructor (`Employee(string,int)`) does real work.
+    
+- **Bad**: The default value `0` is written **twice**:
+    
+    - once in `int m_id{0};`
+        
+    - once in `Employee{name, 0}`
+        
+
+If the default changes later (say `0 → -1`), you must update it in 2 places.
+
+##### (B) **Default arguments**
+
+Let a single constructor handle both cases by giving a parameter a default.
+
+```cpp
+class Employee {
+    std::string m_name{};
+    int m_id{0};   // default member initializer
+
+public:
+    Employee(std::string_view name, int id = 0) 
+        : m_name{name}, m_id{id} {}
+};
+```
+
+- **Good**: Only **one constructor**. Very clean.
+    
+- **Bad**: Again, `0` is written **twice**:
+    
+    - once in `int m_id{0};`
+        
+    - once in `int id = 0`
+        
+
+Same problem: if default changes, must update 2 places.
+
+#### 3. Why this happens
+
+C++ currently has **no way** to tell a constructor:
+
+> “If the caller doesn’t provide a value, just use the member initializer’s default.”
+
+So if you want both:
+
+- default member initializer (safety),
+    
+- and a delegating constructor / default argument (convenience),  
+    you are **forced to duplicate the default values**.
+
+#### 4. The tradeoff
+
+- **Option A: More constructors**
+    
+    - Each constructor written separately.
+        
+    - No duplication of default values.
+        
+    - But more boilerplate code.
+        
+- **Option B: Fewer constructors** (delegation or default args)
+    
+    - Less boilerplate code.
+        
+    - But duplicate default values.
+        
+
+This is the **conundrum**:
+
+- Do you want fewer constructors (cleaner code) but accept duplication?
+    
+- Or more constructors (no duplication) but more boilerplate?
+
+#### 5. Common advice
+
+Most experts (and LearnCpp) recommend:  
+👉 Prefer **fewer constructors**, even if you have to duplicate default values.  
+Why?
+
+- Code is easier to read.
+    
+- Bugs from mismatched defaults are rare if you’re disciplined.
+    
+- Easier to maintain overall.
+    
+
+✅ **In one line for your notes:**  
+C++ forces a tradeoff → Either duplicate default values (fewer constructors) or write more constructors (no duplication). Best practice = fewer constructors, even with duplication.
+
+---
