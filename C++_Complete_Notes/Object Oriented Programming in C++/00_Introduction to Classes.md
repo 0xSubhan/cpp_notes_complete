@@ -4485,3 +4485,378 @@ This works, but:
 - Prefer explicit construction (`T{}`) over `static_cast` when calling constructors.
 
 ---
+# Introduction to the copy constructor
+
+>Example:
+
+```cpp
+#include <iostream>
+
+class Fraction
+{
+private:
+    int m_numerator{ 0 };
+    int m_denominator{ 1 };
+
+public:
+    // Default constructor
+    Fraction(int numerator=0, int denominator=1)
+        : m_numerator{numerator}, m_denominator{denominator}
+    {
+    }
+
+    void print() const
+    {
+        std::cout << "Fraction(" << m_numerator << ", " << m_denominator << ")\n";
+    }
+};
+
+int main()
+{
+    Fraction f { 5, 3 };  // Calls Fraction(int, int) constructor
+    Fraction fCopy { f }; // What constructor is used here?
+
+    f.print();
+    fCopy.print();
+
+    return 0;
+}
+```
+
+📌 What’s happening in your first program?
+
+```cpp
+Fraction f { 5, 3 };   // Calls Fraction(int, int)
+Fraction fCopy { f };  // What constructor?
+```
+
+- **`Fraction f { 5, 3 };`**  
+    This calls your normal constructor `Fraction(int numerator=0, int denominator=1)`.  
+    Result: `f.m_numerator = 5`, `f.m_denominator = 3`.
+    
+- **`Fraction fCopy { f };`**  
+    This looks like it should call the `Fraction(int, int)` constructor, but it doesn’t.  
+    Why? Because the initializer is another **`Fraction` object**, not two `int`s.
+    
+    So here, C++ uses the **copy constructor**:
+
+```cpp
+Fraction(const Fraction& fraction);
+```
+
+If you don’t define one, the compiler automatically gives you an **implicit copy constructor** that just does **memberwise copy**.  
+That’s why it “just works” and `fCopy` ends up with the same values as `f`.
+
+==A **copy constructor** in C++ is a special constructor that initializes a new object as a **copy of an existing object of the same class**.
+
+>📌 The implicit copy constructor
+
+If you don’t write one, the compiler gives you something like this:
+
+```cpp
+Fraction(const Fraction& other)
+    : m_numerator{ other.m_numerator }
+    , m_denominator{ other.m_denominator }
+{
+}
+```
+
+This is why:
+
+- `fCopy.m_numerator = f.m_numerator (5)`
+    
+- `fCopy.m_denominator = f.m_denominator (3)`
+    
+
+So they both print the same.
+
+>📌 When you explicitly define it
+
+```cpp
+Fraction(const Fraction& fraction)
+    : m_numerator{ fraction.m_numerator }
+    , m_denominator{ fraction.m_denominator }
+{
+    std::cout << "Copy constructor called\n";
+}
+```
+
+Now, when you do `Fraction fCopy { f };`, the compiler uses **your version** instead of the implicit one.  
+That’s why `"Copy constructor called"` gets printed.
+
+#### 📌 Key reminders
+
+- A **copy constructor** is called when you **initialize** a new object from an existing object.  
+    (e.g. `Fraction f2 = f1;` or `Fraction f2 { f1 };`)
+    
+- If you don’t write one, the compiler generates one for you (does a memberwise copy).
+    
+- If you need **custom behavior** (like copying dynamically allocated memory), you should define your own.
+    
+- Best practice: keep copy constructors **pure** (just copy data, no extra side effects), because the compiler might skip them during **copy elision** (optimizations).
+
+>[!Best Practice]
+>Copy constructors should have no side effects beyond copying.
+
+### Prefer the implicit copy constructor
+
+Unlike the implicit default constructor, which does nothing (and thus is rarely what we want), the memberwise initialization performed by the implicit copy constructor is usually exactly what we want. Therefore, in most cases, using the implicit copy constructor is perfectly fine.
+
+>[!Best Practice]
+>Prefer the implicit copy constructor, unless you have a specific reason to create your own.
+
+>[!Best Practice]
+>If you write your own copy constructor, the parameter should be a const lvalue reference.
+
+### Pass by value and the copy constructor
+
+When an object is passed by value, the argument is copied into the parameter. When the argument and parameter are the same class type, the copy is made by implicitly invoking the copy constructor.
+
+This is illustrated in the following example:
+
+```cpp
+#include <iostream>
+
+class Fraction
+{
+private:
+    int m_numerator{ 0 };
+    int m_denominator{ 1 };
+
+public:
+    // Default constructor
+    Fraction(int numerator = 0, int denominator = 1)
+        : m_numerator{ numerator }, m_denominator{ denominator }
+    {
+    }
+
+    // Copy constructor
+    Fraction(const Fraction& fraction)
+        : m_numerator{ fraction.m_numerator }
+        , m_denominator{ fraction.m_denominator }
+    {
+        std::cout << "Copy constructor called\n";
+    }
+
+    void print() const
+    {
+        std::cout << "Fraction(" << m_numerator << ", " << m_denominator << ")\n";
+    }
+};
+
+void printFraction(Fraction f) // f is pass by value
+{
+    f.print();
+}
+
+int main()
+{
+    Fraction f{ 5, 3 };
+
+    printFraction(f); // f is copied into the function parameter using copy constructor
+
+    return 0;
+}
+```
+
+On the author’s machine, this example prints:
+
+Copy constructor called
+Fraction(5, 3)
+
+In the above example, the call to `printFraction(f)` is passing `f` by value. The copy constructor is invoked to copy `f` from `main` into the `f` parameter of function `printFraction()`.
+
+### Return by value and the copy constructor
+
+```cpp
+#include <iostream>
+
+class Fraction
+{
+private:
+    int m_numerator{ 0 };
+    int m_denominator{ 1 };
+
+public:
+    // Default constructor
+    Fraction(int numerator = 0, int denominator = 1)
+        : m_numerator{ numerator }, m_denominator{ denominator }
+    {
+    }
+
+    // Copy constructor
+    Fraction(const Fraction& fraction)
+        : m_numerator{ fraction.m_numerator }
+        , m_denominator{ fraction.m_denominator }
+    {
+        std::cout << "Copy constructor called\n";
+    }
+
+    void print() const
+    {
+        std::cout << "Fraction(" << m_numerator << ", " << m_denominator << ")\n";
+    }
+};
+
+void printFraction(Fraction f) // f is pass by value
+{
+    f.print();
+}
+
+Fraction generateFraction(int n, int d)
+{
+    Fraction f{ n, d };
+    return f;
+}
+
+int main()
+{
+    Fraction f2 { generateFraction(1, 2) }; // Fraction is returned using copy constructor
+
+    printFraction(f2); // f2 is copied into the function parameter using copy constructor
+
+    return 0;
+}
+```
+
+#### 🔹 Step 1: What happens in `generateFraction`
+
+```cpp
+Fraction generateFraction(int n, int d)
+{
+    Fraction f{ n, d }; // local object f created
+    return f;           // return by value
+}
+```
+
+- Here, `f` is a **local Fraction**.
+    
+- When you `return f;`, you **return by value**.
+    
+- That means the compiler needs to make a **copy** of `f` into a **temporary object** that will hold the return value.
+    
+- This copy happens through the **copy constructor**.
+
+#### 🔹 Step 2: Back in `main`
+
+```cpp
+Fraction f2{ generateFraction(1, 2) };
+```
+
+Now, `generateFraction(1, 2)` has returned a **temporary Fraction object** (made by copy constructor).  
+Then, `f2` is being initialized **from that temporary**, so another **copy constructor call** happens.
+
+So far:
+
+1. Copy from local `f` → temporary return object.
+    
+2. Copy from temporary return object → `f2`.
+
+#### 🔹 Step 3: Passing `f2` to `printFraction`
+
+```cpp
+printFraction(f2);
+```
+
+Since `printFraction` takes its parameter **by value**:
+
+```cpp
+void printFraction(Fraction f) // pass by value
+```
+
+`f2` must be **copied** into parameter `f`.  
+That’s one more copy constructor call.
+
+So total **3 calls**.
+
+Copy constructor called
+Copy constructor called
+Copy constructor called
+Fraction(1, 2)
+
+### Using `= default` to generate a default copy constructor
+
+If a class has no copy constructor, the compiler will implicitly generate one for us. If we prefer, we can explicitly request the compiler create a default copy constructor for us using the `= default` syntax:
+
+```cpp
+#include <iostream>
+
+class Fraction
+{
+private:
+    int m_numerator{ 0 };
+    int m_denominator{ 1 };
+
+public:
+    // Default constructor
+    Fraction(int numerator=0, int denominator=1)
+        : m_numerator{numerator}, m_denominator{denominator}
+    {
+    }
+
+    // Explicitly request default copy constructor
+    Fraction(const Fraction& fraction) = default;
+
+    void print() const
+    {
+        std::cout << "Fraction(" << m_numerator << ", " << m_denominator << ")\n";
+    }
+};
+
+int main()
+{
+    Fraction f { 5, 3 };
+    Fraction fCopy { f };
+
+    f.print();
+    fCopy.print();
+
+    return 0;
+}
+```
+
+### Using `= delete` to prevent copies
+
+![Ezoic](https://go.ezodn.com/utilcave_com/ezoicbwa.png "ezoic")
+
+Occasionally we run into cases where we do not want objects of a certain class to be copyable. We can prevent this by marking the copy constructor function as deleted, using the `= delete` syntax:
+
+```cpp
+#include <iostream>
+
+class Fraction
+{
+private:
+    int m_numerator{ 0 };
+    int m_denominator{ 1 };
+
+public:
+    // Default constructor
+    Fraction(int numerator=0, int denominator=1)
+        : m_numerator{numerator}, m_denominator{denominator}
+    {
+    }
+
+    // Delete the copy constructor so no copies can be made
+    Fraction(const Fraction& fraction) = delete;
+
+    void print() const
+    {
+        std::cout << "Fraction(" << m_numerator << ", " << m_denominator << ")\n";
+    }
+};
+
+int main()
+{
+    Fraction f { 5, 3 };
+    Fraction fCopy { f }; // compile error: copy constructor has been deleted
+
+    return 0;
+}
+```
+
+In the example, when the compiler goes to find a constructor to initialize `fCopy` with `f`, it will see that the copy constructor has been deleted. This will cause it to emit a compile error.
+
+>If the copy constructor used pass by value, the copy constructor would need to call itself to copy the initializer argument into the copy constructor parameter. But that call to the copy constructor would also be pass by value, so the copy constructor would be invoked again to copy the argument into the function parameter. This would lead to an infinite chain of calls to the copy constructor.
+
+---
