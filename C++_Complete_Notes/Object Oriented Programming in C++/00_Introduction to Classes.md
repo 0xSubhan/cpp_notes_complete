@@ -4150,4 +4150,54 @@ Why?
 ✅ **In one line for your notes:**  
 C++ forces a tradeoff → Either duplicate default values (fewer constructors) or write more constructors (no duplication). Best practice = fewer constructors, even with duplication.
 
+👉 Example that **requires delegation**:
+
+```cpp
+class Student {
+private:
+    std::string m_name{};
+    int m_age{};
+    double m_gpa{};
+
+public:
+    Student(std::string_view name, int age, double gpa)
+        : m_name{name}, m_age{age}, m_gpa{gpa} {}
+
+    // Default GPA depends on age → can't be done with member initializer
+    Student(std::string_view name, int age)
+        : Student(name, age, (age < 10 ? 5.0 : 0.0)) {}
+};
+```
+
+Here, the GPA default depends on `age`, so **delegation wins**.
+
+📝 Example: Using **Default Member Initializers**
+
+```cpp
+class Student {
+private:
+    std::string m_name{"Unknown"};
+    int m_age{18};
+    double m_gpa{0.0};
+public:
+    Student() = default;               // uses defaults
+    Student(std::string_view name) : m_name{name} {}
+};
+```
+
+✅ Best when defaults never change.  
+❌ Can’t handle: “If age < 10, GPA = 5.0”.
+
+## 📊 Default Member Initializers vs Delegating Constructors
+
+|Feature|**Default Member Initializers**|**Delegating Constructors**|
+|---|---|---|
+|**Where defaults live**|Next to the data members|Inside one “master” constructor|
+|**Simplicity**|Very simple for constants|Slightly more verbose|
+|**Code duplication**|Each constructor must still set values if different|No duplication → one master constructor handles all|
+|**Conditional defaults**|❌ Not possible (only static values)|✅ Possible (can compute based on arguments)|
+|**Readability**|Easy to see defaults at a glance|Defaults hidden in delegating calls|
+|**Flexibility**|Limited|Very flexible|
+|**Best use case**|Simple constants (e.g., `int age{18};`)|Context-dependent defaults (e.g., GPA depends on age)
+
 ---
