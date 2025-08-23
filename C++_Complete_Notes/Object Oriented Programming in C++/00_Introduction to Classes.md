@@ -5039,3 +5039,500 @@ It’s not important to memorize when the compiler does / doesn’t do copy elis
 >Prior to C++17, copy elision was strictly an optional optimization that compilers could make. In C++17, copy elision became mandatory in some cases. In these cases, copy elision will be performed automatically (even if you tell your compiler not to perform copy elision).
 
 ---
+# Converting constructors and the explicit keyword
+
+### 🔹 Implicit Conversions (built-in types)
+
+First example:
+
+```cpp
+void printDouble(double d) { std::cout << d; }
+
+int main() {
+    printDouble(5); // int → double
+}
+```
+
+Here:
+
+- Function expects a `double`.
+    
+- You pass an `int`.
+    
+- Compiler applies **numeric conversion rules** → converts `5` into `5.0`.
+    
+
+That’s just **built-in implicit conversion** (done automatically by the compiler).
+
+#### 🔹 User-defined Conversions (custom types)
+
+Now, with your class `Foo`:
+
+```cpp
+class Foo {
+private:
+    int m_x{};
+public:
+    Foo(int x) : m_x{ x } { }  // constructor taking int
+    int getX() const { return m_x; }
+};
+
+void printFoo(Foo f) { std::cout << f.getX(); }
+
+int main() {
+    printFoo(5);  // int → Foo
+}
+```
+
+Here:
+
+- Function `printFoo` expects a `Foo`.
+    
+- You give it an `int` (`5`).
+    
+- Compiler asks: _"Can I turn an `int` into a `Foo`?"_
+    
+- Finds `Foo(int)` constructor.
+    
+- Uses that to implicitly convert `5` into a temporary `Foo`.
+    
+
+That’s called a **user-defined conversion** because the compiler uses a constructor you defined.
+
+#### 🔹 Converting Constructor
+
+A **converting constructor** is any constructor that can be called with a single argument and is not marked `explicit`.  
+That constructor allows implicit conversions.
+
+In this case:
+
+```cpp
+Foo(int x);  // converting constructor
+```
+
+So:
+
+```cpp
+printFoo(5);  
+```
+
+works because `5` is implicitly converted to a `Foo`.
+
+#### 🔹 What happens under the hood
+
+#### Before C++17:
+
+- `5` is converted into a temporary `Foo(5)`.
+    
+- That temporary is then **copied** into parameter `f` (using copy constructor).
+    
+- So two operations: `Foo(int)` → temporary → `Foo(const Foo&)`.
+    
+
+#### C++17 and later:
+
+- The copy is **elided (skipped)**.
+    
+- `f` is constructed directly from `5` using `Foo(int)`.
+    
+- No copy constructor involved (works even if copy constructor is deleted).
+
+### Only one user-defined conversion may be applied
+
+```cpp
+#include <iostream>
+#include <string>
+#include <string_view>
+
+class Employee
+{
+private:
+    std::string m_name{};
+
+public:
+    Employee(std::string_view name)
+        : m_name{ name }
+    {
+    }
+
+    const std::string& getName() const { return m_name; }
+};
+
+void printEmployee(Employee e) // has an Employee parameter
+{
+    std::cout << e.getName();
+}
+
+int main()
+{
+    printEmployee("Joe"); // we're supplying an string literal argument
+
+    return 0;
+}
+```
+
+#### Rule in focus:
+
+👉 **Only one user-defined conversion may be applied in an implicit conversion sequence.**
+
+#### Step 1: What happens in your example?
+
+```cpp
+printEmployee("Joe");
+```
+
+- `"Joe"` is a **C-style string literal** of type `const char[4]`.
+    
+- But `printEmployee` expects an **Employee object**.
+    
+
+So the compiler must figure out how to turn `"Joe"` → `Employee`.
+
+##### Required conversions:
+
+1. `"Joe"` → `std::string_view` (done via `std::string_view`'s converting constructor).
+    
+2. `std::string_view` → `Employee` (done via `Employee(std::string_view)` converting constructor).
+    
+
+✅ That’s **two user-defined conversions** in one chain.  
+❌ The C++ rule says **only one user-defined conversion is allowed** in an implicit conversion sequence.  
+So it fails to compile.
+
+#### Step 2: Why does this restriction exist?
+
+Because otherwise the compiler could chain together **arbitrary user-defined conversions**, leading to:
+
+- Unclear and ambiguous code.
+    
+- Surprising implicit behavior.  
+    C++ designers want conversions to stay predictable.
+
+#### Step 3: How to fix it?
+
+We need to reduce it to **one user-defined conversion**.
+
+##### ✅ Option 1: Pass a `std::string_view` directly
+
+```cpp
+using namespace std::literals;
+printEmployee("Joe"sv);
+```
+
+- `"Joe"sv` is now a **string_view literal** (no constructor needed, it’s a direct type).
+    
+- Conversion: `std::string_view` → `Employee`. (**One user-defined conversion.**)
+
+##### ✅ Option 2: Construct `Employee` explicitly
+
+```cpp
+printEmployee(Employee{"Joe"});
+```
+
+- `"Joe"` → `std::string_view` (conversion happens inside the `Employee` constructor).
+    
+- Then we’re directly passing an **Employee object** to the function, no second conversion required.  
+    So again, only **one user-defined conversion.**
+
+### When converting constructors go wrong
+
+```cpp
+#include <iostream>
+
+class Dollars
+{
+private:
+    int m_dollars{};
+
+public:
+    Dollars(int d)
+        : m_dollars{ d }
+    {
+    }
+
+    int getDollars() const { return m_dollars; }
+};
+
+void print(Dollars d)
+{
+    std::cout << "$" << d.getDollars();
+}
+
+int main()
+{
+    print(5);
+
+    return 0;
+}
+```
+
+#### Step 1: What’s happening in that code?
+
+```cpp
+print(5);  
+```
+
+- You wrote `print(Dollars d)`.
+    
+- But you passed an `int` (`5`).
+    
+- The compiler says:  
+    “Hmm, I don’t have `print(int)`, but I see `Dollars(int)`. That’s a **converting constructor**, so I can turn `5` into `Dollars(5)` and call the function.”
+    
+
+So `print(5)` → `Dollars(5)` → prints `$5`.
+
+#### Step 2: Why is this a problem?
+
+- This looks _harmless_ here, but imagine in a **large codebase**:
+    
+    - Someone writes `print(5);` thinking it will print `5`.
+        
+    - But instead it prints `$5`.
+        
+    - Even worse: if you had multiple converting constructors, the compiler might silently pick one you didn’t mean, causing bugs.
+        
+
+In other words, the compiler is being _too helpful_ — it guesses what you want.
+
+### The explicit keyword
+
+>To address such issues, we can use the **explicit** keyword to tell the compiler that a constructor should not be used as a converting constructor.
+
+Making a constructor `explicit` has two notable consequences:
+
+- An explicit constructor cannot be used to do copy initialization or copy list initialization.
+- An explicit constructor cannot be used to do implicit conversions (since this uses copy initialization or copy list initialization).
+
+Let’s update the `Dollars(int)` constructor from the prior example to be an explicit constructor:
+
+```cpp
+#include <iostream>
+
+class Dollars
+{
+private:
+    int m_dollars{};
+
+public:
+    explicit Dollars(int d) // now explicit
+        : m_dollars{ d }
+    {
+    }
+
+    int getDollars() const { return m_dollars; }
+};
+
+void print(Dollars d)
+{
+    std::cout << "$" << d.getDollars();
+}
+
+int main()
+{
+    print(5); // compilation error because Dollars(int) is explicit
+
+    return 0;
+}
+```
+
+Because the compiler can no longer use `Dollars(int)` as a converting constructor, it can not find a way to convert `5` to a `Dollars`. Consequently, it will generate a compilation error.
+
+#### 📌 Rule of thumb
+
+- If a constructor can be called with **a single argument**, **always consider making it `explicit`** unless you _really want_ implicit conversions.
+
+### Explicit constructors can be used for direct and direct list initialization
+
+#### 🔑 Recap
+
+- **Without `explicit`**: the compiler can use your constructor for **implicit conversions** (e.g. `print(5)` automatically becomes `print(Dollars{5})`).
+    
+- **With `explicit`**: the compiler **cannot** perform implicit conversions.  
+    That’s why `print(5)` fails.
+
+#### 📌 But explicit constructors are still usable
+
+Declaring a constructor `explicit` doesn’t forbid it from being used. It just **forces you to be explicit** about when you want to use it.
+
+That’s why these work:
+
+```cpp
+Dollars d1(5);   // ✅ direct initialization
+Dollars d2{5};  // ✅ direct list initialization
+```
+
+Both are **explicit requests** by the programmer to call the constructor.
+
+#### ⚠️ Where it fails
+
+```cpp
+print(5); // ❌ fails
+```
+
+Because here you are asking `print` to take an `int`.  
+The compiler would need to **implicitly convert** `int -> Dollars`, but `explicit` forbids that.
+
+#### ✅ How to make it work
+
+You just construct the object explicitly yourself:
+
+```cpp
+print(Dollars{5});     // ✅ explicitly construct a Dollars
+print(Dollars(5));     // ✅ also works
+```
+
+Now, there’s no conversion happening: you are literally creating a `Dollars` object and passing it to the function.
+
+#### 🔄 Using `static_cast`
+
+Another neat trick: `static_cast` uses **direct initialization** internally, so it respects explicit constructors:
+
+```cpp
+print(static_cast<Dollars>(5));  // ✅ works
+```
+
+That’s essentially the same as `Dollars(5)`.
+
+#### 🎯 Why this matters
+
+- `explicit` doesn’t ban a constructor — it just bans **implicit use** of that constructor.
+    
+- You, the programmer, must say:  
+    _“Yes, I really want to create a Dollars here.”_
+    
+
+This makes intent clear and prevents hidden, bug-prone conversions.
+
+### Return by value and explicit constructors
+
+>When we return a value from a function, if that value does not match the return type of the function, an implicit conversion will occur. Just like with pass by value, such conversions cannot use explicit constructors.
+
+The following programs shows a few variations in return values, and their results:
+
+```cpp
+#include <iostream>
+
+class Foo
+{
+public:
+    explicit Foo() // note: explicit (just for sake of example)
+    {
+    }
+
+    explicit Foo(int x) // note: explicit
+    {
+    }
+};
+
+Foo getFoo()
+{
+    // explicit Foo() cases
+    return Foo{ };   // ok
+    return { };      // error: can't implicitly convert initializer list to Foo
+
+    // explicit Foo(int) cases
+    return 5;        // error: can't implicitly convert int to Foo
+    return Foo{ 5 }; // ok
+    return { 5 };    // error: can't implicitly convert initializer list to Foo
+}
+
+int main()
+{
+    return 0;
+}
+```
+
+Perhaps surprisingly, `return { 5 }` is considered a conversion.
+
+### Best practices for use of `explicit` 
+==Dont read the following very deeply !
+
+The **best practice** section is basically telling us:  
+➡️ **Default to safety** (make constructors explicit unless you have a really good reason not to).
+
+#### ✅ Cases where you **should make constructors explicit**
+
+- **Any constructor that takes a single argument**
+
+```cpp
+class Dollars {
+public:
+    explicit Dollars(int d); // good practice
+};
+```
+
+This avoids surprises like:
+
+```cpp
+void print(Dollars d);
+
+print(5);   // ❌ if constructor is not explicit, this works (maybe unintended!)
+print(Dollars{5}); // ✅ clear, intentional
+```
+
+**Constructors with multiple parameters with defaults**  
+Because those can still be called with one argument:
+
+```cpp
+class Foo {
+public:
+    explicit Foo(int x, int y = 0);  // still acts like Foo(int)
+};
+```
+
+### 🚫 Cases where you **should NOT** make constructors explicit
+
+1. **Copy constructor**
+
+```cpp
+Foo(const Foo& other);   // never explicit
+```
+
+Copying/moving isn’t really a "conversion". You usually _want_ implicit copies.
+
+2. **Default constructor**
+
+```cpp
+Foo();   // normally not explicit
+```
+
+Because you want `{}` or `Foo()` to just work naturally.
+
+3. **Constructors with multiple arguments only**
+
+```cpp
+Foo(int x, double y); // normally not explicit
+```
+
+Since these don’t get picked for implicit conversions anyway.
+
+#### ⚖️ Gray area — sometimes explicit, sometimes not
+
+- If the conversion is **semantically equivalent** _and_ **efficient**, you can skip `explicit`.  
+    Example:
+
+```cpp
+// std::string_view(char const*)  --> not explicit
+// because treating a C-string as a string_view is always okay and cheap.
+```
+
+If the conversion is **semantically okay** but **expensive**, mark it `explicit`.  
+Example:
+
+```cpp
+// std::string(std::string_view)  --> explicit
+// because converting a view to a full string is costly.
+```
+
+#### 📌 Best Practice (short version)
+
+1. **Default rule**: Mark **single-argument constructors** `explicit`.
+    
+2. **Exception**: If the conversion is both natural (semantically equivalent) and cheap, you can leave it non-explicit.
+    
+3. **Never** make copy/move constructors `explicit`.
+    
+4. You usually don’t need to mark multi-arg or default constructors `explicit`.
+
+---
