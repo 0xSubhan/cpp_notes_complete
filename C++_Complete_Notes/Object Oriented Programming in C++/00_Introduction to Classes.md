@@ -5536,3 +5536,546 @@ Example:
 4. You usually don’t need to mark multi-arg or default constructors `explicit`.
 
 ---
+# Constexpr aggregates and classes
+
+### 🔑 Key ideas to remember
+
+1. **`constexpr` functions**:
+    
+    - They _can_ be evaluated at compile-time **if all inputs are constant expressions**.
+        
+    - Otherwise, they’re just evaluated at runtime.
+        
+    - So `constexpr` doesn’t mean “always compile-time,” it means “_allowed_ to be compile-time.”
+        
+2. **Constant expressions**:
+    
+    - A value/expression that the compiler can fully compute at compile-time.
+        
+    - Needed when initializing `constexpr` variables.
+        
+3. **Member functions** can also be `constexpr`.
+    
+    - But to call them in a `constexpr` context, the _object itself_ must also be a `constexpr` object.
+
+#### 📝 Step through the examples
+
+##### **Example 1 (non-member function)**
+
+```cpp
+constexpr int greater(int x, int y) {
+    return (x > y ? x : y);
+}
+
+int main() {
+    std::cout << greater(5, 6) << '\n'; // may run at compile-time or runtime
+    constexpr int g { greater(5, 6) };  // must run at compile-time
+}
+```
+
+- `greater(5,6)` → can be compile-time since arguments are constexpr values.
+    
+- In `std::cout << greater(5,6)`, no constexpr requirement → compiler is free to do runtime.
+    
+- In `constexpr int g {...}`, the compiler _must_ do compile-time.
+    
+
+✅ Works fine.
+
+##### **Example 2 (non-constexpr member function)**
+
+```cpp
+struct Pair {
+    int m_x {};
+    int m_y {};
+
+    int greater() const {
+        return (m_x > m_y ? m_x : m_y);
+    }
+};
+
+int main() {
+    Pair p {5, 6};
+    constexpr int g { p.greater() }; // ❌ error: greater() not constexpr
+}
+```
+
+- `greater()` is not marked `constexpr`.
+    
+- So even though inputs are compile-time known, compiler isn’t allowed to evaluate at compile-time.
+    
+
+❌ Compile error.
+
+##### **Example 3 (constexpr member function, but object not constexpr)**
+
+```cpp
+struct Pair {
+    int m_x {};
+    int m_y {};
+
+    constexpr int greater() const {
+        return (m_x > m_y ? m_x : m_y);
+    }
+};
+
+int main() {
+    Pair p {5, 6};
+    constexpr int g { p.greater() }; // ❌ error: p is not constexpr
+}
+```
+
+- Now `greater()` _can_ be compile-time.
+    
+- But `p` itself is not `constexpr` (it’s a runtime object).
+    
+- Since `p` isn’t guaranteed to be compile-time known, compiler can’t fold it into a constant expression.
+    
+
+❌ Still error.
+
+##### **Example 4 (constexpr object + constexpr member function)**
+
+```cpp
+struct Pair {
+    int m_x {};
+    int m_y {};
+
+    constexpr int greater() const {
+        return (m_x > m_y ? m_x : m_y);
+    }
+};
+
+int main() {
+    constexpr Pair p {5, 6};     // now constexpr object
+    constexpr int g { p.greater() }; // ✅ works
+}
+```
+
+- `greater()` is constexpr.
+    
+- `p` is constexpr (aggregate types can be constexpr if initialized with constant expressions).
+    
+- So `p.greater()` is a constant expression → can be used to initialize another `constexpr` variable.
+    
+
+✅ Works perfectly.
+
+#### 📌 So the big lesson:
+
+- For **member functions in constexpr contexts**:
+    
+    - The function itself must be `constexpr`.
+        
+    - The object you’re calling on must also be `constexpr`.
+        
+- If either is missing, you can’t use the result in a `constexpr` variable.
+    
+
+### Constexpr class objects and constexpr constructors
+
+>Now let’s make our `Pair` a non-aggregate:
+
+```cpp
+#include <iostream>
+
+class Pair // Pair is no longer an aggregate
+{
+private:
+    int m_x {};
+    int m_y {};
+
+public:
+    Pair(int x, int y): m_x { x }, m_y { y } {}
+
+    constexpr int greater() const
+    {
+        return (m_x > m_y  ? m_x : m_y);
+    }
+};
+
+int main()
+{
+    constexpr Pair p { 5, 6 };       // compile error: p is not a literal type
+    std::cout << p.greater() << '\n';
+
+    constexpr int g { p.greater() };
+    std::cout << g << '\n';
+
+    return 0;
+}
+```
+
+This fails because `Pair` is **not a literal type**.
+
+#### ⚡ What is a _literal type_?
+
+A **literal type** is a type that the compiler can fully construct and reason about at **compile-time**.
+
+Some literal types include:
+
+- Scalars: `int`, `double`, `char`, `bool`, pointers, etc.
+    
+- References
+    
+- Most aggregates (like `struct { int x; int y; };`)
+    
+- Classes that have a `constexpr` constructor
+    
+
+Without a `constexpr` constructor, your class object **can only be created at runtime**. That’s why the compiler rejected `constexpr Pair p { 5, 6 };`.
+
+#### 🛠 Why does making the constructor `constexpr` fix it?
+
+```cpp
+constexpr Pair(int x, int y): m_x { x }, m_y { y } {}
+```
+
+- Now, the constructor itself can run at **compile-time**, as long as the arguments are constant expressions.
+    
+- This makes `Pair` a literal type.
+    
+- Thus `constexpr Pair p { 5, 6 };` is valid, because `5` and `6` are known at compile time.
+
+#### ✅ Correct version
+
+```cpp
+class Pair
+{
+private:
+    int m_x {};
+    int m_y {};
+
+public:
+    constexpr Pair(int x, int y): m_x { x }, m_y { y } {} // constexpr constructor
+
+    constexpr int greater() const
+    {
+        return (m_x > m_y  ? m_x : m_y);
+    }
+};
+
+int main()
+{
+    constexpr Pair p { 5, 6 };   // OK
+    std::cout << p.greater() << '\n'; // still runs at runtime output
+    constexpr int g { p.greater() };  // OK, compile-time evaluation
+    std::cout << g << '\n';
+
+    return 0;
+}
+```
+
+Now both the object construction **and** the call to `greater()` can be done at compile time.
+
+#### 💡 Key Takeaways
+
+1. **`constexpr` constructor** → allows class objects to be used in constant expressions.
+    
+2. **Literal type** → any type that can be used with `constexpr`.
+    
+3. If you want your class to support compile-time evaluation:
+    
+    - Make constructors `constexpr`.
+        
+    - Make relevant member functions `constexpr`.
+        
+4. Removing `constexpr` later breaks code that relies on compile-time evaluation.
+
+>[!Tip]
+>If you want your class to be able to be evaluated at compile-time, make your member functions and constructor constexpr.
+
+>[!Tip]
+>Constexpr is part of the interface of the class, and removing it later will break callers who are calling the function in a constant context.
+
+### Constexpr members may be needed with non-constexpr/non-const objects
+
+#### Step 1: Reminder about `constexpr`
+
+- A `constexpr` function **can** run at runtime **or** at compile-time.
+    
+- But if it’s used in a **constant expression context** (like initializing a `constexpr` variable), the compiler must evaluate it at **compile-time**.
+    
+- In compile-time evaluation, only **constexpr functions** can be called (including constructors and member functions).
+
+#### Step 2: The Example
+
+```cpp
+class Pair
+{
+private:
+    int m_x {};
+    int m_y {};
+
+public:
+    constexpr Pair(int x, int y): m_x { x }, m_y { y } {}
+
+    constexpr int greater() const
+    {
+        return (m_x > m_y ? m_x : m_y);
+    }
+};
+
+constexpr int init()
+{
+    Pair p { 5, 6 };    // requires constexpr constructor (since evaluated at compile-time)
+    return p.greater(); // requires constexpr greater()
+}
+```
+
+- `init()` is marked `constexpr`.
+    
+- That means **if `init()` is used in a constexpr context**, the compiler will try to evaluate it at compile-time.
+    
+
+Now in `main`:
+
+```cpp
+constexpr int g { init() };
+```
+
+Here, `init()` **must** be evaluated at compile-time.
+
+Inside `init()`:
+
+- `Pair p { 5, 6 };` → Even though `p` is not written as `constexpr`, it **still must be constructed at compile-time**. That forces the constructor `Pair(int,int)` to be `constexpr`.
+    
+- `p.greater();` → Since the return value is needed at compile-time, `greater()` must also be `constexpr`.
+    
+
+If either the constructor or `greater()` weren’t `constexpr`, the compiler would error.
+
+#### Step 3: The Key Insight
+
+🔑 **Even if an object is not declared `constexpr`, if it is created inside a constexpr function that is being evaluated at compile-time, then:**
+
+- Its constructor must be `constexpr`.
+    
+- Any member functions called on it must also be `constexpr`.
+
+#### Step 4: Why does this matter?
+
+Because it shows that:
+
+- Just declaring a function `constexpr` isn’t enough.
+    
+- If you want it to **work in compile-time contexts**, all the functions it calls (including constructors) must also be `constexpr`.
+    
+
+So here’s the **core lesson**:
+
+> If a `constexpr` function depends on class objects, those class constructors and member functions must also be `constexpr` to allow compile-time evaluation.
+
+
+#### Because of compile-time evaluation rules:
+
+- If you are inside a `constexpr` function (like `init()` in your example),
+    
+- and that function is evaluated in a **compile-time context** (e.g., initializing a `constexpr` variable),
+    
+- then **all code inside must be valid for compile-time execution**.
+    
+
+That includes:
+
+- constructing objects → needs a `constexpr` constructor
+    
+- calling member functions → needs a `constexpr` function
+    
+
+Even if the object itself is **not declared `constexpr`** (like `Pair p{5, 6};`), it is _still being created at compile-time_.  
+So its constructor and member functions must be `constexpr`.
+
+### Constexpr member functions may be const or non-const C++14
+
+In C++11, non-static constexpr member functions are implicitly const (except constructors).
+
+However, as of C++14, constexpr member functions are no longer implicitly const. This means that if you want a constexpr function to be a const function, you must explicitly mark it as such.
+
+### Constexpr non-const member functions can change data members
+
+```cpp
+#include <iostream>
+
+class Pair
+{
+private:
+    int m_x {};
+    int m_y {};
+
+public:
+    constexpr Pair(int x, int y): m_x { x }, m_y { y } {}
+
+    constexpr int greater() const // constexpr and const
+    {
+        return (m_x > m_y  ? m_x : m_y);
+    }
+
+    constexpr void reset() // constexpr but non-const
+    {
+        m_x = m_y = 0; // non-const member function can change members
+    }
+
+    constexpr const int& getX() const { return m_x; }
+};
+
+// This function is constexpr
+constexpr Pair zero()
+{
+    Pair p { 1, 2 }; // p is non-const
+    p.reset();       // okay to call non-const member function on non-const object
+    return p;
+}
+
+int main()
+{
+    Pair p1 { 3, 4 };
+    p1.reset();                     // okay to call non-const member function on non-const object
+    std::cout << p1.getX() << '\n'; // prints 0
+
+    Pair p2 { zero() };             // zero() will be evaluated at runtime
+    p2.reset();                     // okay to call non-const member function on non-const object
+    std::cout << p2.getX() << '\n'; // prints 0
+
+    constexpr Pair p3 { zero() };   // zero() will be evaluated at compile-time
+//    p3.reset();                   // Compile error: can't call non-const member function on const object
+    std::cout << p3.getX() << '\n'; // prints 0
+
+    return 0;
+}
+```
+
+#### 🔑 Key differences
+
+- **`const`**: relates to _immutability_ at runtime.
+    
+    - If an object is `const`, you can’t modify its members (unless they’re marked `mutable`).
+        
+    - If a member function is marked `const`, it promises _not to modify the object_.
+        
+- **`constexpr`**: relates to _evaluatability at compile time_.
+    
+    - If a function is marked `constexpr`, the compiler _may_ evaluate it at compile-time, but only if used in a constant expression context.
+        
+    - At runtime, `constexpr` functions behave like normal functions.
+
+#### The key line:
+
+> **Constexpr non-const member functions can change data members, so long as the implicit object isn’t const.**
+
+```cpp
+constexpr void test() 
+{
+	changing data member//
+}
+const obj{}
+obj.test() // error, since obj (implicit object is const) it promises not to change the object so error
+
+obj2{};
+obj2.test() // Work
+```
+
+This means:
+
+- If you call a `constexpr` function that is **not const-qualified** (like `reset()` in the example), it can modify the object — _but only if the object itself isn’t const_.
+
+>Example breakdown
+
+```cpp
+constexpr void reset() // constexpr but NOT const
+{
+    m_x = m_y = 0; // allowed to modify data members
+}
+```
+
+#### Case 1: `Pair p1 {3,4};`
+
+```cpp
+p1.reset(); // ✅ works
+```
+
+- `p1` is **non-const** → so `reset()` can modify it.
+    
+- The fact that `reset` is `constexpr` doesn’t matter here, because this is runtime.
+
+#### Case 2: `Pair p2 { zero() };`
+
+```cpp
+Pair zero() {
+    Pair p {1,2};  // non-const object
+    p.reset();     // ✅ allowed (non-const object calling non-const fn)
+    return p;      // returned normally
+}
+```
+
+- `zero()` is `constexpr`, but here it’s being used in a **runtime context**.
+    
+- The `reset()` call works, because `p` is non-const inside `zero()`.
+    
+- So this behaves just like normal runtime code.
+
+#### Case 3: `constexpr Pair p3 { zero() };`
+
+```cpp
+constexpr Pair p3 { zero() };
+```
+
+- Now `zero()` **must be evaluated at compile-time**.
+    
+- That means:
+    
+    - The constructor of `Pair` must be `constexpr`. ✅
+        
+    - Any functions called (`reset`) must be `constexpr`. ✅
+        
+    - The object `p` inside `zero()` is **non-const**, so it can still be modified at compile-time!
+        
+- Result: The compiler fully evaluates `zero()` at compile-time, and initializes `p3`.
+    
+
+But:
+
+```cpp
+p3.reset(); // ❌ ERROR
+```
+
+- `p3` itself is `constexpr` (implicitly `const`).
+    
+- You cannot call a **non-const member function** (`reset()`) on a const object.
+
+#### ✅ Big Takeaway
+
+- `constexpr` is about **when** a function/object can be evaluated (compile-time vs runtime).
+    
+- `const` is about **whether modification is allowed**.
+    
+- A `constexpr` function can still be _non-const_, meaning it can mutate objects **if they’re not const** — even during compile-time evaluation.
+
+### Constexpr functions that return const references (or pointers) Optional
+
+Normally you won’t see `constexpr` and `const` used right next to each other, but one case where this does happen is when you have a constexpr member function that returns a const reference (or (const) pointer-to-const).
+
+In our `Pair` class above, `getX()` is a constexpr member function that returns a const reference:
+
+```cpp
+constexpr const int& getX() const { return m_x; }
+```
+
+That’s a lot of const-ing!
+
+The `constexpr` indicates that the member function can be evaluated at compile-time. The `const int&` is the return type of the function. The rightmost `const` means the member-function itself is const so it can be called on const objects.
+
+As an aside…
+
+A member function that returned a const pointer to const instead might look something like this:
+
+```cpp
+constexpr const int* const getXPtr() const { return &m_x; }
+```
+
+Isn’t it beautiful? No? Okay, fine.
+
+---
+# [Summary and Quiz](https://www.learncpp.com/cpp-tutorial/chapter-14-summary-and-quiz/)
+
+---
