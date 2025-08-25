@@ -95,7 +95,7 @@
             "state": {
               "type": "backlink",
               "state": {
-                "file": "learncpp.com/Chapter 7 - Scope, Duration, and Linkage.md",
+                "file": "C++_Complete_Notes/Object Oriented Programming in C++/01_More on Classes.md",
                 "collapseAll": false,
                 "extraContext": false,
                 "sortOrder": "alphabetical",
@@ -105,7 +105,7 @@
                 "unlinkedCollapsed": true
               },
               "icon": "links-coming-in",
-              "title": "Backlinks for Chapter 7 - Scope, Duration, and Linkage"
+              "title": "Backlinks for 01_More on Classes"
             }
           },
           {

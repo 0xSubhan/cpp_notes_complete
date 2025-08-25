@@ -407,3 +407,356 @@ e.nonConstFunc(); // ❌ still illegal
 If `this` were added to the C++ language today, it would undoubtedly be a reference instead of a pointer. In other more modern C++-like languages, such as Java and C#, `this` is implemented as a reference.
 
 ---
+# Classes and header files
+
+### 🔑 Defining Member Functions Inside vs Outside a Class
+
+#### 1. Defining Functions Inside the Class
+
+In simple cases, we can define all member functions **inside** the class body:
+
+```cpp
+class Date {
+private:
+    int m_year{};
+    int m_month{};
+    int m_day{};
+
+public:
+    Date(int year, int month, int day)     // constructor
+        : m_year{ year }, m_month{ month }, m_day{ day }
+    {
+    }
+
+    void print() const { 
+        std::cout << "Date(" << m_year << ", " << m_month << ", " << m_day << ")\n"; 
+    }
+
+    int getYear() const { return m_year; }
+    int getMonth() const { return m_month; }
+    int getDay() const { return m_day; }
+};
+```
+
+Usage:
+
+```cpp
+Date d{2015, 10, 14};
+d.print();   // prints Date(2015, 10, 14)
+```
+
+👉 This works fine for **small/simple classes**.  
+But as classes grow larger, keeping all definitions inside can **clutter the interface** and make it harder to see what’s important for users of the class.
+
+#### 2. Splitting Declaration and Definition
+
+C++ allows separating:
+
+- **Declaration** (inside the class → what the function looks like).
+    
+- **Definition** (outside the class → how the function works).
+    
+
+#### Example:
+
+```cpp
+class Date {
+private:
+    int m_year{};
+    int m_month{};
+    int m_day{};
+
+public:
+    Date(int year, int month, int day); // declaration only
+    void print() const;                 // declaration only
+
+    // short one-line functions often stay inside
+    int getYear() const { return m_year; }
+    int getMonth() const { return m_month; }
+    int getDay() const { return m_day; }
+};
+```
+
+Definitions outside:
+
+```cpp
+Date::Date(int year, int month, int day)   // definition
+    : m_year{ year }, m_month{ month }, m_day{ day }
+{
+}
+
+void Date::print() const                   // definition
+{
+    std::cout << "Date(" << m_year << ", " << m_month << ", " << m_day << ")\n";
+}
+```
+
+Usage:
+
+```cpp
+Date d{2015, 10, 14};
+d.print();
+```
+
+#### 3. Important Notes
+
+- When defining functions **outside the class**, you must prefix the function name with the **class scope**:
+
+```cpp
+ReturnType ClassName::functionName(...) { ... }
+```
+
+- Example: `void Date::print() const { ... }`
+    
+- This tells the compiler that the function belongs to the class, not a free function.
+    
+
+#### 4. Which Functions Should Stay Inside?
+
+- **Accessors (getters)** and other very short, one-line functions are usually kept **inside** the class definition → keeps code concise.
+    
+- Longer, more complex functions are usually moved **outside** to keep the class definition clean and easy to read.
+    
+
+#### ✅ Key Insight
+
+- **Inside the class** = simple, quick to read, but can get messy for large classes.
+    
+- **Outside the class** = cleaner interface (users only see function names, not implementations).
+    
+- Prefix with `ClassName::` when defining functions outside the class.
+
+### Putting class definitions in a header file
+
+If you define a class inside a source (.cpp) file, that class is only usable within that particular source file. In larger programs, it’s common that we’ll want to use the classes we write in multiple source files.
+
+In lesson [2.11 -- Header files](https://www.learncpp.com/cpp-tutorial/header-files/), you learned that you can put function declarations in a header files. Then you can #include those functions declarations into multiple code files (or even multiple projects). Classes are no different. A class definitions can be put in a header files, and then #included into any other files that want to use the class type.
+
+Unlike functions, which only need a forward declaration to be used, the compiler typically needs to see the full definition of a class (or any program-defined type) in order for the type to be used. This is because the compiler needs to understand how members are declared in order to ensure they are used properly, and it needs to be able to calculate how large objects of that type are in order to instantiate them. So our header files usually contain the full definition of a class rather than just a forward declaration of the class.
+
+### Naming your class header and code files
+
+#### 1. Why split into `.h` and `.cpp`?
+
+- As classes get larger, we don’t want **all definitions** cluttering the class interface.
+    
+- C++ best practice is to **separate class declarations and definitions** into two files:
+    
+    - **Header file (`.h`)** → contains the class declaration (blueprint).
+        
+    - **Source file (`.cpp`)** → contains function definitions (implementation).
+
+#### 2. Example: Splitting the `Date` Class
+
+**`Date.h`** (class declaration):
+
+```cpp
+#ifndef DATE_H   // include guard start
+#define DATE_H
+
+class Date
+{
+private:
+    int m_year{};
+    int m_month{};
+    int m_day{};
+
+public:
+    Date(int year, int month, int day); // declaration only
+    void print() const;                 // declaration only
+
+    // trivial functions can stay inline
+    int getYear() const { return m_year; }
+    int getMonth() const { return m_month; }
+    int getDay() const { return m_day; }
+};
+
+#endif  // include guard end
+```
+
+**`Date.cpp`** (definitions/implementation):
+
+```cpp
+#include "Date.h"
+#include <iostream>
+
+Date::Date(int year, int month, int day)
+    : m_year{ year }, m_month{ month }, m_day{ day }
+{
+}
+
+void Date::print() const
+{
+    std::cout << "Date(" << m_year << ", " << m_month << ", " << m_day << ")\n";
+}
+```
+
+#### 3. How It Works
+
+- Any other file that wants to use `Date` just writes:
+
+```cpp
+#include "Date.h"
+```
+
+The compiler needs both:
+
+- `Date.h` (so it knows the class layout + declarations).
+    
+- `Date.cpp` compiled and linked (so function calls have actual code to run).
+
+#### 4. Best Practices
+
+✔ **Header file (`.h`)**
+
+- Use the **same name as the class** (`Date.h` for `Date`).
+    
+- Put the **class definition** (data members + function declarations).
+    
+- Define only **trivial one-liners** (e.g., getters, simple constructors).
+    
+
+✔ **Source file (`.cpp`)**
+
+- Also use the **same name as the class** (`Date.cpp`).
+    
+- Put **non-trivial function definitions** here.
+    
+- Always `#include "Date.h"` at the top.
+
+#### ✅ Key Insight
+
+- **Header = What the class looks like** (interface).
+    
+- **Source = How the class works** (implementation).
+    
+- This makes projects organized, avoids clutter, and keeps code easier to read and maintain.
+
+### 📘 Does Defining a Class in a Header File Violate the One-Definition Rule (ODR)?
+
+#### 🔹 The One-Definition Rule (ODR)
+
+- In C++, most things (like functions, variables) must have **exactly one definition** across the entire program.
+    
+- If you define the same function or variable in multiple translation units, the linker throws an error.
+
+#### 🔹 What About Classes?
+
+- **Types (like classes)** are **exempt** from the "only one definition per program" part of the ODR.
+    
+    - ✅ You can safely `#include` a class definition in multiple files.
+        
+    - ❌ But including the same class definition more than once in a _single file_ **is an ODR violation**.
+        
+    - Solution → Use **include guards** (`#ifndef … #define … #endif`) or `#pragma once`.
+
+#### 🔹 Member Functions
+
+- **Functions are NOT exempt from ODR** → each function definition must exist only once in the entire program.
+    
+
+1. **Functions defined inside the class**
+    
+    - They are **implicitly `inline`**.
+        
+    - Inline functions are allowed to appear in multiple translation units without violating ODR.
+        
+2. **Functions defined outside the class**
+    
+    - They are **NOT inline by default**.
+        
+    - To avoid ODR violations:
+        
+        - Either put them in a `.cpp` file (so there’s only one definition).
+            
+        - Or mark them `inline` in the header if you bdwant them inlined and usable across bdmultiple files.
+
+#### 🔹 Example (`Date.h` with inline functions)
+
+```cpp
+#ifndef DATE_H
+#define DATE_H
+
+#include <iostream>
+
+class Date
+{
+private:
+    int m_year{};
+    int m_month{};
+    int m_day{};
+
+public:
+    Date(int year, int month, int day); // declaration
+    void print() const;                 // declaration
+};
+
+inline Date::Date(int year, int month, int day) // definition made inline
+    : m_year{ year }, m_month{ month }, m_day{ day }
+{
+}
+
+inline void Date::print() const // definition made inline
+{
+    std::cout << "Date(" << m_year << ", " << m_month << ", " << m_day << ")\n";
+}
+
+#endif
+
+```
+
+Since the constructor and `print()` are marked `inline`, this header can be included in multiple `.cpp` files safely.
+
+#### 🔹 Why Not Put _Everything_ in the Header?
+
+- ✅ Compiles fine, but…
+    
+
+1. **Clutters the class definition** → harder to read.
+    
+2. **Recompilation cost** → if you edit a header, _every file that includes it_ must recompile.
+    
+    - Changing only a `.cpp` file triggers recompilation of _just that file_.
+        
+3. **Project organization** → keeping non-trivial code in `.cpp` files makes codebases cleaner.
+
+#### 🔹 Exceptions (When You Might Put Everything in a Header)
+
+1. Small, single-use classes (only used in one `.cpp`).
+    
+2. Classes with very few non-trivial functions.
+    
+3. **Header-only libraries** → everything goes in the header (all functions `inline`).
+    
+4. **Templates** → must be fully defined in headers (compiler needs full definition to generate code).
+
+#### ✅ Key Takeaways
+
+- **Classes in headers = okay** (types are ODR-exempt).
+    
+- **Functions in headers = must be inline** (unless trivial inside class).
+    
+- **Best practice** → class in header, non-trivial function definitions in `.cpp`.
+
+### Inline expansion of member functions
+
+>The compiler must be able to see a full definition of a function in order to perform inline expansion. Most often, such functions (e.g. access functions) are defined inside the class definition. However, if you want to define a member function outside the class definition, but still want it to be eligible for inline expansion, you can define it as an inline function just below the class definition (in the same header file). That way the definition of the function is accessible to anybody who #includes the header.
+
+### Default arguments for member functions
+
+>[!Best Practice]
+>Put any default arguments for member functions inside the class definition.
+
+### Libraries
+
+Throughout your programs, you’ve used classes that are part of the standard library, such as `std::string`. To use these classes, you simply need to #include the relevant header (such as `#include <string>`). Note that you haven’t needed to add any code files (such as `string.cpp` or `iostream.cpp`) into your projects.
+
+The header files provide the declarations that the compiler requires in order to validate that the programs you’re writing are syntactically correct. However, the implementations for the classes that belong to the C++ standard library are contained in a precompiled file that is linked in automatically at the link stage. You never see the code.
+
+Many open source software packages provide both .h and .cpp files for you to compile into your program. However, most commercial libraries provide only .h files and a precompiled library file. There are several reasons for this: 1) It’s faster to link a precompiled library than to recompile it every time you need it, 2) A single copy of a precompiled library can be shared by many applications, whereas compiled code gets compiled into every executable that uses it (inflating file sizes), and 3) Intellectual property reasons (you don’t want people stealing your code).
+
+We discuss how to include 3rd party precompiled libraries into your projects in the appendix.
+
+While you probably won’t be creating and distributing your own libraries for a while, separating your classes into header files and source files is not only good form, it also makes creating your own custom libraries easier. Creating your own libraries is beyond the scope of these tutorials, but separating your declaration and implementation is a prerequisite to doing so if you want to distribute precompiled binaries.
+
+---
