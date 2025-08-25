@@ -760,3 +760,294 @@ We discuss how to include 3rd party precompiled libraries into your projects in 
 While you probably won’t be creating and distributing your own libraries for a while, separating your classes into header files and source files is not only good form, it also makes creating your own custom libraries easier. Creating your own libraries is beyond the scope of these tutorials, but separating your declaration and implementation is a prerequisite to doing so if you want to distribute precompiled binaries.
 
 ---
+# Nested types (member types)
+
+### Nested Types (Member Types) in C++
+
+So far, we’ve seen two kinds of members inside a class:
+
+- **Data members** → variables inside a class
+    
+- **Member functions** → functions inside a class
+    
+
+C++ also allows another kind of member: **nested types (member types)**.  
+A **nested type** is a type (like `enum`, `struct`, `class`, or `using` alias) that is defined **inside a class**.
+
+```cpp
+#include <iostream>
+
+class Fruit
+{
+public:
+    // Nested enum type inside the class
+    enum Type
+    {
+        apple,
+        banana,
+        cherry
+    };
+
+private:
+    Type m_type {};
+    int m_percentageEaten { 0 };
+
+public:
+    Fruit(Type type) : m_type { type } {}
+
+    Type getType() { return m_type; }
+    int getPercentageEaten() { return m_percentageEaten; }
+
+    bool isCherry() { return m_type == cherry; } // No need for Fruit:: here
+};
+
+int main()
+{
+    Fruit apple { Fruit::apple }; // outside the class, we must use Fruit::
+
+    if (apple.getType() == Fruit::apple)
+        std::cout << "I am an apple";
+    else
+        std::cout << "I am not an apple";
+
+    return 0;
+}
+```
+
+#### Key Points
+
+1. **Definition position**
+    
+    - Nested types must be fully defined before they are used.
+        
+    - That’s why they are usually placed **at the top of the class**.
+        
+    
+    ✅ Best practice → Put nested types at the top of the class.
+
+2. **Access control**
+
+- Nested types follow the normal access rules:
+    
+    - If declared under `public:`, they are accessible outside the class.
+        
+    - If under `private:`, they can only be used inside the class.
+
+3. **Scope rules**
+
+- A class creates its own **scope region**, just like a namespace.
+    
+- So the **fully qualified name** of the nested type is `Fruit::Type`.
+    
+- The **fully qualified name** of an enumerator is `Fruit::apple`.
+
+4. **Access inside vs outside the class**
+
+- Inside the class → No need for the `Fruit::` prefix. Example: `m_type == cherry`.
+    
+- Outside the class → Must use the `Fruit::` prefix. Example: `Fruit::apple`.
+
+5. **Why we renamed FruitType → Type**
+
+- Writing `Fruit::Type` looks cleaner than `Fruit::FruitType`.
+    
+- It avoids redundancy.
+
+6. **Scoped vs Unscoped enums**
+
+- If we used a **scoped enum class**, we’d have to write `Fruit::Type::apple`.
+    
+- But since the class already provides a scope, an **unscoped enum** is simpler: `Fruit::apple`.
+
+#### ✅ **Summary:**
+
+- Nested types are types defined inside a class.
+    
+- They act like members and follow access control rules.
+    
+- The class scope makes their names qualified (`Fruit::Type`, `Fruit::apple`).
+    
+- Place them at the top of the class for clarity.
+    
+- Use unscoped enums if the class already provides a scope.
+
+### Nested typedefs and type aliases
+
+Class types can also contain nested typedefs or type aliases:
+
+```cpp
+#include <iostream>
+#include <string>
+#include <string_view>
+
+class Employee
+{
+public:
+    using IDType = int;
+
+private:
+    std::string m_name{};
+    IDType m_id{};
+    double m_wage{};
+
+public:
+    Employee(std::string_view name, IDType id, double wage)
+        : m_name { name }
+        , m_id { id }
+        , m_wage { wage }
+    {
+    }
+
+    const std::string& getName() { return m_name; }
+    IDType getId() { return m_id; } // can use unqualified name within class
+};
+
+int main()
+{
+    Employee john { "John", 1, 45000 };
+    Employee::IDType id { john.getId() }; // must use fully qualified name outside class
+
+    std::cout << john.getName() << " has id: " << id << '\n';
+
+    return 0;
+}
+```
+
+This prints:
+
+John has id: 1
+
+Note that inside the class we can just use `IDType`, but outside the class we must use the fully qualified name `Employee::IDType`.
+
+### Nested Classes and Access to Outer Class Members
+
+- **Definition**:  
+    In C++, a class can contain another class inside it. The inner one is called a _nested class_.
+    
+- **Important Rule**:  
+    A nested class **does not automatically get access** to the outer class’s `this` pointer.
+    
+    - This means it **cannot directly access** members of the outer class.
+        
+    - Reason: A nested class can exist independently of the outer class, so it may not have an outer object to reference.
+        
+- **But**:  
+    Since the nested class is itself a _member_ of the outer class, it is allowed to access the **private members** of the outer class (if given an instance of the outer class).
+
+```cpp
+class Employee
+{
+public:
+    using IDType = int;
+
+    class Printer // nested class
+    {
+    public:
+        void print(const Employee& e) const
+        {
+            // Can’t use outer `this`, but can access outer private members via object
+            std::cout << e.m_name << " has id: " << e.m_id << '\n';
+        }
+    };
+
+private:
+    std::string m_name{};
+    IDType m_id{};
+    double m_wage{};
+
+public:
+    Employee(std::string_view name, IDType id, double wage)
+        : m_name{ name }, m_id{ id }, m_wage{ wage }
+    {
+    }
+};
+```
+
+Usage:
+
+```cpp
+const Employee john{ "John", 1, 45000 };
+const Employee::Printer p{};
+p.print(john); // Output: John has id: 1
+```
+
+#### Key Takeaways
+
+1. **Nested classes do not have access** to the outer class’s `this`.
+    
+2. **But they can access outer private members** if they are given an object of the outer class.
+    
+3. **Common use case**: Iterators (e.g., `std::string::iterator`).
+
+### Nested types and forward declarations
+
+- **Nested types** are types (e.g., classes, structs, enums) declared inside another class.
+    
+- A **nested type can be forward declared** inside the enclosing class, and then defined:
+    
+    - Either **inside the enclosing class** later, or
+        
+    - **Outside of the enclosing class**.
+        
+
+✅ Example:
+
+```cpp
+class outer
+{
+public:
+    class inner1;   // forward declaration (inside)
+    class inner1 {}; // definition inside
+    class inner2;   // forward declaration (inside)
+};
+
+class inner2 {}; // definition outside
+```
+
+**But**: You **cannot forward declare a nested type before the enclosing class is defined**.
+
+```cpp
+class outer;         // okay
+class outer::inner1; // error! outer not defined yet
+```
+Same code as above:
+```cpp
+#include <iostream>
+
+class outer;         // okay: can forward declare non-nested type
+class outer::inner1; // error: can't forward declare nested type prior to outer class definition
+
+class outer
+{
+public:
+    class inner1{}; // note: nested type declared here
+};
+
+class outer::inner1; // okay (but redundant) since nested type has already been declared as part of outer class definition
+
+int main()
+{
+    return 0;
+}```
+
+✅ Correct:
+
+```cpp
+class outer
+{
+public:
+    class inner1 {};  // nested type declared here
+};
+
+class outer::inner1; // okay, but redundant
+```
+
+#### ⚡ **Key takeaway:**
+
+- You can forward declare **nested types inside their enclosing class**.
+    
+- You **cannot** forward declare a nested type outside the enclosing class before the enclosing class is defined.
+    
+- Forward declarations **after** the enclosing class is defined are allowed but redundant.
+
+---
