@@ -1366,6 +1366,307 @@ Here:
     
 - Otherwise, the implicit destructor is enough.
 
+---
+# Class templates with member functions
+
+### Type template parameters in member functions
+
+```cpp
+#include <ios>       // for std::boolalpha
+#include <iostream>
+
+template <typename T>
+class Pair
+{
+private:
+    T m_first{};
+    T m_second{};
+
+public:
+    // When we define a member function inside the class definition,
+    // the template parameter declaration belonging to the class applies
+    Pair(const T& first, const T& second)
+        : m_first{ first }
+        , m_second{ second }
+    {
+    }
+
+    bool isEqual(const Pair<T>& pair);
+};
+
+// When we define a member function outside the class definition,
+// we need to resupply a template parameter declaration
+template <typename T>
+bool Pair<T>::isEqual(const Pair<T>& pair)
+{
+    return m_first == pair.m_first && m_second == pair.m_second;
+}
+
+int main()
+{
+    Pair p1{ 5, 6 }; // uses CTAD to infer type Pair<int>
+    std::cout << std::boolalpha << "isEqual(5, 6): " << p1.isEqual( Pair{5, 6} ) << '\n';
+    std::cout << std::boolalpha << "isEqual(5, 7): " << p1.isEqual( Pair{5, 7} ) << '\n';
+
+    return 0;
+}
+```
+
+#### 🔹 The Core Idea: _Type template parameters in member functions_
+
+When you write a **class template** like:
+
+```cpp
+template <typename T>
+class Pair
+{
+    T m_first{};
+    T m_second{};
+};
+```
+
+You are telling the compiler: _“This is not just one class, but a blueprint to generate multiple classes, each with `T` replaced by some actual type.”_
+
+So:
+
+- `Pair<int>` → a class with two `int`s
+    
+- `Pair<double>` → a class with two `double`s
+    
+- etc.
+    
+
+Since your **data members** (`m_first`, `m_second`) are of type `T`, any **member functions** you write must also know what `T` is.
+
+That’s where **type template parameters in member functions** come in.
+
+#### 🔹 Case 1: Defining functions _inside_ the class
+
+```cpp
+template <typename T>
+class Pair
+{
+private:
+    T m_first{};
+    T m_second{};
+
+public:
+    Pair(const T& first, const T& second)
+        : m_first{ first }, m_second{ second }
+    {}
+
+    bool isEqual(const Pair<T>& pair)   // ✅ no template redeclaration needed
+    {
+        return m_first == pair.m_first && m_second == pair.m_second;
+    }
+};
+```
+
+Here:
+
+- The function is **inside** the template class.
+    
+- The function can directly use `T` because it already belongs to the class template.
+    
+- No need to redeclare `template <typename T>` again.
+
+#### 🔹 Case 2: Defining functions _outside_ the class
+
+```cpp
+template <typename T>
+bool Pair<T>::isEqual(const Pair<T>& pair)
+{
+    return m_first == pair.m_first && m_second == pair.m_second;
+}
+```
+
+Why is `template <typename T>` needed again?
+
+Because **outside of the class definition, the compiler has no context for what `T` is anymore**. You must “remind” it:
+
+```cpp
+template <typename T>  // redeclare template parameter list
+bool Pair<T>::isEqual(const Pair<T>& pair) // fully qualify Pair<T>
+```
+
+If you wrote just `Pair::isEqual`, the compiler wouldn’t know which `Pair` (e.g., `Pair<int>`? `Pair<double>`?).
+
+So:
+
+- You resupply `template <typename T>`
+    
+- And you fully qualify it as `Pair<T>::function`
+
+#### 🔹 CTAD (Class Template Argument Deduction)
+
+```cpp
+Pair p1{ 5, 6 };   // compiler infers this is Pair<int>
+```
+
+How does the compiler know `T = int`?
+
+- It looks at the constructor: `Pair(const T&, const T&)`
+    
+- Since you provided `5` and `6` (both `int`s), it deduces `T = int`.
+    
+- That’s why you don’t need an explicit **deduction guide** for non-aggregate classes: the constructor itself is enough.
+
+#### 🔹 Why pass `const T&` in constructor?
+
+```cpp
+Pair(const T& first, const T& second)
+```
+
+- If `T` is cheap (like `int`), passing by reference doesn’t hurt.
+    
+- If `T` is expensive (like a giant `std::string`), passing by value would copy unnecessarily.
+    
+- Using `const T&` avoids copies when possible.
+    
+- For modern C++, we might also add **move semantics**:
+
+```cpp
+Pair(T first, T second) : m_first{std::move(first)}, m_second{std::move(second)} {}
+```
+
+#### 🔹 Key Takeaways
+
+1. **Inside class definition**:
+    
+    - You can use the template parameter (`T`) directly.
+        
+    - No need to redeclare `template <typename T>`.
+        
+2. **Outside class definition**:
+    
+    - You must redeclare the template (`template <typename T>`).
+        
+    - You must fully qualify the class with `Pair<T>::function`.
+        
+3. **CTAD** works automatically for non-aggregate class templates with constructors.
+
+#### ✅ So the essence:
+
+- **Templates are like blueprints.**
+    
+- When defining _outside_ the blueprint, the compiler needs to be reminded what template parameters apply.
+    
+- Inside the blueprint, they’re already in scope.
+
+### Injected class names
+
+#### 1. The basic problem
+
+Normally, when you define a constructor, **its name must exactly match the class name**.
+
+For a **non-template class**, that’s straightforward:
+
+```cpp
+class Foo {
+public:
+    Foo() { }  // constructor name == class name
+};
+```
+
+But for a **class template**, things seem tricky:
+
+```cpp
+template <typename T>
+class Pair {
+public:
+    Pair(const T& a, const T& b) { }  // constructor
+};
+```
+
+Here, the constructor is named `Pair`, not `Pair<T>`.  
+But shouldn’t the constructor’s name include `<T>` to match the template instantiation?
+
+#### 2. Injected class names
+
+The answer is **injected class names**.
+
+Inside the scope of a class (or class template), the **unqualified name of the class itself** is automatically treated as a shorthand for the class with its template arguments.
+
+👉 In other words:
+
+- Inside `Pair<T>`, the name `Pair` is **injected** and automatically treated as if you wrote `Pair<T>`.
+    
+
+That’s why this works:
+
+```cpp
+template <typename T>
+class Pair {
+public:
+    Pair(const T& a, const T& b) { }  // really Pair<T>(const T&, const T&)
+};
+```
+
+The compiler interprets `Pair` here as `Pair<T>`.
+
+#### 3. Example with a member function
+
+Normally, when defining a member function outside a class template, we’d write:
+
+```cpp
+template <typename T>
+bool Pair<T>::isEqual(const Pair<T>& pair) {
+    return m_first == pair.m_first && m_second == pair.m_second;
+}
+```
+
+But because of **injected class names**, we can shorten this to:
+
+```cpp
+template <typename T>
+bool Pair<T>::isEqual(const Pair& pair) {   // Pair == Pair<T>
+    return m_first == pair.m_first && m_second == pair.m_second;
+}
+```
+
+Here, `Pair` is shorthand for `Pair<T>` because we’re still inside the scope of the class template `Pair<T>`.
+
+#### 4. Important distinction from CTAD
+
+- **Class Template Argument Deduction (CTAD)** works when _creating_ an object:
+
+```cpp
+Pair p{5, 6};   // compiler deduces T = int
+```
+
+But **function parameter deduction** does NOT work:
+
+```cpp
+void foo(Pair x);  // ❌ doesn’t deduce T
+```
+
+So why does `isEqual(const Pair& pair)` work?  
+👉 Because this is not CTAD — it’s just shorthand! The `Pair` here is expanded by the compiler into `Pair<T>`.
+
+#### 5. Key insights
+
+1. Inside a class template, the **unqualified class name** automatically means “this class with its current template arguments.”
+    
+2. That’s why we can write constructors as `Pair(...)` instead of `Pair<T>(...)`.
+    
+3. And why member function parameters can use `Pair` instead of `Pair<T>`.
+    
+4. This shorthand is _not_ CTAD, it’s just compiler substitution.
+
+### Where to define member functions for class templates outside the class
+
+With member functions for class templates, the compiler needs to see both the class definition (to ensure that the member function template is declared as part of the class) and the template member function definition (to know how to instantiate the template). Therefore, we typically want to define both a class and its member function templates in the same location.
+
+When a member function template is defined _inside_ the class definition, the template member function definition is part of the class definition, so anywhere the class definition can be seen, the template member function definition can also be seen. This makes things easy (at the cost of cluttering our class definition).
+
+When a member function template is defined _outside_ the class definition, it should generally be defined immediately below the class definition. That way, anywhere the class definition can be seen, the member function template definitions immediately below the class definition will also be seen.
+
+In the typical case where a class is defined in a header file, this means any member function templates defined outside the class should also be defined in the same header file, below the class definition.
+
+>[!Key insight]
+In lesson [11.7 -- Function template instantiation](https://www.learncpp.com/cpp-tutorial/function-template-instantiation/), we noted that functions implicitly instantiated from templates are implicitly inline. This includes both non-member and member function templates. Therefore, there is no issue including member function templates defined in header files into multiple code files, as the functions instantiated from those templates will be implicitly inline (and the linker will de-duplicate them).
+
+>[!Best practice]
+Any member function templates defined outside the class definition should be defined just below the class definition (in the same file).
 
 ---
-	
