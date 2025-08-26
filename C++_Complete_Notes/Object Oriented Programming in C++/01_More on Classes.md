@@ -1670,3 +1670,477 @@ In lesson [11.7 -- Function template instantiation](https://www.learncpp.com/cp
 Any member function templates defined outside the class definition should be defined just below the class definition (in the same file).
 
 ---
+# Static member variables
+
+>In the lesson [7.4 -- Introduction to global variables](https://www.learncpp.com/cpp-tutorial/introduction-to-global-variables/), we introduced global variables, and in lesson [7.11 -- Static local variables](https://www.learncpp.com/cpp-tutorial/static-local-variables/), we introduced static local variables. Both of these types of variables have static duration, meaning they are created at the start of the program, and destroyed at the end of the program. Such variables keep their values even if they go out of scope.
+
+Example:
+
+```cpp
+#include <iostream>
+
+int generateID()
+{
+    static int s_id{ 0 }; // static local variable
+    return ++s_id;
+}
+
+int main()
+{
+    std::cout << generateID() << '\n';
+    std::cout << generateID() << '\n';
+    std::cout << generateID() << '\n';
+
+    return 0;
+}
+```
+1
+2
+3
+
+Note that static local variable `s_id` has kept its value across multiple function calls.
+
+>Class types bring two more uses for the `static` keyword: static member variables, and static member functions. 
+
+### Static member variables
+
+Before we go into the static keyword as applied to member variables, first consider the following class:
+
+```cpp
+#include <iostream>
+
+struct Something
+{
+    int value{ 1 };
+};
+
+int main()
+{
+    Something first{};
+    Something second{};
+
+    first.value = 2;
+
+    std::cout << first.value << '\n';
+    std::cout << second.value << '\n';
+
+    return 0;
+}
+```
+
+When we instantiate a class object, each object gets its own copy of all normal member variables. In this case, because we have declared two `Something` class objects, we end up with two copies of `value`: `first.value`, and `second.value`. `first.value` is distinct from `second.value`. Consequently, the program above prints:
+
+2
+1
+
+Member variables of a class can be made static by using the `static` keyword. Unlike normal member variables, **static member variables** are shared by all objects of the class. Consider the following program, similar to the above:
+
+```cpp
+#include <iostream>
+
+struct Something
+{
+    static int s_value; // declare s_value as static (initializer moved below)
+};
+
+int Something::s_value{ 1 }; // define and initialize s_value to 1 (we'll discuss this section below)
+
+int main()
+{
+    Something first{};
+    Something second{};
+
+    first.s_value = 2;
+
+    std::cout << first.s_value << '\n';
+    std::cout << second.s_value << '\n';
+    return 0;
+}
+```
+
+This program produces the following output:
+
+2
+2
+
+Because `s_value` is a static member variable, `s_value` is shared between all objects of the class. Consequently, `first.s_value` is the same variable as `second.s_value`. The above program shows that the value we set using `first` can be accessed using `second`!
+
+### Static members are not associated with class objects
+
+>Although you can access static members through objects of the class (as shown with `first.s_value` and `second.s_value` in the example above), static members exist even if no objects of the class have been instantiated! This makes sense: they are created at the start of the program and destroyed at the end of the program, so their lifetime is not bound to a class object like a normal member.
+
+Essentially, static members are global variables that live inside the scope region of the class. There is very little difference between a static member of a class and a normal variable inside a namespace.
+
+>Static members are global variables that live inside the scope region of the class.
+
+Because static member `s_value` exists independently of any class objects, it can be accessed directly using the class name and the scope resolution operator (in this case, `Something::s_value`):
+
+```cpp
+class Something
+{
+public:
+    static int s_value; // declare s_value as static
+};
+
+int Something::s_value{ 1 }; // define and initialize s_value to 1 (we'll discuss this section below)
+
+int main()
+{
+    // note: we're not instantiating any objects of type Something
+
+    Something::s_value = 2;
+    std::cout << Something::s_value << '\n';
+    return 0;
+}
+```
+
+In the above snippet, `s_value` is referenced by class name `Something` rather than through an object. Note that we have not even instantiated an object of type `Something`, but we are still able to access and use `Something::s_value`. This is the preferred method for accessing static members.
+
+>[!Best Practice]
+>Access static members using the class name and the scope resolution operator (::).
+
+### Defining and initializing static member variables
+
+#### 🔹 The problem
+
+When you write this inside a class:
+
+```cpp
+class Something
+{
+private:
+    static int s_value; // declaration only
+};
+```
+
+This **declares** `s_value`, but does not actually **create storage** for it.  
+Why? Because `static` members are not tied to any one object instance — they belong to the class itself (just like global variables).
+
+So at this point, the compiler just knows _“there exists a static int called `s_value` for this class”_, but no memory is reserved yet.
+
+#### 🔹 The solution: definition outside the class
+
+To actually create storage, you must define it once outside the class:
+
+```cpp
+int Something::s_value{ 1 };  // definition + initialization
+```
+
+This line:
+
+1. **Defines** the variable (allocates storage in global scope).
+    
+2. **Optionally initializes** it (here, to `1`).
+    
+
+If you omit the initializer:
+
+```cpp
+int Something::s_value;  // definition, zero-initialized by default
+```
+
+then `s_value` will default to `0`.
+
+#### 🔹 Why outside the class?
+
+Because inside the class, `s_value` is only a declaration — like a forward declaration of a global variable.  
+Since all objects share the same `s_value`, its storage must be created only **once** at global scope, not inside each object.
+
+#### 🔹 Access control note
+
+Even if `s_value` is declared `private` inside the class, you can still define it outside — access control only applies to usage in code, not to the definition itself.
+
+#### 🔹 Where to put the definition
+
+- **Non-template classes**:
+    
+    - If the class is in a `.h` header file, put the static definition in the `.cpp` file to avoid multiple definitions when the header is included in several places.
+        
+    - Alternatively, you can declare it `inline` in the header:
+
+```cpp
+inline int Something::s_value{ 1 };
+```
+
+- - This avoids linker errors, but is only available in C++17+.
+        
+- **Template classes**:
+    
+    - The static member definition must be in the header (because templates need everything available in every translation unit that instantiates them).
+        
+    - Luckily, templated static members are treated as implicitly `inline`, so this doesn’t violate the **One Definition Rule (ODR)**.
+
+#### **Summary:**
+
+- Declaring a static member inside the class just tells the compiler it exists.
+    
+- You must define it once in global scope (usually `.cpp` file).
+    
+- Default is zero-initialization if you don’t explicitly initialize.
+    
+- For templates, define them in the header.
+
+#### 🔹 What happens if static were initialized inside the class?
+
+Imagine this code (which is illegal in C++98/03/11/14):
+
+```cpp
+class Foo {
+    static int s_value = 5;  // ❌ error in old C++
+};
+```
+
+If this were allowed, then every time you create an object of `Foo`, the compiler would need to run this initialization again. But `s_value` is supposed to exist **only once for the entire program**, not once per object.
+
+So C++ designers said:
+
+> "To avoid confusion, initialization of static members should happen only once, and outside the class."
+
+That’s why you must write:
+
+```cpp
+int Foo::s_value = 5;  // ✅ definition + initialization
+```
+
+This guarantees that `s_value` is initialized **only once**, no matter how many objects of `Foo` exist.
+
+>Because static member live inside class and not object, it makes sense to define it outside the class to allocate memory for member then we can use it without having to create object.
+>
+
+### Initialization of static member variables inside the class definition
+
+#### 🔹 1. Old rule (pre-C++11 / pre-C++17)
+
+- Normally, **static members** had to be declared inside the class but **defined/initialized outside**.
+    
+- Reason: static lives independently of objects, so the compiler needed one place in memory for it → definition outside the class ensures a single copy.
+    
+
+Example:
+
+```cpp
+class Whatever {
+public:
+    static int s_value; // declaration only
+};
+
+// definition + initialization outside
+int Whatever::s_value{ 4 };
+```
+
+#### 🔹 2. Special shortcut: `static const integral`
+
+C++11 allowed a **special case**:  
+If a static member is:
+
+- `const`, and
+    
+- of an **integral type** (int, char, bool, etc.)
+    
+
+👉 then you can initialize it **inside** the class, because the compiler treats it as a **compile-time constant**.
+
+Example:
+
+```cpp
+class Whatever {
+public:
+    static const int s_value{ 4 }; // ✅ allowed
+};
+```
+
+Here, `s_value` is like a `constexpr` constant.  
+But note: if you ever _odr-use_ it (take its address, pass by reference), you may still need an **out-of-class definition**.
+
+#### 🔹 3. Inline static members (C++17)
+
+C++17 introduced **inline variables**, meaning:
+
+- The compiler allows multiple definitions across translation units.
+    
+- Only **one actual copy** exists at link time.
+    
+
+So now you can do this:
+
+```cpp
+class Whatever {
+public:
+    static inline int s_value{ 4 }; // ✅ works for any type
+};
+```
+
+- No need for an out-of-class definition.
+    
+- Works for `int`, `double`, even class types.
+    
+- This is now the **preferred way**.
+
+#### 🔹 4. Constexpr static members
+
+In C++17, `constexpr` implies `inline`.  
+So if you declare:
+
+```cpp
+class Whatever {
+public:
+    static constexpr double s_value{ 2.2 };        // ✅ ok
+    static constexpr std::string_view s_view{"Hi"}; // ✅ works for class types with constexpr constructor
+};
+```
+
+- No out-of-class definition needed.
+    
+- Works for arithmetic and literal types, or anything with a constexpr constructor.
+    
+- This is very common in modern C++.
+
+#### 🔹 Best Practice (Modern C++)
+
+- Use `inline` or `constexpr` for static members → so you can define them inside the class, no extra boilerplate.
+    
+- Old-style `int Whatever::s_value{}` definition is only needed in legacy code.
+
+#### ✅ In short:
+
+- **Old C++** → definition outside class.
+    
+- **Static const integral** (special case) → inside class allowed.
+    
+- **C++17+** → `inline` or `constexpr` allows full inside-class initialization.
+
+#### Whats the logic behind making static members inline? Important Read:
+
+##### 🔹 The Problem Before C++17
+
+Suppose you had this class:
+
+```cpp
+// header.h
+class Whatever {
+public:
+    static int s_value; // declaration only
+};
+```
+
+And in some `.cpp`:
+
+```cpp
+// source.cpp
+int Whatever::s_value = 4; // definition
+```
+
+Now if you `#include "header.h"` in multiple `.cpp` files, there’s **only one definition** of `s_value` (in `source.cpp`), so the linker is happy. ✅
+
+But if C++ had allowed you to write this:
+
+```cpp
+// header.h
+class Whatever {
+public:
+    static int s_value { 4 };  // definition in header
+};
+```
+
+Every `.cpp` file that includes the header would generate its **own copy** of `s_value`.  
+When linking, you’d get a **multiple definition error** (ODR violation). ❌
+
+##### 🔹 The Fix: `inline`
+
+C++17 introduced **inline variables**.  
+The rule:
+
+> An `inline` variable is allowed to have multiple definitions across translation units, but all those definitions refer to the same single variable.
+
+So now you can safely write:
+
+```cpp
+// header.h
+class Whatever {
+public:
+    static inline int s_value { 4 }; // definition is fine in a header
+};
+```
+
+Even if `header.h` is included in 100 `.cpp` files, the linker knows they all mean **one single `s_value`**, not 100 different ones.
+
+### An example of static member variables
+
+Why use static variables inside classes? One use is to assign a unique ID to every instance of the class. Here’s an example:
+
+```cpp
+#include <iostream>
+
+class Something
+{
+private:
+    static inline int s_idGenerator { 1 };
+    int m_id {};
+
+public:
+    // grab the next value from the id generator
+    Something() : m_id { s_idGenerator++ }
+    {
+    }
+
+    int getID() const { return m_id; }
+};
+
+int main()
+{
+    Something first{};
+    Something second{};
+    Something third{};
+
+    std::cout << first.getID() << '\n';
+    std::cout << second.getID() << '\n';
+    std::cout << third.getID() << '\n';
+    return 0;
+}
+```
+
+This program prints:
+
+1
+2
+3
+
+Because `s_idGenerator` is shared by all `Something` objects, when a new `Something` object is created, the constructor initializes `m_id` with the current value of `s_idGenerator` and then increments the value for the next object. This guarantees that each instantiated `Something` object receives a unique id (incremented in the order of creation).
+
+Giving each object a unique ID can help when debugging, as it can be used to differentiate objects that otherwise have identical data. This is particularly true when working with arrays of data.
+
+Static member variables are also useful when the class needs to utilize a lookup table (e.g. an array used to store a set of pre-calculated values). By making the lookup table static, only one copy exists for all objects, rather than making a copy for each object instantiated. This can save substantial amounts of memory.
+
+### Only static members may use type deduction (`auto` and CTAD)
+
+A static member may use `auto` to deduce its type from the initializer, or Class Template Argument Deduction (CTAD) to deduce template type arguments from the initializer.
+
+Non-static members may not use `auto` or CTAD.
+
+The reasons for this distinction being made are quite complicated, but boil down to there being certain cases that can occur with non-static members that lead to ambiguity or non-intuitive results. This does not occur for static members. Thus non-static members are restricted from using these features, whereas static members are not.
+
+```cpp
+#include <utility> // for std::pair<T, U>
+
+class Foo
+{
+private:
+    auto m_x { 5 };           // auto not allowed for non-static members
+    std::pair m_v { 1, 2.3 }; // CTAD not allowed for non-static members
+
+    static inline auto s_x { 5 };           // auto allowed for static members
+    static inline std::pair s_v { 1, 2.3 }; // CTAD allowed for static members
+
+public:
+    Foo() {};
+};
+
+int main()
+{
+    Foo foo{};
+
+    return 0;
+}
+```
+
+---
