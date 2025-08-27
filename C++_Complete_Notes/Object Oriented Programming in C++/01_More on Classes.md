@@ -3007,3 +3007,270 @@ This is basically the **friendship tradeoff in C++**:
 - Undefined behavior = workers misusing the tools when not guided properly.
 
 ---
+# Friend classes and friend member functions
+
+### Friend classes
+
+A **friend class** is a class that can access the private and protected members of another class.
+
+Here is an example:
+
+```cpp
+#include <iostream>
+
+class Storage
+{
+private:
+    int m_nValue {};
+    double m_dValue {};
+public:
+    Storage(int nValue, double dValue)
+       : m_nValue { nValue }, m_dValue { dValue }
+    { }
+
+    // Make the Display class a friend of Storage
+    friend class Display;
+};
+
+class Display
+{
+private:
+    bool m_displayIntFirst {};
+
+public:
+    Display(bool displayIntFirst)
+         : m_displayIntFirst { displayIntFirst }
+    {
+    }
+
+    // Because Display is a friend of Storage, Display members can access the private members of Storage
+    void displayStorage(const Storage& storage)
+    {
+        if (m_displayIntFirst)
+            std::cout << storage.m_nValue << ' ' << storage.m_dValue << '\n';
+        else // display double first
+            std::cout << storage.m_dValue << ' ' << storage.m_nValue << '\n';
+    }
+
+    void setDisplayIntFirst(bool b)
+    {
+         m_displayIntFirst = b;
+    }
+};
+
+int main()
+{
+    Storage storage { 5, 6.7 };
+    Display display { false };
+
+    display.displayStorage(storage);
+
+    display.setDisplayIntFirst(true);
+    display.displayStorage(storage);
+
+    return 0;
+}
+```
+
+Because the `Display` class is a friend of `Storage`, `Display` members can access the private members of any `Storage` object they have access to.
+
+This program produces the following result:
+
+6.7 5
+5 6.7
+
+A few additional notes on friend classes.
+
+First, even though `Display` is a friend of `Storage`, `Display` has no access to the `*this` pointer of `Storage` objects (because `*this` is actually a function parameter).
+
+Second, friendship is not reciprocal. Just because `Display` is a friend of `Storage` does not mean `Storage` is also a friend of `Display`. If you want two classes to be friends of each other, both must declare the other as a friend.
+
+#### Important rules about friend classes
+
+1. **Not reciprocal**  
+    If `Display` is a friend of `Storage`, `Storage` does _not_ automatically gain access to `Display`’s private members. You’d have to declare friendship both ways.
+    
+2. **Not transitive**  
+    If `A` is a friend of `B`, and `B` is a friend of `C`, that does _not_ make `A` a friend of `C`.
+    
+3. **Not inherited**  
+    If `A` makes `B` a friend, `B`’s derived classes are not automatically friends of `A`.
+    
+4. **Acts like a forward declaration**  
+    `friend class Display;` is enough to let the compiler know `Display` exists, so you don’t need to forward declare `class Display;` separately.
+
+### Friend member functions
+
+>Instead of making an entire class a friend, you can make a single member function a friend. This is done similarly to making a non-member function a friend, except the name of the member function is used instead.
+
+#### 🚩 The Problem
+
+We want this situation:
+
+- Class `Storage` has **private data** (`m_nValue`, `m_dValue`).
+    
+- Class `Display` has a member function `displayStorage` that we want to give **access to those private members**.
+    
+- But we don’t want to make the **whole `Display` class a friend**, only that one function.
+    
+
+So we try:
+
+```cpp
+class Display; // forward declaration
+
+class Storage {
+    friend void Display::displayStorage(const Storage& storage); // ❌ error
+};
+```
+
+Why error? Because at this point, `Display` is **not defined yet**. The compiler doesn’t even know if `displayStorage` exists. You can’t friend something it hasn’t seen.
+
+####  🧩 Rule of Friendship
+
+There are two ways:
+
+1. **Friend a whole class**
+
+```cpp
+friend class Display;
+```
+	
+	→ easy, works with just a forward declaration.  
+	But gives _every function_ in `Display` access.
+
+2. **Friend a specific member function**
+
+```cpp
+friend void Display::displayStorage(const Storage&);
+```
+	
+	→ precise, only one function gets access.  
+	But compiler must already know that such a function exists.
+
+####  🛠 Step-by-step Fix
+
+We need to **teach the compiler about both classes in the right order**.
+
+##### Step 1: Forward declare `Storage`
+
+So that `Display` can mention `Storage` in its function signature.
+
+```cpp
+class Storage; // just saying “there is a class Storage”
+```
+
+##### Step 2: Define `Display`
+
+We can now declare its member function:
+
+```cpp
+class Display {
+private:
+    bool m_displayIntFirst {};
+
+public:
+    Display(bool displayIntFirst) : m_displayIntFirst{ displayIntFirst } {}
+
+    void displayStorage(const Storage& storage); // ok, Storage is known as a type
+};
+```
+
+Here, we only _declare_ the function (not define it), because we can’t touch `Storage` internals yet.
+
+##### Step 3: Define `Storage` and give friendship
+
+Now the compiler already knows about `Display` and its member `displayStorage`, so we can safely make it a friend:
+
+```cpp
+class Storage {
+private:
+    int m_nValue {};
+    double m_dValue {};
+
+public:
+    Storage(int nValue, double dValue) : m_nValue{ nValue }, m_dValue{ dValue } {}
+
+    friend void Display::displayStorage(const Storage& storage); // ✅ works now
+};
+```
+
+##### Step 4: Define the function
+
+Now both classes are fully defined, so we can write the body:
+
+```cpp
+void Display::displayStorage(const Storage& storage) {
+    if (m_displayIntFirst)
+        std::cout << storage.m_nValue << " " << storage.m_dValue << "\n";
+    else
+        std::cout << storage.m_dValue << " " << storage.m_nValue << "\n";
+}
+```
+
+#### ✅ Full Working Example
+
+```cpp
+#include <iostream>
+
+class Storage; // Step 1
+
+class Display { // Step 2
+private:
+    bool m_displayIntFirst {};
+
+public:
+    Display(bool displayIntFirst) : m_displayIntFirst{ displayIntFirst } {}
+
+    void displayStorage(const Storage& storage); // declaration only
+};
+
+class Storage { // Step 3
+private:
+    int m_nValue {};
+    double m_dValue {};
+
+public:
+    Storage(int nValue, double dValue) : m_nValue{ nValue }, m_dValue{ dValue } {}
+
+    friend void Display::displayStorage(const Storage& storage); // friend
+};
+
+// Step 4
+void Display::displayStorage(const Storage& storage) {
+    if (m_displayIntFirst)
+        std::cout << storage.m_nValue << " " << storage.m_dValue << "\n";
+    else
+        std::cout << storage.m_dValue << " " << storage.m_nValue << "\n";
+}
+
+int main() {
+    Storage s{5, 6.7};
+    Display d1{true};
+    Display d2{false};
+
+    d1.displayStorage(s); // prints: 5 6.7
+    d2.displayStorage(s); // prints: 6.7 5
+}
+```
+
+####  🔑 Why this works
+
+1. We forward-declare `Storage` so that `Display` can mention it.
+    
+2. We define `Display` so the compiler knows `displayStorage` exists.
+    
+3. We define `Storage` and grant friendship to that exact function.
+    
+4. We finally implement `displayStorage`, now allowed to touch `Storage`’s private data.
+
+#### 🔑 Analogy
+
+- **Non-member friend function** → “I trust Bob (just Bob) with my house key.”
+    
+- **Friend class** → “I trust Bob’s whole family (all members) with my house key.”
+    
+- **Member friend function** → “I trust Bob only when he’s wearing his _work hat_ (one role of Bob), not for everything he does.”
+
+---
+	

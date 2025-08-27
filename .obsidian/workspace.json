@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "C++_Complete_Notes/Object Oriented Programming in C++/01_More on Classes.md",
+                "file": "C++_Complete_Notes/Chapter 02 - C++ Basics  Functions and Files.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "01_More on Classes"
+              "title": "Chapter 02 - C++ Basics  Functions and Files"
             }
           }
         ]
@@ -78,8 +78,7 @@
       }
     ],
     "direction": "horizontal",
-    "width": 300,
-    "collapsed": true
+    "width": 495.5
   },
   "right": {
     "id": "a90c9f7febfb8538",
