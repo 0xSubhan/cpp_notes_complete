@@ -3273,4 +3273,229 @@ int main() {
 - **Member friend function** → “I trust Bob only when he’s wearing his _work hat_ (one role of Bob), not for everything he does.”
 
 ---
-	
+# Ref qualifiers
+
+```cpp
+#include <iostream>
+#include <string>
+#include <string_view>
+
+class Employee
+{
+private:
+	std::string m_name{};
+
+public:
+	Employee(std::string_view name): m_name { name } {}
+	const std::string& getName() const { return m_name; } //  getter returns by const reference
+};
+
+// createEmployee() returns an Employee by value (which means the returned value is an rvalue)
+Employee createEmployee(std::string_view name)
+{
+	Employee e { name };
+	return e;
+}
+
+int main()
+{
+	// Case 1: okay: use returned reference to member of rvalue class object in same expression
+	std::cout << createEmployee("Frank").getName() << '\n';
+
+	// Case 2: bad: save returned reference to member of rvalue class object for use later
+	const std::string& ref { createEmployee("Garbo").getName() }; // reference becomes dangling when return value of createEmployee() is destroyed
+	std::cout << ref << '\n'; // undefined behavior
+
+	return 0;
+}
+```
+
+### **1. Background**
+
+- A getter can return:
+    
+    - **By value** → makes a copy (safe, but possibly expensive).
+        
+    - **By const reference** → avoids copy (efficient), but risky if the object is temporary (rvalue).
+
+#### **2. Example Class**
+
+```cpp
+class Employee {
+private:
+    std::string m_name{};
+public:
+    Employee(std::string_view name) : m_name{name} {}
+    const std::string& getName() const { return m_name; } // returns const reference
+};
+```
+
+#### **3. Rvalue case: Function returning Employee by value**
+
+```cpp
+Employee createEmployee(std::string_view name) {
+    Employee e{name};
+    return e; // returns an rvalue
+}
+```
+
+#### **4. Case 1 – Safe usage**
+
+```cpp
+std::cout << createEmployee("Frank").getName() << '\n';
+```
+
+- `createEmployee("Frank")` → temporary object (rvalue).
+    
+- `.getName()` → returns a reference to its `m_name`.
+    
+- Reference used **immediately in same expression**.
+    
+- Safe → temporary object lives until end of the full expression.
+
+#### **5. Case 2 – Unsafe usage**
+
+```cpp
+const std::string& ref { createEmployee("Garbo").getName() };
+std::cout << ref << '\n';
+```
+
+- `createEmployee("Garbo")` → returns rvalue Employee.
+    
+- `.getName()` → returns reference to `m_name` of that rvalue.
+    
+- Temporary Employee destroyed **right after line ends**.
+    
+- `ref` → now a dangling reference.
+    
+- Using `ref` → **undefined behavior**.
+
+#### **6. The Conundrum**
+
+- **Return by value**
+    
+    - Safe for rvalues.
+        
+    - Expensive copy for lvalues (common case).
+        
+- **Return by const reference**
+    
+    - Efficient for lvalues (no copy).
+        
+    - Dangerous for rvalues (can dangle).
+        
+
+#### **7. Conventional choice**
+
+- Most calls are on **lvalues**, so:
+    
+    - Return by **const reference**.
+        
+    - **Avoid misuse** when dealing with rvalues.
+        
+
+
+#### ✅ **Key Takeaway**:
+
+- Returning by **const reference** is the usual design (efficient).
+    
+- Be careful not to store references when calling on **temporaries** (rvalues).
+
+### Ref qualifiers
+
+#### 1. **The Problem**
+
+- Sometimes you want a member function to behave differently depending on **whether the object it’s called on is an lvalue or rvalue**.
+    
+- Example:
+
+```cpp
+std::string& getName() { return m_name; }
+```
+
+- If object is an **lvalue**, returning by reference is fine.
+    
+- But if object is a **temporary (rvalue)**, returning a reference would be **dangerous** (dangling reference).
+
+#### 2. **Solution: Ref-qualifiers**
+
+- Introduced in **C++11**.
+    
+- Let you **qualify member functions** with `&` or `&&`:
+    
+    - `&` → function can only be called on **lvalue objects**.
+        
+    - `&&` → function can only be called on **rvalue objects**.
+
+
+#### 3. **Example**
+
+```cpp
+const std::string& getName() const &  
+{ 
+    return m_name;  
+}  // called only on lvalues, returns reference (fast)
+
+std::string getName() const && 
+{ 
+    return m_name;  
+}  // called only on rvalues, returns by value (safe)
+```
+
+#### 4. **Why this works**
+
+- **Overloads based on object type**:
+    
+    - If `joe` is an **lvalue**:
+
+```cpp
+Employee joe{"Joe"};
+std::cout << joe.getName(); // calls const& version
+```
+
+	If function returns a **temporary Employee (rvalue)**:
+
+```cpp
+std::cout << createEmployee("Frank").getName();
+// calls && version
+```
+
+#### 5. **Behavior Summary**
+
+- **Lvalue object** → call the `&` version → return reference (no copy, efficient).
+    
+- **Rvalue object** → call the `&&` version → return by value (safe, avoids dangling reference).
+
+#### 6. **Key Point**
+
+This feature lets you:
+
+- Be **efficient** for lvalues (avoid copies).
+    
+- Be **safe** for rvalues (avoid dangling references).
+
+✅ In short: **Ref-qualifiers give you control over lvalue/rvalue member function calls, allowing different behavior and return strategies depending on object type.**
+
+### Some notes about ref-qualified member functions
+
+First, for a given function, non-ref-qualified overloads and ref-qualified overloads cannot coexist. Use one or the other.
+
+Second, similar to how a const lvalue reference can bind to an rvalue, if only a const lvalue-qualified function exists, it will accept either lvalue or rvalue implicit objects.
+
+Third, either qualified overload can be explicitly deleted (using `= delete`), which prevents calls to that function. For example, deleting the rvalue-qualified version prevents use of the function with rvalue implicit objects.
+
+### So why don’t we recommend using ref-qualifiers?
+
+While ref-qualifiers are neat, there are some downsides to using them in this way.
+
+- Adding rvalue overloads to every getter that returns a reference adds clutter to the class, to mitigate against a case that isn’t that common and is easily avoidable with good habits.
+- Having an rvalue overload return by value means we have to pay for the cost of a copy (or move) even in cases where we could have used a reference safely (e.g. in case 1 of the example at the top of the lesson).
+
+Additionally:
+
+- Most C++ developers are not aware of this feature (which can lead to errors or inefficiencies in use).
+- The standard library typically does not make use of this feature.
+
+Based on all of the above, we are not recommending the use of ref-qualifiers as a best practice. Instead, we recommend always using the result of an access function immediately and not saving returned references for use later.
+
+---
