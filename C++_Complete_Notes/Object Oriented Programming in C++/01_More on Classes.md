@@ -2495,4 +2495,515 @@ public:
     
 - This way, the static member is still initialized only **once**, just like in other languages with static constructors.
 
+>static functions are more useful than you think, if you delete the default constructor, it is now a very useful namespace, with all the benefits of encapsulation.
+
+---
+# Friend non-member functions
+
+### 1. **Normal Access Rules**
+
+- **Private members**: only accessible by the class itself (its member functions).
+    
+- **Public members**: accessible by anyone.
+    
+
+👉 This is the basis of _encapsulation_ — data hiding behind a controlled interface.
+
+#### 2. **The Problem**
+
+There are times when this strict rule causes inconvenience:
+
+- **Case A: Separation of responsibilities**
+    
+    - You have a `Storage` class → its job is only to manage data.
+        
+    - You have a `Display` class → its job is to show the data nicely.
+        
+    - Good design: separation of concerns ✅
+        
+    - Problem: `Display` class needs to see the private data of `Storage`.
+        
+    - But access control forbids it ❌
+        
+- **Case B: Non-member functions (like operator overloading)**
+    
+    - Sometimes it’s cleaner to write a function as a non-member.  
+        Example: `operator<<` for `std::cout`.
+
+```cpp
+std::cout << myObject;
+```
+
+- This operator is not a member of your class — it’s a free function.
+    
+- But since it’s not a member, it **cannot access private data** of your class directly.
+
+#### 3. **First Attempted Solutions**
+
+- **Use accessors (getters/setters):**  
+    If proper access functions already exist → just use them.  
+    But maybe they don’t exist, or writing them makes the interface messy.
+    
+- **Add new public member functions:**  
+    This would let other classes/functions access the internals.  
+    But it exposes too much and breaks encapsulation (you don’t want everyone having access to low-level internals).
+
+#### 4. **The Real Need**
+
+We need a mechanism that:
+
+- Keeps access restricted in general,
+    
+- But lets **specific trusted functions/classes** break the rules **only when necessary**.
+    
+
+This is exactly what **friendship in C++** provides:
+
+- `friend` functions can access private/protected members of the class.
+    
+- `friend` classes can access everything inside the class.
+    
+
+It’s like saying:
+
+> "I normally lock my house, but I give a spare key only to my best friend."
+
+### Friendship
+
+C++ introduces the `friend` keyword to let a class **selectively share its private/protected members** with a specific function or class.
+
+```cpp
+class Accumulator {
+private:
+    int m_value{0};
+
+public:
+    void add(int value) { m_value += value; }
+
+    // declare print() as a friend
+    friend void print(const Accumulator& acc);
+};
+```
+
+This means:  
+➡️ “`print()` is not a member of `Accumulator`, but I trust it. Give it full access to my private stuff.”
+
+So now:
+
+```cpp
+void print(const Accumulator& acc) {
+    std::cout << acc.m_value; // ✅ works now
+}
+```
+
+#### 🌟 Key Insights
+
+1. **Friendship is granted, not taken**
+    
+    - The `Accumulator` class _chooses_ to allow `print()` in.
+        
+    - `print()` itself can’t just declare “I’m a friend” — the class has to say so.
+        
+2. **Friendship breaks encapsulation (but in a controlled way)**
+    
+    - Normally, we protect private data.
+        
+    - Friendship says: _“Okay, this one function/class can peek inside, but nobody else.”_
+        
+    - So we’re not opening everything — just selectively.
+        
+3. **Friendship is not inherited**
+    
+    - If `Accumulator` makes `print()` its friend, and `DerivedAccumulator` inherits from `Accumulator`, `print()` is **not automatically a friend of the derived class**.
+
+#### 🌟 Why use friend functions?
+
+- Sometimes **operator overloads** need direct access (e.g. `operator<<` for `std::cout`).
+    
+- Sometimes you want to **keep two classes separate** (good design), but still let one access another’s private members.
+    
+- Sometimes helper functions (like `print()`) don’t logically belong _inside_ the class, but still need access.
+
+>[!Tip]
+>Note that because `print()` is a non-member function (and thus does not have an implicit object), we must explicitly pass an `Accumulator` object to `print()` to work with.
+
+### Defining a friend non-member inside a class
+
+Much like member functions can be defined inside a class if desired, friend non-member functions can also be defined inside a class. The following example defines friend non-member function `print()` inside the `Accumulator` class:
+
+```cpp
+#include <iostream>
+
+class Accumulator
+{
+private:
+    int m_value { 0 };
+
+public:
+    void add(int value) { m_value += value; }
+
+    // Friend functions defined inside a class are non-member functions
+    friend void print(const Accumulator& accumulator)
+    {
+        // Because print() is a friend of Accumulator
+        // it can access the private members of Accumulator
+        std::cout << accumulator.m_value;
+    }
+};
+
+int main()
+{
+    Accumulator acc{};
+    acc.add(5); // add 5 to the accumulator
+
+    print(acc); // call the print() non-member function
+
+    return 0;
+}
+```
+
+Although you might assume that because `print()` is defined inside `Accumulator`, that makes `print()` a member of `Accumulator`, this is not the case. Because `print()` is defined as a friend, it is instead treated as a non-member function (as if it had been defined outside `Accumulator`).
+
+### Syntactically preferring a friend non-member function
+
+>In the introduction to this lesson, we mentioned that there were times we might prefer to use a non-member function over a member function. Let’s show an example of that now.
+
+```cpp
+#include <iostream>
+
+class Value
+{
+private:
+    int m_value{};
+
+public:
+    explicit Value(int v): m_value { v }  { }
+
+    bool isEqualToMember(const Value& v) const;
+    friend bool isEqualToNonmember(const Value& v1, const Value& v2);
+};
+
+bool Value::isEqualToMember(const Value& v) const
+{
+    return m_value == v.m_value;
+}
+
+bool isEqualToNonmember(const Value& v1, const Value& v2)
+{
+    return v1.m_value == v2.m_value;
+}
+
+int main()
+{
+    Value v1 { 5 };
+    Value v2 { 6 };
+
+    std::cout << v1.isEqualToMember(v2) << '\n';
+    std::cout << isEqualToNonmember(v1, v2) << '\n';
+
+    return 0;
+}
+```
+
+#### The code has two equality-checking functions:
+
+1. **Member function**:
+
+```cpp
+bool Value::isEqualToMember(const Value& v) const
+{
+    return m_value == v.m_value;
+}
+```
+
+- Here, `v1.isEqualToMember(v2)` means:
+    
+    - `v1` is the **implicit object** (`this`).
+        
+    - `v2` is passed explicitly.
+        
+- Inside the function:
+    
+    - `m_value` refers to `v1.m_value` (implicit).
+        
+    - `v.m_value` refers to `v2.m_value` (explicit).
+        
+
+❗ Problem: you need to **mentally juggle** which object is implicit and which is explicit.
+
+
+2. **Friend non-member function**:
+
+```cpp
+bool isEqualToNonmember(const Value& v1, const Value& v2)
+{
+    return v1.m_value == v2.m_value;
+}
+```
+
+2. - Here, `isEqualToNonmember(v1, v2)` means:
+        
+        - Both objects (`v1`, `v2`) are passed **explicitly**.
+            
+    - Inside the function:
+        
+        - `v1.m_value` vs `v2.m_value`.
+            
+    - Much clearer: both objects are treated equally.
+        
+    
+    ✅ This gives **syntactic symmetry**. There’s no special “implicit this” object to worry about.
+    
+
+#### Why is this important?
+
+- For single-object actions (e.g., `v1.reset()`, `v1.print()`), member functions make sense because you’re acting **on one object**.
+    
+- For operations involving **two or more objects** (e.g., comparisons, arithmetic), non-member functions (often friends) are syntactically cleaner and more symmetric.
+
+>You may still prefer the calling syntax `v1.isEqualToMember(v2)` over `isEqualToNonmember(v1, v2)`. But when we cover operator overloading, we’ll see this topic come up again.
+
+#### ✅ **Summary:**
+
+- Member function: implicit `this` + explicit other → asymmetry.
+    
+- Friend non-member function: all objects explicit → symmetry, cleaner comparisons.
+    
+- That’s why for binary operations (like equality, arithmetic, etc.), we often prefer friend non-member functions
+
+### Multiple friends
+
+>A function can be a friend of more than one class at the same time. For example, consider the following example:
+
+```cpp
+#include <iostream>
+
+class Humidity; // forward declaration of Humidity
+
+class Temperature
+{
+private:
+    int m_temp { 0 };
+public:
+    explicit Temperature(int temp) : m_temp { temp } { }
+
+    friend void printWeather(const Temperature& temperature, const Humidity& humidity); // forward declaration needed for this line
+};
+
+class Humidity
+{
+private:
+    int m_humidity { 0 };
+public:
+    explicit Humidity(int humidity) : m_humidity { humidity } {  }
+
+    friend void printWeather(const Temperature& temperature, const Humidity& humidity);
+};
+
+void printWeather(const Temperature& temperature, const Humidity& humidity)
+{
+    std::cout << "The temperature is " << temperature.m_temp <<
+       " and the humidity is " << humidity.m_humidity << '\n';
+}
+
+int main()
+{
+    Humidity hum { 10 };
+    Temperature temp { 12 };
+
+    printWeather(temp, hum);
+
+    return 0;
+}
+```
+
+There are three things worth noting about this example. First, because `printWeather()` uses both `Humidity` and `Temperature` equally, it doesn’t really make sense to have it be a member of either. A non-member function works better. Second, because `printWeather()` is a friend of both `Humidity` and `Temperature`, it can access the private data from objects of both classes. Finally, note the following line at the top of the example:
+
+```cpp
+class Humidity;
+```
+
+This is a forward declaration for `class Humidity`. Class forward declarations serve the same role as function forward declarations -- they tell the compiler about an identifier that will be defined later. However, unlike functions, classes have no return types or parameters, so class forward declarations are always simply `class ClassName` (unless they are class templates).
+
+Without this line, the compiler would tell us it doesn’t know what a `Humidity` is when parsing the friend declaration inside `Temperature`.
+
+### Doesn’t friendship violate the principle of data hiding?
+
+>No
+
+👉 **Friendship is not forced from outside.**  
+The class itself _grants_ friendship. That means the class is deliberately choosing to let some external function/class have privileged access. So it’s not a violation — it’s controlled sharing.
+
+Think of it like this:
+
+- **Private members** are secrets of the class.
+    
+- A **friend** is someone you _choose_ to trust with those secrets.
+    
+- Since you’re the one deciding to share, your data hiding isn’t broken — it’s extended to include the friend.
+
+#### ⚡ Why is this useful?
+
+Sometimes, for design reasons, it makes sense to keep certain functionality **outside** the class (as a non-member function), but that functionality still needs to peek inside the class.
+
+Examples:
+
+- Operator overloading (`operator<<` for `std::cout`)
+    
+- Symmetric comparisons (`isEqualToNonmember` earlier)
+    
+- Helper functions that logically belong _with_ the class but don’t need to be member functions
+
+#### ⚠️ Downsides
+
+Because a friend has direct access to a class’s internals, if you **change the implementation** of the class, you may also need to change all its friends. This creates a **ripple effect** (extra maintenance work).
+
+That’s why the best practice is:  
+✅ **Prefer using the class’s public interface in friend functions whenever possible.**  
+If the class provides getters/setters, use those rather than digging into private members directly. That way, if the implementation changes, the public interface can stay stable and your friend function doesn’t break.
+
+#### 🔑 Best Practice Summary
+
+- Friendship ≠ violation → it’s **controlled sharing**.
+    
+- Useful for cleaner design and symmetry (esp. operator overloading).
+    
+- Avoid overusing it — too many friends = tightly coupled code.
+    
+- In friend functions: **use the public interface first, private members only if necessary**.
+
+### Prefer non-friend functions to friend functions
+
+>Prefer non-friend functions to friend functions
+
+In lesson [14.8 -- The benefits of data hiding (encapsulation)](https://www.learncpp.com/cpp-tutorial/the-benefits-of-data-hiding-encapsulation/), we mentioned that we should prefer non-member functions over member functions. For the same reasons given there, we should prefer non-friend functions over friend functions.
+
+For example, in the following example, if the implementation of `Accumulator` is changed (e.g. we rename `m_value`), the implementation of `print()` will need to be changed as well:
+
+```cpp
+#include <iostream>
+
+class Accumulator
+{
+private:
+    int m_value { 0 }; // if we rename this
+
+public:
+    void add(int value) { m_value += value; } // we need to modify this
+
+    friend void print(const Accumulator& accumulator);
+};
+
+void print(const Accumulator& accumulator)
+{
+    std::cout << accumulator.m_value; // and we need to modify this
+}
+
+int main()
+{
+    Accumulator acc{};
+    acc.add(5); // add 5 to the accumulator
+
+    print(acc); // call the print() non-member function
+
+    return 0;
+}
+```
+
+A better idea is as follows:
+
+```cpp
+#include <iostream>
+
+class Accumulator
+{
+private:
+    int m_value { 0 };
+
+public:
+    void add(int value) { m_value += value; }
+    int value() const { return m_value; } // added this reasonable access function
+};
+
+void print(const Accumulator& accumulator) // no longer a friend of Accumulator
+{
+    std::cout << accumulator.value(); // use access function instead of direct access
+}
+
+int main()
+{
+    Accumulator acc{};
+    acc.add(5); // add 5 to the accumulator
+
+    print(acc); // call the print() non-member function
+
+    return 0;
+}
+```
+
+In this example, `print()` uses access function `value()` to get the value of `m_value` instead of accessing `m_value` directly. Now if the implementation of `Accumulator` is ever changed, `print()` will not need to be updated.
+
+>[!Best Practice]
+>Prefer to implement a function as a non-friend when possible and reasonable.
+
+>Be cautious when adding new members to the public interface of an existing class, as every function (even trivial ones) adds some level of clutter and complexity. In the case of `Accumulator` above, it’s totally reasonable to have an access function to get the current accumulated value. In more complex cases, it may be preferable to use friendship instead of adding many new access functions to the interface of a class.
+
+### BrainRot Analogy
+
+#### 🏭 1. Factory with expensive materials → switching to cheaper ones via friends
+
+- **Factory = Class**
+    
+- **Expensive materials = private data members**
+    
+- **Friends = external functions/classes with access**
+    
+
+You’re saying: normally the factory (class) hides its materials (data). But if you make an external helper a **friend**, they can sneak in and swap those materials. That’s like directly accessing private variables instead of using getters/setters.
+
+👉 **Moral:** Friend functions give you power (direct access), but also risk — you bypass safeguards and risk misuse or future breakage. If friends abuse this, they can “steal the whole factory” (mess with internals too much).
+
+#### 🚛 2. Multiple factories sharing one logistics center
+
+- **Multiple factories = multiple classes**
+    
+- **Logistics center = a friend class/function**
+    
+
+Instead of each class duplicating logistics (e.g., writing their own shipping system), you centralize it in one friend. That way, different classes can give this “trusted logistics center” access to their private data for coordination.
+
+👉 **Moral:** Friendship is useful to avoid **scope creep / code duplication**, but it couples your classes to this one shared friend.
+
+#### 🚬➡️💣 3. Cigarette factory making ammo = operator overloading
+
+- **Same factory = same class**
+    
+- **Making cigarettes vs ammo = handling different data types**
+    
+- **Friendly workers = friend functions**
+    
+
+You’re saying: “I can use the same assembly line (class) but instruct it to also produce something different.” This is just like **operator overloading**: same syntax, different meaning, depending on input.
+
+👉 **Moral:** Overloading lets you reuse infrastructure (class) flexibly. But… if the workers “smoke the ammo” (misuse overloads or design badly), chaos ensues → _undefined behavior_.
+
+#### 🔥 The Virginia Mortar Shell moment
+
+That’s just you realizing:  
+“Wow, friendship and overloading give me so much power — I can extend factories, logistics, production lines… but if misused, it can blow up in my face.”
+
+This is basically the **friendship tradeoff in C++**:
+
+- Controlled sharing of power → ✅ flexibility, less duplication.
+    
+- Too much sharing → ❌ tight coupling, higher maintenance risks.
+
+#### ✅ **Your metaphor nailed it:**
+
+- Friendship = giving trusted external helpers access.
+    
+- Operator overloading = repurposing the same class to do more without rewriting it.
+    
+- Undefined behavior = workers misusing the tools when not guided properly.
+
 ---
