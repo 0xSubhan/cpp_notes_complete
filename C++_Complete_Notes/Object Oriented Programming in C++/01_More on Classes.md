@@ -3403,6 +3403,8 @@ std::cout << ref << '\n';
 
 ### Ref qualifiers
 
+==This is an optional read!
+
 #### 1. **The Problem**
 
 - Sometimes you want a member function to behave differently depending on **whether the object it’s called on is an lvalue or rvalue**.
@@ -3497,5 +3499,8 @@ Additionally:
 - The standard library typically does not make use of this feature.
 
 Based on all of the above, we are not recommending the use of ref-qualifiers as a best practice. Instead, we recommend always using the result of an access function immediately and not saving returned references for use later.
+
+---
+# [Summary and quiz](https://www.learncpp.com/cpp-tutorial/chapter-15-summary-and-quiz/)
 
 ---
