@@ -1195,3 +1195,258 @@ void printElement(const std::vector<T>& arr, std::size_t index)
 - Best practice: **don’t design functions that assume minimum vector size** in the first place.
 
 ---
+# Returning std::vector, and an introduction to move semantics
+
+When we need to pass a `std::vector` to a function, we pass it by (const) reference so that we do not make an expensive copy of the array data.
+
+Therefore, you will probably be surprised to find that it is okay to return a `std::vector` by value.
+
+### Copy semantics
+
+Consider the following program:
+
+```cpp
+#include <iostream>
+#include <vector>
+
+int main()
+{
+    std::vector arr1 { 1, 2, 3, 4, 5 }; // copies { 1, 2, 3, 4, 5 } into arr1
+    std::vector arr2 { arr1 };          // copies arr1 into arr2
+
+    arr1[0] = 6; // We can continue to use arr1
+    arr2[0] = 7; // and we can continue to use arr2
+
+    std::cout << arr1[0] << arr2[0] << '\n';
+
+    return 0;
+}
+```
+
+When `arr2` is initialized with `arr1`, the copy constructor of `std::vector` is called, which copies `arr1` into `arr2`.
+
+Making a copy is the only reasonable thing to do in this case, as we need both `arr1` and `arr2` to live on independently. This example ends up making two copies, one for each initialization.
+
+The term **copy semantics** refers to the rules that determine how copies of objects are made. When we say a type supports copy semantics, we mean that objects of that type are copyable, because the rules for making such copies have been defined. When we say copy semantics are being invoked, that means we’ve done something that will make a copy of an object.
+
+For class types, copy semantics are typically implemented via the copy constructor (and copy assignment operator), which defines how objects of that type are copied. Typically this results in each data member of the class type being copied. In the prior example, the statement `std::vector arr2 { arr1 };` invokes copy semantics, resulting in a call to the copy constructor of `std::vector`, which then makes a copy of each data member of `arr1` into `arr2`. The end result is that `arr1` is equivalent to (but independent from) `arr2`.
+
+### When copy semantics is not optimal
+
+#### Step 1: The function returns by value
+
+```cpp
+std::vector<int> generate()
+{
+    std::vector arr1 { 1, 2, 3, 4, 5 };
+    return arr1; // arr1 is a named local variable
+}
+```
+
+- `arr1` is created on the stack.
+    
+- At `return arr1;`, since `arr1` is a **named variable** (an lvalue), the compiler normally interprets this as “make a copy of `arr1` and return it”.
+    
+
+Now, in practice, **return value optimization (RVO)** and **mandatory copy elision (C++17)** often eliminate this copy — but here the lesson _intentionally_ disables that optimization by using a named variable. So logically, a **copy constructor** would be called.
+
+#### Step 2: Where the returned object goes
+
+```cpp
+std::vector arr2 { generate() };
+```
+
+- `generate()` returns a temporary object (an **rvalue**) holding `{1,2,3,4,5}`.
+    
+- This temporary lives only until the end of the full statement.
+    
+- At the end of the line, that temporary object is destroyed.
+    
+
+So if we simply **copied** it into `arr2`, the sequence is:
+
+1. Temporary vector created inside `generate`.
+    
+2. Temporary returned, then copied into `arr2`.
+    
+3. Temporary destroyed.
+    
+
+That means we did a full **deep copy** of the data (allocating memory for arr2, copying 5 integers) … only to immediately throw away the temporary. Wasteful.
+
+#### Step 3: Why copy semantics is not optimal here
+
+The key idea:
+
+- In the first example (`arr2 { arr1 };`), **both `arr1` and `arr2` need to live** → we truly need two copies of the data. Copy semantics is correct.
+    
+- In this example (`arr2 { generate() };`), the temporary will **die anyway**, so keeping two independent copies is unnecessary.
+    
+    - We only need **one set of data**, owned by `arr2`.
+        
+    - So instead of copying, we’d like to **transfer ownership of the temporary’s data** directly to `arr2`.
+        
+
+That’s exactly what **move semantics** does.
+
+### Introduction to move semantics
+
+#### 🔹 Problem with Copy Semantics
+
+- Copy semantics = make a duplicate of data when assigning/initializing.
+    
+- Works fine when both objects must live independently.
+    
+- But inefficient when working with **temporaries** (rvalues):
+    
+    - Example: returning a vector from a function.
+        
+    - Temporary will be destroyed anyway → making a copy is wasteful.
+
+#### 🔹 Solution: Move Semantics
+
+- **Idea**: Instead of copying, let one object **“steal”** the resources (ownership) from another.
+    
+- Called **moving**: ownership of data is transferred.
+    
+- **Cost**: trivial (just pointer swaps / a few assignments). Much cheaper than copying large arrays.
+    
+- When temporary is destroyed → it has nothing to free → no destruction overhead.
+
+#### 🔹 Definition
+
+- **Move semantics** = rules that determine how data is transferred from one object to another.
+    
+- When move semantics is invoked:
+    
+    - Movable members → moved.
+        
+    - Non-movable members → copied.
+        
+- Benefit: avoids expensive deep copies.
+    
+
+**Key insight**:
+
+- Move semantics = optimization that cheaply transfers ownership of data.
+    
+- Works best with large, expensive-to-copy objects (e.g., `std::vector`, `std::string`).
+
+#### 🔹 When is Move Semantics Invoked?
+
+Move semantics happens **only if all conditions are met**:
+
+1. The type supports move semantics (e.g., `std::vector`, `std::string`).
+    
+2. The source object is an **rvalue** (temporary).
+    
+3. Copy elision is **not** applied (otherwise no move/copy happens at all).
+    
+
+⚠️ Not many standard types support move semantics — but the important ones (`std::vector`, `std::string`) do.
+
+#### 🔹 Return by Value and Move Semantics
+
+- Returning by value produces an **rvalue**.
+    
+- If the type supports moves → the return value can be **moved instead of copied**.
+    
+- This makes return-by-value **inexpensive** for move-capable types.
+    
+
+**Rule of thumb:**
+
+- Pass large/move-capable objects by `const&`.
+    
+- Return them by value → moves/elision will optimize it.
+
+#### 🔹 Common Function Call Flow (with class types)
+
+Passing a value to a function and getting one back typically has 4 steps:
+
+1. Construct value to be passed.
+    
+2. Pass value to function.
+    
+3. Construct value to be returned.
+    
+4. Pass return value back to caller.
+
+#### 🔹 Example: Without Move Semantics
+
+```cpp
+std::vector<int> doSomething(std::vector<int> v2)
+{
+    std::vector v3 { v2[0] + v2[0] };
+    return v3;
+}
+
+int main()
+{
+    std::vector v1 { 5 };
+    std::cout << doSomething(v1)[0] << '\n';
+}
+```
+
+If `std::vector` is **not move-capable**, then:
+
+1. Copy initializer list → `v1`.
+    
+2. Copy `v1` → `v2` (function parameter).
+    
+3. Copy initializer → `v3`.
+    
+4. Copy `v3` → return value.
+    
+
+➡️ **4 copies** total → expensive.
+
+#### 🔹 Optimizations in Steps
+
+- **Copy 1 & 3**: unavoidable → we must construct `v1` and `v3`.
+    
+- **Copy 2 (argument passing)**:
+    
+    - ❌ Cannot elide.
+        
+    - ❌ Cannot move (argument is lvalue, moving would empty `v1`).
+        
+    - ✅ Best option: pass by `const&` to avoid copy.
+        
+- **Copy 4 (return value)**:
+    
+    - ❌ Cannot return reference (local would dangle).
+        
+    - ✅ Copy elision (if compiler applies).
+        
+    - ✅ Move semantics (safe, since `v3` will be destroyed anyway).
+        
+    - ✅ Out parameter (possible, but awkward).
+
+#### 🔹 Final Best Practices
+
+- **Pass** large/move-capable objects by **const reference** → avoids unnecessary copies.
+    
+- **Return** large/move-capable objects by **value** → moves (or elision) make it efficient.
+
+#### ✅ **Summary Insight**:
+
+- Move semantics lets us **transfer ownership** of resources cheaply.
+    
+- Copy = duplicate data. Move = steal data.
+    
+- Use `const&` for parameters, return by value for results.
+    
+- For move-capable types (e.g., `std::vector`, `std::string`), this gives both safety and efficiency.
+
+>[!Key insight]
+>Move semantics is an optimization that allows us, under certain circumstances, to inexpensively transfer ownership of some data members from one object to another object (rather than making a more expensive copy).
+>
+Data members that can’t be moved are copied instead.
+
+>[!Key insight]
+>We can return move-capable types (like `std::vector` and `std::string`) by value. Such types will inexpensively move their values instead of making an expensive copy.
+>
+Such types should still be passed by const reference.
+
+---
