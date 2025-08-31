@@ -1450,3 +1450,176 @@ Data members that can’t be moved are copied instead.
 Such types should still be passed by const reference.
 
 ---
+# Arrays and loops
+
+### The variable scalability challenge, revisited
+
+Consider the case where we want to find the average test score for a class of students. To keep these examples concise, we’ll assume the class has only 5 students.
+
+Here’s how we might solve this using individual variables:
+
+```cpp
+#include <iostream>
+
+int main()
+{
+    // allocate 5 integer variables (each with a different name)
+    int testScore1{ 84 };
+    int testScore2{ 92 };
+    int testScore3{ 76 };
+    int testScore4{ 81 };
+    int testScore5{ 56 };
+
+    int average { (testScore1 + testScore2 + testScore3 + testScore4 + testScore5) / 5 };
+
+    std::cout << "The class average is: " << average << '\n';
+
+    return 0;
+}
+```
+
+That’s a lot of variables and a lot of typing. Imagine how much work we’d have to do for 30 students, or 600. Furthermore, if a new test score is added, a new variable has to be declared, initialized, and added to the average calculation. And did you remember to update the divisor? If you forgot, you now have a semantic error. Any time you have to modify existing code, you run the risk of introducing errors.
+
+By now, you know that we should be using an array when we have a bunch of related variables. So let’s replace our individual variables with a `std::vector`:
+
+```cpp
+#include <iostream>
+#include <vector>
+
+int main()
+{
+    std::vector testScore { 84, 92, 76, 81, 56 };
+    std::size_t length { testScore.size() };
+
+    int average { (testScore[0] + testScore[1] + testScore[2] + testScore[3] + testScore[4])
+        / static_cast<int>(length) };
+
+    std::cout << "The class average is: " << average << '\n';
+
+    return 0;
+}
+```
+
+This is better -- we’ve cut down on the number of variables defined significantly, and the divisor for the average calculation is now determined directly from the length of the array.
+
+But the average calculation is still a problem, as we’re having to manually list each element individually. And because we have to list each element explicitly, our average calculation only works for arrays with exactly as many elements as we list. If we also want to be able to average arrays of other lengths, we’ll need to write a new average calculation for each different array length.
+
+What we really need is some way to access each array element without having to explicitly list each one.
+
+### Arrays and loops
+
+Normally when you write something like:
+
+```cpp
+testScore[2]; // fixed, constant index
+```
+
+You’re using a literal constant. But C++ also allows:
+
+```cpp
+testScore[i]; // where i is a variable (runtime value)
+```
+
+So instead of hardcoding every index, you can **loop** through the indices dynamically.
+
+>Also note that the array indices used in the average calculation of the previous example are an ascending sequence: 0, 1, 2, 3, 4. Therefore, if we had some way to set a variable to values 0, 1, 2, 3, and 4 in sequence, then we could just use that variable as our array index instead of literals. And we already know how to do that -- with a for-loop.
+
+Let’s rewrite the above example using a for-loop, where the loop variable is used as the array index:
+
+```cpp
+#include <iostream>
+#include <vector>
+
+int main()
+{
+    std::vector testScore { 84, 92, 76, 81, 56 };
+    std::size_t length { testScore.size() };
+
+    int average { 0 };
+    for (std::size_t index{ 0 }; index < length; ++index) // index from 0 to length-1
+        average += testScore[index];                      // add the value of element with index `index`
+    average /= static_cast<int>(length);                  // calculate the average
+
+    std::cout << "The class average is: " << average << '\n';
+
+    return 0;
+}
+```
+
+This solution is ideal in terms of maintainability. The number of times the loop iterates is determined from the length of the array, and the loop variable is used to do all of the array indexing. We no longer have to manually list each array element.
+
+If we want to add or remove a test score, we can just modify the number of array initializers, and the rest of the code will still work without further changes!
+
+==Accessing each element of a container in some order is called **traversal**, or **traversing** the container. Traversal is often called **iteration**, or **iterating over** or **iterating through** the container.
+
+### Templates, arrays, and loops unlock scalability
+
+Arrays provide a way to store multiple objects without having to name each element.
+
+Loops provide a way to traverse an array without having to explicitly list each element.
+
+Templates provide a way to parameterize the element type.
+
+Together, templates, arrays, and loops allow us to write code that can operate on a container of elements, regardless of the element type or number of elements in the container!
+
+To illustrate this further, let’s rewrite the above example, refactoring the average calculation into a function template:
+
+```cpp
+#include <iostream>
+#include <vector>
+
+// Function template to calculate the average of the values in a std::vector
+template <typename T>
+T calculateAverage(const std::vector<T>& arr)
+{
+    std::size_t length { arr.size() };
+
+    T average { 0 };                                      // if our array has elements of type T, our average should have type T too
+    for (std::size_t index{ 0 }; index < length; ++index) // iterate through all the elements
+        average += arr[index];                            // sum up all the elements
+    average /= static_cast<int>(length);                  // divide by count of items (integral in nature)
+
+    return average;
+}
+
+int main()
+{
+    std::vector class1 { 84, 92, 76, 81, 56 };
+    std::cout << "The class 1 average is: " << calculateAverage(class1) << '\n'; // calc average of 5 ints
+
+    std::vector class2 { 93.2, 88.6, 64.2, 81.0 };
+    std::cout << "The class 2 average is: " << calculateAverage(class2) << '\n'; // calc average of 4 doubles
+
+    return 0;
+}
+```
+
+This prints:
+
+The class 1 average is: 77
+The class 2 average is: 81.75
+
+In the above example, we’ve created function template `calculateAverage()`, which takes a `std::vector` of any element type and any length, and returns the average. In `main()`, we demonstrate that this function works equally well when called with an array of 5 `int` elements or an array of 4 `double` elements!
+
+`calculateAverage()` will work for any type `T` that supports the operators used inside the function (`operator+=(T)`, `operator/=(int)`). If you try to use a `T` that does not support these operators, the compiler will error when trying to compile the instantiated function template.
+
+You might be wondering why we cast `length` to an `int` rather than a `T`. When we calculate the average, we divide the sum by the count of items. The count of items is an integral value. Therefore, semantically, it makes more sense to divide by an `int`.
+
+### What we can do with arrays and loops
+
+>Now that we know how to traverse a container of elements using a loop, let’s look at the most common things that we can use container traversal for. We typically traverse a container in order to do one of four things:
+
+1. Calculate a new value based on the value of existing elements (e.g. average value, sum of values).
+2. Search for an existing element (e.g. has exact match, count number of matches, find highest value).
+3. Operate on each element (e.g. output each element, multiply all elements by 2).
+4. Reorder the elements (e.g. sort the elements in ascending order).
+
+>The first three of these are fairly straightforward. We can use a single loop to traverse the array, inspecting or modifying each element as appropriate.
+
+### Arrays and off-by-one errors
+
+>When traversing a container using an index, you must take care to ensure the loop executes the proper number of times. Off-by-one errors (where the loop body executes one too many or one too few times) are easy to make.
+
+Typically, when traversing a container using an index, we will start the index at `0` and loop until `index < length`.
+
+---
