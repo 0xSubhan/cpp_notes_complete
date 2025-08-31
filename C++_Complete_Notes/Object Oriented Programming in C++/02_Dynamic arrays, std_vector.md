@@ -911,3 +911,287 @@ for (std::size_t i = 0; i < prime.size(); ++i) {
 - Best fix: use `std::size_t` for indexing variables.
 
 ---
+# Passing std::vector
+
+An object of type `std::vector` can be passed to a function just like any other object. That means if we pass a `std::vector` by value, an expensive copy will be made. Therefore, we typically pass `std::vector` by (const) reference to avoid such copies.
+
+With a `std::vector`, the element type is part of the type information of the object. Therefore, when we use a `std::vector` as a function parameter, we have to explicitly specify the element type:
+
+```cpp
+#include <iostream>
+#include <vector>
+
+void passByRef(const std::vector<int>& arr) // we must explicitly specify <int> here
+{
+    std::cout << arr[0] << '\n';
+}
+
+int main()
+{
+    std::vector primes{ 2, 3, 5, 7, 11 };
+    passByRef(primes);
+
+    return 0;
+}
+```
+
+### Passing `std::vector` of different element types
+
+#### 🔹 The problem: Passing `std::vector` of different element types
+
+In C++, a `std::vector<int>` and a `std::vector<double>` are **completely different types**.  
+That’s why this code:
+
+```cpp
+void passByRef(const std::vector<int>& arr);
+
+std::vector<double> dbl{1.1, 2.2, 3.3};
+passByRef(dbl); // ❌ compile error
+```
+
+fails:
+
+- `std::vector<int>` ≠ `std::vector<double>`.
+    
+- C++ does not allow implicit conversion between different `std::vector<T>` types.
+
+#### 🔹 Why not CTAD?
+
+CTAD (Class Template Argument Deduction) lets the compiler **deduce template arguments** when creating an object:
+
+```cpp
+std::vector primes{2, 3, 5}; // deduced as std::vector<int>
+std::vector dbl{1.1, 2.2};   // deduced as std::vector<double>
+```
+
+But **CTAD doesn’t work for function parameters**:
+
+```cpp
+void passByRef(const std::vector& arr); // ❌ not allowed
+```
+
+Because when calling a function, the compiler must already know the exact type of the parameter. CTAD only applies at **construction time**, not at **function call time**.
+
+#### 🔹 Solution: Function template
+
+We need something that can adapt to different vector element types.  
+That’s exactly what **function templates** are for.
+
+```cpp
+template <typename T>
+void passByRef(const std::vector<T>& arr)
+{
+    std::cout << arr[0] << '\n';
+}
+```
+
+Here’s what happens:
+
+- When you call `passByRef(primes)`, where `primes` is a `std::vector<int>`, the compiler **instantiates**:
+
+```cpp
+void passByRef(const std::vector<int>& arr) { ... }
+```
+
+When you call `passByRef(dbl)`, where `dbl` is a `std::vector<double>`, the compiler **instantiates**:
+
+```cpp
+void passByRef(const std::vector<double>& arr) { ... }
+```
+
+#### 🔹 Why this works?
+
+Because templates allow the **element type** (`T`) of the vector to be a parameter.  
+The compiler generates the correct version of the function for each type of vector you pass in.
+
+#### ✅ **Final Example**
+
+```cpp
+#include <iostream>
+#include <vector>
+
+template <typename T>
+void passByRef(const std::vector<T>& arr)
+{
+    std::cout << arr[0] << '\n';
+}
+
+int main()
+{
+    std::vector primes{2, 3, 5, 7, 11};   // std::vector<int>
+    passByRef(primes); // works → calls vector<int> version
+
+    std::vector dbl{1.1, 2.2, 3.3};       // std::vector<double>
+    passByRef(dbl);    // works → calls vector<double> version
+}
+```
+
+Output:
+
+```Ouput
+2
+1.1
+```
+
+👉 So in short:
+
+- `std::vector<int>` and `std::vector<double>` are different types.
+    
+- CTAD can’t deduce function parameters.
+    
+- **Function templates** let us generalize over different vector element types.
+
+### Passing a `std::vector` using a generic template or abbreviated function template
+
+We can also create a function template that will accept any type of object:
+
+```cpp
+#include <iostream>
+#include <vector>
+
+template <typename T>
+void passByRef(const T& arr) // will accept any type of object that has an overloaded operator[]
+{
+    std::cout << arr[0] << '\n';
+}
+
+int main()
+{
+    std::vector primes{ 2, 3, 5, 7, 11 };
+    passByRef(primes); // ok: compiler will instantiate passByRef(const std::vector<int>&)
+
+    std::vector dbl{ 1.1, 2.2, 3.3 };
+    passByRef(dbl);    // ok: compiler will instantiate passByRef(const std::vector<double>&)
+
+    return 0;
+}
+```
+
+In C++20, we can use an abbreviated function template (via an `auto` parameter) to do the same thing:
+
+```cpp
+#include <iostream>
+#include <vector>
+
+void passByRef(const auto& arr) // abbreviated function template
+{
+    std::cout << arr[0] << '\n';
+}
+
+int main()
+{
+    std::vector primes{ 2, 3, 5, 7, 11 };
+    passByRef(primes); // ok: compiler will instantiate passByRef(const std::vector<int>&)
+
+    std::vector dbl{ 1.1, 2.2, 3.3 };
+    passByRef(dbl);    // ok: compiler will instantiate passByRef(const std::vector<double>&)
+
+    return 0;
+}
+```
+
+Both of these will accept an argument of _any_ type that will compile. This can be desirable when writing functions that we might want to operate on more than just a `std::vector`. For example, the above functions will also work on a `std::array`, a `std::string`, or some other type we may not have even considered.
+
+The potential downside of this method is that it may lead to bugs if the function is passed an object of a type that compiles but doesn’t make sense semantically.
+
+### Asserting on array length
+
+#### 🔹 The function
+
+```cpp
+template <typename T>
+void printElement3(const std::vector<T>& arr)
+{
+    std::cout << arr[3] << '\n';
+}
+```
+
+This function **always tries to access `arr[3]`** (the 4th element).
+
+#### 🔹 Problem
+
+The compiler does **not check at compile time** whether the vector you pass in actually has at least 4 elements.
+
+So:
+
+```cpp
+std::vector arr{9, 7, 5, 3, 1}; // ✅ has index 3 (0..4)
+printElement3(arr); // works fine
+```
+
+But:
+
+```cpp
+std::vector arr{9, 7}; // ❌ only indices 0 and 1 exist
+printElement3(arr);    // arr[3] is out of bounds → undefined behavior
+```
+
+Undefined behavior = your program might crash, print garbage, or even appear to "work" sometimes but not always. Very dangerous.
+
+#### 🔹 Solution 1: **Runtime assert**
+
+We can **assert that the vector is long enough** before accessing it:
+
+```cpp
+#include <cassert>
+
+template <typename T>
+void printElement3(const std::vector<T>& arr)
+{
+    assert(arr.size() > 3 && "Vector must have at least 4 elements");
+    std::cout << arr[3] << '\n';
+}
+```
+
+- If `arr.size() <= 3`, the program will stop with an error in **debug builds** (asserts are disabled in release builds by default).
+    
+- This prevents silent undefined behavior during development.
+    
+
+But notice:  
+`std::vector::size()` is a **runtime function** (not constexpr), so you cannot check this at compile time — only at runtime.
+
+#### 🔹 Solution 2: **Use `std::array`**
+
+If instead of a `std::vector`, you used `std::array`:
+
+```cpp
+template <typename T, std::size_t N>
+void printElement3(const std::array<T, N>& arr)
+{
+    static_assert(N > 3, "Array must have at least 4 elements");
+    std::cout << arr[3] << '\n';
+}
+```
+
+Here, `N` is known at **compile time**, so you can `static_assert` and catch the problem **before the program even runs**.
+
+#### 🔹 Best option
+
+The **best design** is to **avoid writing functions that assume a minimum size at all**.  
+Instead, pass the index you want, or design the function so it works with any length safely.
+
+For example:
+
+```cpp
+template <typename T>
+void printElement(const std::vector<T>& arr, std::size_t index)
+{
+    if (index < arr.size())
+        std::cout << arr[index] << '\n';
+    else
+        std::cerr << "Index out of bounds!\n";
+}
+```
+
+#### ✅ **Summary**
+
+- `printElement3` is unsafe because it assumes at least 4 elements exist.
+    
+- With `std::vector`, you can only **runtime assert** (`assert`).
+    
+- With `std::array`, you can use **compile-time check** (`static_assert`).
+    
+- Best practice: **don’t design functions that assume minimum vector size** in the first place.
+
+---
