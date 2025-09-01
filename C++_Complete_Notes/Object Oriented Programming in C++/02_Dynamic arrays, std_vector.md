@@ -2020,3 +2020,253 @@ Two common methods for array traversal without indices include range-based for l
 >Avoid array indexing with integral values whenever possible.
 
 ---
+# Range-based for loops (for-each)
+
+Because traversing (forwards) through an array is such a common thing to do, C++ supports another type of for-loop called a **range-based for loop** (also sometimes called a **for-each loop**) that allows traversal of a container without having to do explicit indexing. Range-based for loops are simpler, safer, and work with all the common array types in C++ (including `std::vector`, `std::array`, and C-style arrays).
+
+### Range-based for loops
+
+The _range-based for_ statement has a syntax that looks like this:
+
+```syntax
+for (element_declaration : array_object)
+   statement;
+```
+
+>When a range-based for loop is encountered, the loop will iterate through each element in `array_object`. For each iteration, the value of the current array element will be assigned to the variable declared in `element_declaration`, and then `statement` will execute.
+
+For best results, `element_declaration` should have the same type as the array elements, otherwise type conversion will occur.
+
+Here’s a simple example that uses a _range-based for_ loop to print all of the elements in an array named `fibonacci`:
+
+```cpp
+#include <iostream>
+#include <vector>
+
+int main()
+{
+    std::vector fibonacci { 0, 1, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89 };
+
+    for (int num : fibonacci) // iterate over array fibonacci and copy each value into `num`
+       std::cout << num << ' '; // print the current value of `num`
+
+    std::cout << '\n';
+
+    return 0;
+}
+```
+
+This prints:
+
+0 1 1 2 3 5 8 13 21 34 55 89
+
+Note that this example does not require us to use the array’s length, nor does it require us to index the array!
+
+>Let’s take a closer look at how this works. This range-based for loop will execute through all the elements of `fibonacci`. For the first iteration, variable `num` is assigned the value of the first element (`0`). Then the program executes the associated statement, which prints the value of `num` (`0`) to the console. For the second iteration, `num` is assigned the value of the second element (`1`). The associated statement executes again, which prints `1`. The range-based for loop continues to iterate through each of the array elements in turn, executing the associated statement for each one, until there are no elements left in the array to iterate over. At that point, the loop terminates, and the program continues execution (printing a newline and then returning `0` to the operating system).
+
+>[!Key insight]
+>The declared element (`num` in the prior example) is not an array index. Rather, it is assigned the value of the array element being iterated over.
+
+Because `num` is assigned the value of the array element, this does mean the array element is copied (which can be expensive for some types).
+
+>[!Best Practice]
+>Favor range-based for loops over regular for-loops when traversing containers.
+
+### Range-based for loops and empty containers
+
+In cases where the container being traversed has no elements, the body of the range-based for-loop will simply not execute:
+
+```cpp
+#include <iostream>
+#include <vector>
+
+int main()
+{
+    std::vector empty { };
+
+    for (int num : empty)
+       std::cout << "Hi mom!\n";
+
+    return 0;
+}
+```
+
+The above example does not print anything. Sorry mom!
+
+### Range-based for loops and type deduction using the `auto` keyword
+
+>[!Best practice]
+>Use type deduction (`auto`) with range-based for loops to have the compiler deduce the type of the array element.
+
+```cpp
+#include <iostream>
+#include <vector>
+
+int main()
+{
+    std::vector fibonacci { 0, 1, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89 };
+
+    for (auto num : fibonacci) // compiler will deduce type of num to be `int`
+       std::cout << num << ' ';
+
+    std::cout << '\n';
+
+    return 0;
+}
+```
+
+Because `std::vector fibonacci` has elements of type `int`, `num` will be deduced to be an `int`.
+
+>Another benefit to using `auto` is that if the element type of the array is ever updated (e.g. from `int` to `long`), `auto` will automatically deduce the updated element type, ensuring they stay in sync (and preventing type conversion from occurring).
+
+### Avoid element copies using references
+
+```cpp
+#include <iostream>
+#include <string>
+#include <vector>
+
+int main()
+{
+    std::vector<std::string> words{ "peter", "likes", "frozen", "yogurt" };
+
+    for (auto word : words)
+        std::cout << word << ' ';
+
+    std::cout << '\n';
+
+    return 0;
+}
+```
+
+>It will be expensive to copy every element of std::string into the variable so we can just pass the element to the variable by const reference, const make sure that element is not modifyied and no expensive copy is made.
+
+```cpp
+#include <iostream>
+#include <string>
+#include <vector>
+
+int main()
+{
+    std::vector<std::string> words{ "peter", "likes", "frozen", "yogurt" };
+
+    for (const auto& word : words) // word is now a const reference
+        std::cout << word << ' ';
+
+    std::cout << '\n';
+
+    return 0;
+}
+```
+
+In the above example, `word` is now a const reference. With each iteration of this loop, `word` will be bound to the next array element. This allows us to access the array element’s value without having to make an expensive copy.
+
+If the reference is non-const, it can also be used to change the values in the array (something not possible if our `element_declaration` is a copy of the value).
+
+### When to use `auto` vs `auto&` vs `const auto&`
+
+>Normally we’d use `auto` for cheap-to-copy types, `auto&` when we want to modify the elements, and `const auto&` for expensive-to-copy types. But with range-based for loops, many developers believe it is preferable to always use `const auto&` because it is more future-proof.
+
+For example, consider the following example:
+
+```cpp
+#include <iostream>
+#include <string_view>
+#include <vector>
+
+int main()
+{
+    std::vector<std::string_view> words{ "peter", "likes", "frozen", "yogurt" }; // elements are type std::string_view
+
+    for (auto word : words) // We normally pass string_view by value, so we'll use auto here
+        std::cout << word << ' ';
+
+    std::cout << '\n';
+
+    return 0;
+}
+```
+
+In this example, we have a `std::vector` containing `std::string_view` objects. Since `std::string_view` is normally passed by value, using `auto` seems appropriate.
+
+>But consider what happens if `words` is later updated to an array of `std::string` instead.
+
+```cpp
+#include <iostream>
+#include <string>
+#include <vector>
+
+int main()
+{
+    std::vector<std::string> words{ "peter", "likes", "frozen", "yogurt" }; // obvious we should update this
+
+    for (auto word : words) // Probably not obvious we should update this too
+        std::cout << word << ' ';
+
+    std::cout << '\n';
+
+    return 0;
+}
+```
+
+The range-based for loop will compile and execute just fine, but `word` will now be deduced to be a `std::string`, and because we’re using `auto`, our loop will silently make expensive copies of `std::string` elements. We just took a huge performance hit!
+
+>[!Best Practice]
+>For range-based for loops, prefer to define the element type as:
+>
+>>- `auto` when you want to modify copies of the elements.
+>> - `auto&` when you want to modify the original elements.
+>> - `const auto&` otherwise (when you just need to view the original elements).
+>>
+
+### Range-based for loops and other standard container types
+
+Range-based for loops work with a wide variety of array types, including (non-decayed) C-style arrays, `std::array`, `std::vector`, linked list, trees, and maps. We haven’t covered any of these yet, so don’t worry if you don’t know what these are. Just remember that _range-based for_ loops provide a flexible and generic way to iterate through more than just `std::vector`:
+
+>[!For advanced readers]
+>Range-based for loops won’t work with decayed C-style arrays. This is because a range-based for-loop needs to know the length of the array to know when traversal is complete, and decayed C-style arrays do not contain this information.
+>
+>Range-based for loops also won’t work with enumerations.
+
+### Getting the index of the current element
+
+Range-based for loops do _not_ provide a direct way to get the array index of the current element. This is because many of the structures that a range-based for loop can iterate over (such as `std::list`) do not support indices.
+
+However, because range-based for loops always iterate in a forwards direction and don’t skip elements, you can always declare (and increment) your own counter. However, if you’re going to do this, you should consider whether you’re better off using a normal for-loop instead of a range-based for loop.
+
+#### Range-based for loops in reverse C++20
+
+Range-based for loops only iterate in forwards order. However, there are cases where we want to traverse an array in reverse order. Prior to C++20, range-based for loops could not be easily used for this purpose, and other solutions had to be employed (typically normal for-loops).
+
+However, as of C++20, you can use the `std::views::reverse` capability of the Ranges library to create a reverse view of the elements that can be traversed:
+
+```cpp
+#include <iostream>
+#include <ranges> // C++20
+#include <string_view>
+#include <vector>
+
+int main()
+{
+    std::vector<std::string_view> words{ "Alex", "Bobby", "Chad", "Dave" }; // sorted in alphabetical order
+
+    for (const auto& word : std::views::reverse(words)) // create a reverse view
+        std::cout << word << ' ';
+
+    std::cout << '\n';
+
+    return 0;
+}
+```
+
+This prints:
+
+Dave
+Chad
+Bobby
+Alex
+
+We haven’t covered the ranges library, so consider this a useful bit of magic for now.
+
+---
+	
