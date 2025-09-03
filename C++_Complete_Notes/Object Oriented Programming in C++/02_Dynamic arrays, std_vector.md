@@ -2935,3 +2935,629 @@ Capacity: 0     Length: 0
 - Do shrink when memory waste is **large and persistent**.
 
 ---
+# std::vector and stack behavior
+
+### What is a stack?
+
+>Analogy time! Consider a stack of plates in a cafeteria. For some unknown reason, these plates are extra heavy and can only be lifted one at a time. Because the plates are stacked and heavy, you can only modify the stack of plates in one of two ways:
+
+1. Put a new plate on top of the stack (hiding the plate underneath, if it exists)
+2. Remove the top plate from the stack (exposing the plate underneath, if it exists)
+
+Adding or removing a plate from the middle or bottom of the stack is not allowed, as that would require lifting more than one plate at a time.
+
+The order in which items are added to and removed from a stack can be described as **last-in, first-out (LIFO)**. The last plate added onto the stack will be the first plate that is removed.
+
+### Stacks in programming
+
+Stacks in programming
+
+In programming, a **stack** is a container data type where the insertion and removal of elements occurs in a LIFO manner. This is commonly implemented via two operations named **push** and **pop**:
+
+|Operation Name|Behavior|Required?|Notes|
+|---|---|---|---|
+|Push|Put new element on top of stack|Yes||
+|Pop|Remove the top element from the stack|Yes|May return the removed element or void|
+
+Many stack implementations optionally support other useful operations as well:
+
+|Operation Name|Behavior|Required?|Notes|
+|---|---|---|---|
+|Top or Peek|Get the top element on the stack|Optional|Does not remove item|
+|Empty|Determine if stack has no elements|Optional||
+|Size|Count of how many elements are on the stack|Optional||
+
+Stacks are common in programming. In lesson [3.9 -- Using an integrated debugger: The call stack](https://www.learncpp.com/cpp-tutorial/using-an-integrated-debugger-the-call-stack/), we discussed the call stack, which keeps track of which functions have been called. The call stack is… a stack! (I know, that reveal was a letdown). When a function is called, an entry with information about that function is added to the top of the call stack. When the function returns, the entry containing information about that function is removed from the top of the call stack. In this way, the top of the call stack always represents the currently executing function, and each subsequent entry represents the function that was previously executing.
+
+For example, here’s a short sequence showing how pushing and popping on a stack works:
+
+       (Stack: empty)
+Push 1 (Stack: 1)
+Push 2 (Stack: 1 2)
+Push 3 (Stack: 1 2 3)
+Pop    (Stack: 1 2)
+Push 4 (Stack: 1 2 4)
+Pop    (Stack: 1 2)
+Pop    (Stack: 1)
+Pop    (Stack: empty)
+
+### Stacks in C++
+
+#### 🔹 How C++ Treats Stacks
+
+- In some languages → stack is a **dedicated container type**.
+    
+- In C++ → stack-like operations are added to **existing STL containers** (`std::vector`, `std::deque`, `std::list`) because these already support **efficient insertion/removal at one end**.
+    
+- This makes them more flexible → you can use them as normal containers _and_ as stacks.
+
+#### 🔹 Limitation of a Pure Stack
+
+- A **pure stack interface** only gives `push`, `pop`, and `top`.
+    
+- Example limitation: You **cannot iterate through all elements** in a pure stack without modifying it (popping each item).
+    
+- C++ avoids this limitation by **building stack-like behavior on top of other containers**.
+
+>In C++, stack-like operations were instead added (as member functions) to the existing standard library container classes that support efficient insertion and removal of elements at one end (`std::vector`, `std::deque` and `std::list`). This allows any of these containers to be used as stacks in addition to their native capabilities.
+
+#### 📚 Stack Analogy: Mailboxes Instead of Plates
+
+##### 🔹 Problem with Plates Analogy
+
+- Plates stack works fine to explain **LIFO** (last in, first out).
+    
+- But plates don’t explain **how to implement a stack with an array** (fixed-size memory).
+    
+
+##### 🔹 Mailboxes Analogy 📬
+
+- Imagine a **column of mailboxes**, one on top of another.
+    
+- Rules:
+    
+    1. Each mailbox can hold **only one item**.
+        
+    2. All mailboxes start out **empty**.
+        
+    3. Mailboxes are **nailed together** → can’t add/remove boxes.
+        
+    4. The **top is blocked with poisonous spikes** → no new mailbox can be added.
+        
+
+👉 This models an **array in memory** (fixed-size block of slots).
+
+##### 🔹 The Marker = Top of the Stack
+
+- We use a **marker (post-it note)** to track the **lowest empty mailbox**.
+    
+- At the start:
+    
+    - No items → marker at the **bottom mailbox**.
+        
+
+##### 🔹 Push Operation (add item)
+
+1. Put the item into the **mailbox at the marker**.
+    
+2. Move the marker **up one mailbox**.
+    
+
+##### 🔹 Pop Operation (remove item)
+
+1. Move the marker **down one mailbox** (to the last filled one).
+    
+2. Remove the item from that mailbox (now it’s empty).
+    
+
+##### 🔹 Stack Membership
+
+- **Mailboxes below marker** → considered **part of the stack**.
+    
+- **Mailboxes at/above marker** → **not part of the stack** (empty).
+    
+
+##### 🔹 Mapping to Computer Science
+
+- **Mailboxes** = the array slots (memory already allocated).
+    
+- **Marker** = the **length** (how many elements are in use).
+    
+- **Total mailboxes** = the **capacity** (how many elements can fit in total).
+    
+
+##### ✅ **Key Insight**:
+
+- The **capacity** (total mailboxes) is fixed by the array size.
+    
+- The **length** (marker position) changes as we push/pop.
+    
+- This is exactly how `std::vector` or a manually built stack works under the hood.
+
+### Stack behavior with `std::vector`
+
+Stack behavior in `std::vector` is implemented via the following member functions:
+
+|Function Name|Stack Operation|Behavior|Notes|
+|---|---|---|---|
+|push_back()|Push|Put new element on top of stack|Adds the element to end of vector|
+|pop_back()|Pop|Remove the top element from the stack|Returns void, removes element at end of vector|
+|back()|Top or Peek|Get the top element on the stack|Does not remove item|
+|emplace_back()|Push|Alternate form of push_back() that can be more efficient (see below)|Adds element to end of vector|
+
+Let’s take a look at an example that uses some of these functions:
+
+```cpp
+#include <iostream>
+#include <vector>
+
+void printStack(const std::vector<int>& stack)
+{
+	if (stack.empty()) // if stack.size == 0
+		std::cout << "Empty";
+
+	for (auto element : stack)
+		std::cout << element << ' ';
+
+	// \t is a tab character, to help align the text
+	std::cout << "\tCapacity: " << stack.capacity() << "  Length " << stack.size() << "\n";
+}
+
+int main()
+{
+	std::vector<int> stack{}; // empty stack
+
+	printStack(stack);
+
+	stack.push_back(1); // push_back() pushes an element on the stack
+	printStack(stack);
+
+	stack.push_back(2);
+	printStack(stack);
+
+	stack.push_back(3);
+	printStack(stack);
+
+	std::cout << "Top: " << stack.back() << '\n'; // back() returns the last element
+
+	stack.pop_back(); // pop_back() pops an element off the stack
+	printStack(stack);
+
+	stack.pop_back();
+	printStack(stack);
+
+	stack.pop_back();
+	printStack(stack);
+
+	return 0;
+}
+```
+
+```output
+Empty   Capacity: 0  Length: 0
+1       Capacity: 1  Length: 1
+1 2     Capacity: 2  Length: 2
+1 2 3   Capacity: 4  Length: 3
+Top:3
+1 2     Capacity: 4  Length: 2
+1       Capacity: 4  Length: 1
+Empty   Capacity: 4  Length: 0
+```
+
+#### 🔹 Example Flow (from code)
+
+```cpp
+std::vector<int> stack{};
+```
+
+- Start: **empty vector**
+    
+- Capacity = 0, Length = 0
+
+```cpp
+stack.push_back(1);
+```
+
+- Adds `1` → vector reallocates capacity to 1
+    
+- Capacity = 1, Length = 1
+
+```cpp
+stack.push_back(2);
+```
+
+- Adds `2` → needs more space → reallocate to capacity = 2
+    
+- Length = 2
+
+```cpp
+stack.push_back(3);
+```
+
+- Adds `3` → capacity 2 not enough → reallocate to capacity = 4 (growth strategy)
+    
+- Length = 3
+
+```cpp
+std::cout << stack.back(); 
+```
+
+Prints **3** (top element)
+
+```cpp
+stack.pop_back();
+```
+
+Removes last element (3) → Length = 2, Capacity = 4 (unchanged!)
+
+#### 🔹 Key Observations
+
+1. **Length (`size()`)** = current number of elements.  
+    → Stack height.
+    
+2. **Capacity (`capacity()`)** = how much memory is currently allocated.  
+    → Room for growth.
+    
+3. **Reallocation** happens when inserting (`push_back` / `emplace_back`) and capacity is insufficient.
+    
+    - Capacity grows (often doubles) to avoid reallocating on every insertion.
+        
+    - Example sequence: `0 → 1 → 2 → 4`.
+        
+4. **Pop (`pop_back`)** only reduces **length**, not capacity.  
+    → Memory stays reserved for possible future pushes.
+
+#### 🔹 Why capacity jumps to 4 (not 3)
+
+```cpp
+std::vector<int> stack{};
+stack.push_back(1); // capacity: 1
+stack.push_back(2); // capacity: 2
+stack.push_back(3); // capacity: 4
+```
+
+Notice capacity doesn’t just increase **by 1** every time. Instead, it **grows geometrically** (usually doubling).
+
+#### 🔹 Reason: Efficiency
+
+If capacity grew exactly to the new size (`3` in this case), every time you added an element beyond capacity, the vector would have to:
+
+1. **Allocate new memory** (slow).
+    
+2. **Copy/move all existing elements** to new memory (slow).
+    
+3. **Free old memory**.
+    
+
+If you inserted 1 million elements one by one, this would mean almost 1 million reallocations — very expensive 🚨.
+
+#### 🔹 Growth Strategy
+
+To avoid this, `std::vector` implementations typically use a **growth factor** (commonly ×2, sometimes ×1.5).
+
+So when you exceed capacity:
+
+- If capacity = 2 and you push a 3rd element → new capacity becomes **4**, not 3.
+    
+- This way, there’s **room for future growth**, and reallocations happen less often.
+    
+
+👉 This makes insertion **amortized O(1)** instead of O(n).
+
+### Resizing a vector doesn’t work with stack behavior
+
+#### 🔹 The Problem Recap
+
+You tried this:
+
+```cpp
+std::vector<int> stack(3); // set "capacity" to 3
+```
+
+but the output started with:
+
+```cpp
+0 0 0   Capacity: 3  Length: 3
+```
+
+So instead of an **empty stack** with space reserved, you got a stack that **already contains 3 zeros**.
+
+#### 🔹 Why This Happens
+
+- `std::vector<int> stack(3);`  
+    means **construct a vector with 3 elements, all initialized to 0**.  
+    👉 Both **capacity = 3** and **length = 3**.
+    
+- Similarly, calling `stack.resize(3);` does the same thing:  
+    it changes **length**, creating default elements if necessary.
+    
+
+So when you later `push_back()`, new elements get **added after those zeros**, making it look like junk values were “preloaded” into your stack.
+
+#### 🔹 Why This is Wrong for Stacks
+
+A stack should start **empty** (length = 0).  
+The mailbox analogy from earlier makes this clear: you want _empty mailboxes_ (capacity), not mailboxes pre-filled with “letters” (length elements set to 0).
+
+If you mistakenly set the length, then your stack starts with “ghost elements” at the bottom. When you push, they don’t go into empty slots — they get added **after the fake ones**.
+
+#### 🔹 What You Actually Want
+
+You want to **reserve capacity without changing length**.  
+That’s exactly what `reserve()` does:
+
+```cpp
+std::vector<int> stack{};
+stack.reserve(3); // set capacity = 3, but length = 0
+```
+
+Now:
+
+```cpp
+Empty   Capacity: 3  Length: 0
+```
+
+✅ Perfect for stack behavior — no ghost elements.  
+✅ Future pushes won’t cause immediate reallocations.  
+✅ Still amortized O(1) growth.
+
+#### 🔹 Key Insight
+
+- **`resize(n)` / constructor `(n)` → changes both size (length) and capacity** (adds real elements, usually zeros).
+    
+- **`reserve(n)` → changes only capacity** (leaves length untouched).
+    
+
+When using `std::vector` as a stack, always use **`reserve()`**, never `resize()`, if your goal is just to pre-allocate memory.
+
+### The `reserve()` member function changes the capacity (but not the length)
+
+The `reserve()` member function can be used to reallocate a `std::vector` without changing the current length.
+
+Here’s the same example as before, but with an added call to `reserve()` to set the capacity:
+
+```cpp
+#include <iostream>
+#include <vector>
+
+void printStack(const std::vector<int>& stack)
+{
+	if (stack.empty()) // if stack.size == 0
+		std::cout << "Empty";
+
+	for (auto element : stack)
+		std::cout << element << ' ';
+
+	// \t is a tab character, to help align the text
+	std::cout << "\tCapacity: " << stack.capacity() << "  Length " << stack.size() << "\n";
+}
+
+int main()
+{
+	std::vector<int> stack{};
+
+	printStack(stack);
+
+	stack.reserve(6); // reserve space for 6 elements (but do not change length)
+	printStack(stack);
+
+	stack.push_back(1);
+	printStack(stack);
+
+	stack.push_back(2);
+	printStack(stack);
+
+	stack.push_back(3);
+	printStack(stack);
+
+	std::cout << "Top: " << stack.back() << '\n';
+
+	stack.pop_back();
+	printStack(stack);
+
+	stack.pop_back();
+	printStack(stack);
+
+	stack.pop_back();
+	printStack(stack);
+
+	return 0;
+}
+```
+
+On the author’s machine, this prints:
+
+Empty   Capacity: 0  Length: 0
+Empty   Capacity: 6  Length: 0
+1       Capacity: 6  Length: 1
+1 2     Capacity: 6  Length: 2
+1 2 3   Capacity: 6  Length: 3
+Top: 3
+1 2     Capacity: 6  Length: 2
+1       Capacity: 6  Length: 1
+Empty   Capacity: 6  Length: 0
+
+You can see that calling `reserve(6)` changed the capacity to 6, but did not affect the length. No more reallocations occur because the std::vector is large enough to accommodate all of the elements we are pushing.
+
+>[!Key insight]
+>The `resize()` member function changes the length of the vector, and the capacity (if necessary).  
+The `reserve()` member function changes just the capacity (if necessary)
+
+>[!Tip]
+>To increase the number of elements in a `std::vector`:  
+Use `resize()` when accessing a vector via indexing. This changes the length of the vector so your indices will be valid.  
+Use `reserve()` when accessing a vector using stack operations. This adds capacity without changing the length of the vector.
+
+### `push_back()` vs `emplace_back()`
+
+```cpp
+#include <iostream>
+#include <string>
+#include <string_view>
+#include <vector>
+
+class Foo
+{
+private:
+    std::string m_a{};
+    int m_b{};
+
+public:
+    Foo(std::string_view a, int b)
+        : m_a { a }, m_b { b }
+        {}
+
+    explicit Foo(int b)
+        : m_a {}, m_b { b }
+        {};
+};
+
+int main()
+{
+	std::vector<Foo> stack{};
+
+	// When we already have an object, push_back and emplace_back are similar in efficiency
+	Foo f{ "a", 2 };
+	stack.push_back(f);    // prefer this one
+	stack.emplace_back(f);
+
+	// When we need to create a temporary object to push, emplace_back is more efficient
+	stack.push_back({ "a", 2 }); // creates a temporary object, and then copies it into the vector
+	stack.emplace_back("a", 2);  // forwards the arguments so the object can be created directly in the vector (no copy made)
+
+	// push_back won't use explicit constructors, emplace_back will
+	stack.push_back({ 2 }); // compile error: Foo(int) is explicit
+	stack.emplace_back(2);  // ok
+
+	return 0;
+}
+```
+
+#### 📌 `push_back()` vs `emplace_back()` in C++
+
+##### 1. **What they do**
+
+- Both add a new element to the **end of a vector** (stack-like behavior).
+    
+- Difference lies in **how the new element is created**.
+
+##### 2. **Case 1: Already have an object**
+
+```cpp
+Foo f{ "a", 2 };
+stack.push_back(f);     // copies f into vector
+stack.emplace_back(f);  // also copies f into vector
+```
+
+- ✅ Both behave the same.
+    
+- ✅ `push_back()` is **clearer** → prefer this.
+
+##### 3. **Case 2: Need to create a temporary**
+
+```cpp
+stack.push_back({ "a", 2 }); // creates a temporary Foo, then copies into vector
+stack.emplace_back("a", 2);  // constructs Foo directly inside vector
+```
+
+- `push_back()` → **temporary object** created → then **copied/moved**.
+    
+- `emplace_back()` → constructs **directly inside vector** (no copy).
+    
+- ✅ `emplace_back()` is **more efficient**, especially for **expensive-to-copy objects** like `std::string`.
+
+##### 4. **Explicit constructor difference**
+
+```cpp
+stack.push_back({ 2 }); // ❌ compile error (explicit constructor not allowed here)
+stack.emplace_back(2);  // ✅ works, explicit constructor can be called
+```
+
+- `push_back()` → does **not** use `explicit` constructors.
+    
+- `emplace_back()` → can use `explicit` constructors.
+    
+- ⚠️ This can make `emplace_back()` **more dangerous**, because it may silently call explicit constructors and create unintended conversions.
+
+##### 5. **Aggregate types (before C++20)**
+
+- `emplace_back()` **does not work with aggregate initialization** (e.g., `struct` without constructors).
+    
+- `push_back()` can take an aggregate with `{}` initialization.
+    
+- Since C++20 → this limitation is removed.
+
+##### 6. **Performance Insight**
+
+- If you’re inserting a **pre-existing object**, `push_back()` and `emplace_back()` are **equivalent**.
+    
+- If you’re **creating a new object at the point of insertion**, `emplace_back()` avoids creating a temporary → **better performance**.
+    
+
+##### ✅ Best Practices
+
+- **Use `push_back()`** when you already have an object.
+    
+- **Use `emplace_back()`** when:
+    
+    - You’re creating a new object at insertion.
+        
+    - You need to use an `explicit` constructor.
+        
+
+##### 👉 In short:
+	
+- `push_back(f)` = "I already have `f`, just add it."
+    
+- `emplace_back(args...)` = "Here are the constructor arguments, build it directly inside the container."
+
+### Addressing our challenge using stack operations
+
+It should now be obvious how we should address the challenge introduced at the top of the lesson. If we don’t know in advance how many elements will be added to our `std::vector`, using the stack functions to insert those elements is the way to go.
+
+Here’s an example:
+
+```cpp
+#include <iostream>
+#include <limits>
+#include <vector>
+
+int main()
+{
+	std::vector<int> scoreList{};
+
+	while (true)
+	{
+		std::cout << "Enter a score (or -1 to finish): ";
+		int x{};
+		std::cin >> x;
+
+		if (!std::cin) // handle bad input
+		{
+			std::cin.clear();
+			std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+			continue;
+		}
+
+		// If we're done, break out of loop
+		if (x == -1)
+			break;
+
+		// The user entered a valid element, so let's push it on the vector
+		scoreList.push_back(x);
+	}
+
+	std::cout << "Your list of scores: \n";
+
+	for (const auto& score : scoreList)
+		std::cout << score << ' ';
+
+	return 0;
+}
+```
+
+This program lets the user enter test scores, adding each score to a vector. After the user has finished adding scores, all the values in the vector are printed.
+
+Note how in this program, we don’t have to do any counting, indexing, or deal with array lengths at all! We can just focus on the logic of what we want the program to do, and let the vector handle all of the storage issues!
+
+---
