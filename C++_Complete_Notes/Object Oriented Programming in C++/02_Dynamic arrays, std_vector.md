@@ -3719,3 +3719,6 @@ void foo(std::vector<T>& v) {
 `std::vector<bool>` tries to be a space-efficient bool vector, but in practice it’s buggy, non-standard, and unreliable. Use `std::bitset` (fixed) or `std::vector<char>` (dynamic) instead.
 
 ---
+### [Summary and quiz](https://www.learncpp.com/cpp-tutorial/chapter-16-summary-and-quiz/)
+
+---
