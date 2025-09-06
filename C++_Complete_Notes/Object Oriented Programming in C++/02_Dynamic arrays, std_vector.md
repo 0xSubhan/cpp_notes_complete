@@ -3712,7 +3712,7 @@ void foo(std::vector<T>& v) {
     
 - But in reality, it causes **more problems than benefits**.
     
-- Modern C++ devs consider it a **mistake** and avoid it.
+- Modern C++  devs consider it a **mistake** and avoid it.
 
 
 📌 **In short**:  
