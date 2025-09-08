@@ -632,3 +632,361 @@ That’s the key difference: unlike `at()` which throws at runtime, `std::get` s
 - If `I >= arr.size()`, your program won’t compile.
 
 ---
+# Passing and returning std::array
+
+An object of type `std::array` can be passed to a function just like any other object. That means if we pass a `std::array` by value, an expensive copy will be made. Therefore, we typically pass `std::array` by (const) reference to avoid such copies.
+
+With a `std::array`, both the element type and array length are part of the type information of the object. Therefore, when we use a `std::array` as a function parameter, we have to explicitly specify both the element type and array length:
+
+```cpp
+#include <array>
+#include <iostream>
+
+void passByRef(const std::array<int, 5>& arr) // we must explicitly specify <int, 5> here
+{
+    std::cout << arr[0] << '\n';
+}
+
+int main()
+{
+    std::array arr{ 9, 7, 5, 3, 1 }; // CTAD deduces type std::array<int, 5>
+    passByRef(arr);
+
+    return 0;
+}
+```
+
+CTAD doesn’t (currently) work with function parameters, so we cannot just specify `std::array` here and let the compiler deduce the template arguments.
+
+### Using function templates to pass `std::array` of different element types or lengths
+
+#### 1. How `std::array` itself is defined
+
+At its core, `std::array` is just a templated struct:
+
+```cpp
+template <typename T, std::size_t N>
+struct array;
+```
+
+- `T` = element type (e.g., `int`, `double`, `char`…)
+    
+- `N` = non-type template parameter (array length, must be `std::size_t`)
+    
+
+So `std::array<int, 5>` is "an array of 5 `int`s".
+
+#### 2. Function templates for flexibility
+
+If you want a function to accept **any `std::array` of any type and any length**, you make your function a template with the same parameters:
+
+```cpp
+template <typename T, std::size_t N>
+void passByRef(const std::array<T, N>& arr)
+{
+    static_assert(N != 0); // disallow empty arrays
+    std::cout << arr[0] << '\n';
+}
+```
+
+- `T` → element type
+    
+- `N` → array length
+    
+
+When you call `passByRef()` with a `std::array`, the compiler deduces `T` and `N` from the argument.
+
+Example:
+
+```cpp
+std::array arr{ 9, 7, 5, 3, 1 };   // CTAD → std::array<int, 5>
+passByRef(arr); // compiler generates: passByRef(const std::array<int, 5>&)
+```
+
+Another call with a different type or length:
+
+```cpp
+std::array arr2{ 1.2, 2.3, 3.4 };  // CTAD → std::array<double, 3>
+passByRef(arr2); // compiler generates: passByRef(const std::array<double, 3>&)
+```
+
+So **one function template** can cover infinite variations of `std::array`.
+
+#### 3. Why `N` must be `std::size_t`, not `int`
+
+`std::array` is declared with `std::size_t` for its length.
+
+If you mistakenly write:
+
+```cpp
+template <typename T, int N> // ❌ wrong
+void func(const std::array<T, N>& arr) { ... }
+```
+
+then the compiler sees a mismatch:
+
+- `std::array<int, 5>` is really `std::array<int, std::size_t{5}>`
+    
+- But your template wants `std::array<int, int{5}>`
+    
+
+Templates don’t do implicit conversions, so they won’t match.
+
+#### 4. Templating only part of it
+
+You don’t always need both parameters. For example, if you only care about the length and want to force the type to `int`:
+
+```cpp
+template <std::size_t N>
+void passByRef(const std::array<int, N>& arr)
+{
+    std::cout << arr[0] << '\n';
+}
+```
+
+Now:
+
+```cpp
+std::array arr{ 9, 7, 5 };  // int, size 3
+passByRef(arr); // works
+
+std::array arr2{ 1.2, 3.4 }; // double, size 2
+passByRef(arr2); // ❌ error (not std::array<int, N>)
+```
+
+This restricts the function to only `int` arrays, but any size.
+
+#### ✅ **Key takeaway**:  
+Function templates with `<typename T, std::size_t N>` let you write a single function that automatically adapts to **any element type and array length** of `std::array`.
+
+### Auto non-type template parameters C++20
+
+Having to remember (or look up) the type of a non-type template parameter so that you can use it in a template parameter declaration for your own function templates is a pain.
+
+In C++20, we can use `auto` in a template parameter declaration to have a non-type template parameter deduce its type from the argument:
+
+```cpp
+template <typename T, auto N> // now using auto to deduce type of N
+void passByRef(const std::array<T, N>& arr)
+{
+    static_assert(N != 0); // fail if this is a zero-length std::array
+
+    std::cout << arr[0] << '\n';
+}
+```
+
+If your compiler is C++20 capable, this is fine to use.
+
+### Static asserting on array length
+
+#### 🔹 The Problem
+
+You wrote a function template:
+
+```cpp
+template <typename T, std::size_t N>
+void printElement3(const std::array<T, N>& arr)
+{
+    std::cout << arr[3] << '\n';
+}
+```
+
+This assumes **every array passed in has at least 4 elements** (index `3` must exist).  
+But templates don’t enforce that — so if someone calls:
+
+```cpp
+std::array arr{ 9, 7 }; // size = 2
+printElement3(arr);     // index 3 doesn’t exist!
+```
+
+👉 This compiles fine, but causes **undefined behavior** at runtime.  
+The compiler won’t warn you, because `arr[3]` doesn’t do any bounds checking.
+
+#### 🔹 Two Solutions
+
+##### ✅ 1. Use `std::get<Index>()`
+
+```cpp
+std::cout << std::get<3>(arr) << '\n';
+```
+
+- `std::get<Index>` takes the index as a **template parameter**, which is a `constexpr`.
+    
+- The compiler checks at **compile-time** whether `Index` is valid for the array size `N`.
+    
+- If it’s out of range, compilation **fails immediately** instead of producing undefined behavior.
+    
+
+Example:
+
+```cpp
+std::array arr{ 9, 7 }; 
+printElement3(arr); // ❌ compile error
+```
+
+##### ✅ 2. Use `static_assert`
+
+```cpp
+template <typename T, std::size_t N>
+void printElement3(const std::array<T, N>& arr)
+{
+    static_assert(N > 3, "Array must have at least 4 elements");
+    std::cout << arr[3] << '\n';
+}
+```
+
+- Here we enforce a **precondition**: “this function only works if `N > 3`”.
+    
+- If someone tries to call it with a smaller array, the compiler **rejects the code**.
+    
+
+Example:
+
+```cpp
+std::array arr2{ 9, 7 };
+printElement3(arr2); // ❌ compile error: static assertion failed
+```
+
+#### 🔹 Key Insight
+
+Why not use `static_assert(std::size(arr) > 3)`?
+
+Because:
+
+- `std::size(arr)` is only `constexpr` when `arr` is a local variable, not when it’s a function parameter (prior to **C++23**).
+    
+- So before C++23, the only thing you can reliably use is the **template parameter `N`**, which is always a compile-time constant.
+
+#### 🚀 Summary
+
+- `operator[]` → **no bounds checking** → can cause runtime UB.
+    
+- `at()` → **runtime bounds checking**, throws exception if invalid.
+    
+- `std::get<Index>()` → **compile-time bounds checking**, safe if `Index` is constexpr.
+    
+- `static_assert(N > k)` → enforce **preconditions at compile time**.
+    
+
+👉 Both `std::get()` and `static_assert` are ways to **catch errors early, at compile-time**, instead of letting UB sneak in.
+
+### Returning a `std::array`
+
+Returning a `std::array`
+
+Syntax aside, passing a `std::array` to a function is conceptually simple -- pass it by (const) reference. But what if we have a function that needs to return a `std::array`? Things are a little more complicated. Unlike `std::vector`, `std::array` is not move-capable, so returning a `std::array` by value will make a copy of the array. The elements inside the array will be moved if they are move-capable, and copied otherwise.
+
+There are two conventional options here, and which you should pick depends on circumstances.
+
+### Returning a `std::array` by value
+
+It is okay to return a `std:array` by value when all of the following are true:
+
+- The array isn’t huge.
+- The element type is cheap to copy (or move).
+- The code isn’t being used in a performance-sensitive context.
+
+In such cases, a copy of the `std::array` will be made, but if all of the above are true, the performance hit will be minor, and sticking with the most conventional way to return data to the caller may be the best choice.
+
+```cpp
+#include <array>
+#include <iostream>
+#include <limits>
+
+// return by value
+template <typename T, std::size_t N>
+std::array<T, N> inputArray() // return by value
+{
+	std::array<T, N> arr{};
+	std::size_t index { 0 };
+	while (index < N)
+	{
+		std::cout << "Enter value #" << index << ": ";
+		std::cin >> arr[index];
+
+		if (!std::cin) // handle bad input
+		{
+			std::cin.clear();
+			std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+			continue;
+		}
+		++index;
+	}
+
+	return arr;
+}
+
+int main()
+{
+	std::array<int, 5> arr { inputArray<int, 5>() };
+
+	std::cout << "The value of element 2 is " << arr[2] << '\n';
+
+	return 0;
+}
+```
+
+There are a few nice things about this method:
+
+- It uses the most conventional way to return data to the caller.
+- It’s obvious that the function is returning a value.
+- We can define an array and use the function to initialize it in a single statement.
+
+There are also a few downsides:
+
+- The function returns a copy of the array and all its elements, which isn’t cheap.
+- When we call the function, we must explicitly supply the template arguments since there is no parameter to deduce them from.
+
+### Returning a `std::array` via an out parameter
+
+In cases where return by value is too expensive, we can use an out-parameter instead. In this case, the caller is responsible for passing in the `std::array` by non-const reference (or by address), and the function can then modify this array.
+
+```cpp
+#include <array>
+#include <limits>
+#include <iostream>
+
+template <typename T, std::size_t N>
+void inputArray(std::array<T, N>& arr) // pass by non-const reference
+{
+	std::size_t index { 0 };
+	while (index < N)
+	{
+		std::cout << "Enter value #" << index << ": ";
+		std::cin >> arr[index];
+
+		if (!std::cin) // handle bad input
+		{
+			std::cin.clear();
+			std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+			continue;
+		}
+		++index;
+	}
+
+}
+
+int main()
+{
+	std::array<int, 5> arr {};
+	inputArray(arr);
+
+	std::cout << "The value of element 2 is " << arr[2] << '\n';
+
+	return 0;
+}
+```
+
+The primary advantage of this method is that no copy of the array is ever made, so this is efficient.
+
+There are also a few downsides:
+
+- This method of returning data is non-conventional, and it is not easy to tell that the function is modifying the argument.
+- We can only use this method to assign values to the array, not initialize it.
+- Such a function cannot be used to produce temporary objects.
+
+### Returning a `std::vector` instead
+
+`std::vector` is move-capable and can be returned by value without making expensive copies. If you’re returning a `std::array` by value, your `std::array` probably isn’t constexpr, and you should consider using (and returning) `std::vector` instead.
+
+---
