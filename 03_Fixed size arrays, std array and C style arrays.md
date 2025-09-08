@@ -387,3 +387,248 @@ int main()
 As a reminder, `operator[]` does not do bounds checking. If an invalid index is provided, undefined behavior will result.
 
 ---
+# std::array length and indexing
+
+>std::array faces the same issue of unsigned value as the std::vector because they are part of the same standard library container class.
+
+now would be a good time to refresh your memory on “sign conversions are narrowing conversions, except when constexpr”
+Becasue if it is constexpr it can determine at compile time that if it is narrowing conversion or not.
+
+### The length of a `std::array` has type `std::size_t`
+
+`std::array` is implemented as a template struct whose declaration looks like this:
+
+```cpp
+template<typename T, std::size_t N> // N is a non-type template parameter
+struct array;
+```
+
+As you can see, the non-type template parameter representing the array length (`N`) has type `std::size_t`. And as you’re probably aware by now, `std::size_t` is a large unsigned integral type.
+
+>[!Important]
+>The length of the std::array must be constant expression (constexpr).
+
+>Thus, when we define a `std::array`, the length non-type template argument must either have type `std::size_t`, or be convertible to a value of type `std::size_t`. Because this value must be constexpr, we don’t run into sign conversion issues when we use a signed integral value, as the compiler will happily convert a signed integral value to a `std::size_t` at compile-time without it being considered a narrowing conversion.
+
+### The length and indices of `std::array` have type `size_type`, which is always `std::size_t`
+
+Just like a `std::vector`, `std::array` defines a nested typedef member named `size_type`, which is an alias for the type used for the length (and indices, if supported) of the container. In the case of `std::array`, `size_type` is _always_ an alias for `std::size_t`.
+
+Note that the non-type template parameter defining the length of the `std::array` is explicitly defined as `std::size_t` rather than `size_type`. This is because `size_type` is a member of `std::array`, and isn’t defined at that point. This is the only place that uses `std::size_t` explicitly -- everywhere else uses `size_type`.
+
+```cpp
+template <typename Container>
+void printIndices(const Container& c) {
+    for (typename Container::size_type i = 0; i < c.size(); ++i) {
+        std::cout << i << " ";
+    }
+}
+```
+
+- Works for `std::array`, `std::vector`, `std::deque`, etc.
+    
+- If instead you wrote `std::size_t`, it would still work in practice (since most containers use `std::size_t`), but using `size_type` makes it **more correct and future-proof**.
+
+### Getting the length of a `std::array`
+
+There are three common ways to get the length of a `std::array` object.
+
+First, we can ask a `std::array` object for its length using the `size()` member function (which returns the length as unsigned `size_type`):
+
+```cpp
+#include <array>
+#include <iostream>
+
+int main()
+{
+    constexpr std::array arr { 9.0, 7.2, 5.4, 3.6, 1.8 };
+    std::cout << "length: " << arr.size() << '\n'; // returns length as type `size_type` (alias for `std::size_t`)
+    return 0;
+}
+```
+
+This prints:
+
+length: 5
+
+Second, in C++17, we can use the `std::size()` non-member function (which for `std::array` just calls the `size()` member function, thus returning the length as unsigned `size_type`).
+
+Finally, in C++20, we can use the `std::ssize()` non-member function, which returns the length as a large _signed_ integral type (usually`std::ptrdiff_t`):
+
+### Getting the length of a `std::array` as a constexpr value
+
+>Because the length of a `std::array` is constexpr, each of the above functions will return the length of a `std::array` as a constexpr value (even when called on a non-constexpr `std::array` object)! This means we can use any of these functions in constant expressions, and the length returned can be implicitly converted to an `int` without it being a narrowing conversion:
+
+```cpp
+#include <array>
+#include <iostream>
+
+int main()
+{
+    std::array arr { 9, 7, 5, 3, 1 }; // note: not constexpr for this example
+    constexpr int length{ std::size(arr) }; // ok: return value is constexpr std::size_t and can be converted to int, not a narrowing conversion
+
+    std::cout << "length: " << length << '\n';
+
+    return 0;
+}
+```
+
+>[!Warning]
+
+#### 🔹 The situation
+
+You want to get the length of a `std::array` at compile time using `std::size`.
+
+#### Works fine in `main`:
+
+```cpp
+std::array arr{ 9, 7, 5, 3, 1 };
+constexpr int length{ std::size(arr) }; // ✅ okay
+```
+
+- Here, the compiler **knows the type**: `std::array<int, 5>`.
+    
+- `std::size(arr)` returns `5`.
+    
+- `length` is `constexpr`.
+
+#### Fails in a function:
+
+```cpp
+void printLength(const std::array<int, 5> &arr) {
+    constexpr int length{ std::size(arr) }; // ❌ compile error
+}
+```
+
+Why? 🤔
+
+- When you pass `arr` as a **function parameter**, it is treated like a **normal runtime reference**.
+    
+- Due to a language defect (before C++23), the compiler **doesn’t propagate the fact that `arr.size()` is known at compile time** when the array is passed by reference.
+    
+- So inside the function, `std::size(arr)` is seen as a **runtime call**, not a constexpr expression.
+
+#### 🔹 Fix in C++23 (P2280)
+
+C++23 fixed this "language defect" (via **P2280**).  
+Now, even if the array is passed by reference, the compiler can recognize that its size is **constexpr**.
+
+So this will compile in C++23:
+
+```cpp
+void printLength(const std::array<int, 5> &arr) {
+    constexpr int length{ std::size(arr) }; // ✅ works in C++23
+}
+```
+
+### Subscripting `std::array` using `operator[]` or the `at()` member function
+
+we covered that the most common way to index a `std::array` is to use the subscript operator (`operator[]`). No bounds checking is done in this case, and passing in an invalid index will result in undefined behavior.
+
+Just like `std::vector`, `std::array` also has an `at()` member function that does subscripting with runtime bounds checking. We recommend avoiding this function since we typically want to do bounds checking before indexing, or we want compile-time bounds checking.
+
+Both of these functions expect the index to be of type `size_type` (`std::size_t`).
+
+If either of these functions are called with a constexpr value, the compiler will do a constexpr conversion to `std::size_t`. This isn’t considered to be a narrowing conversion, so you won’t run into sign problems here.
+
+However, if either of these functions are called with a non-constexpr signed integral value, the conversion to `std::size_t` is considered narrowing and your compiler may emit a warning.
+
+### `std::get()` does compile-time bounds checking for constexpr indices
+
+#### 1. Background: `std::array` has a fixed size at compile time
+
+A `std::array<T, N>` has two things we care about:
+
+- The **length** (`N`) is known at compile time (a `constexpr`).
+    
+- We often want to index into it using **indices** that might also be known at compile time.
+    
+
+Normally, when indexing:
+
+- `operator[]` → **no bounds checking** (dangerous if wrong).
+    
+- `at()` → **runtime bounds checking** (slower, but safe at runtime).
+    
+
+Neither of these provides **compile-time bounds checking**.
+
+#### 2. Why `constexpr` index matters
+
+If both:
+
+- the array length (`N`) is a `constexpr`, and
+    
+- the index is also a `constexpr`,
+    
+
+then in theory the compiler could verify the index is valid at compile time.  
+But:
+
+- function parameters can’t be `constexpr` (so you can’t do `arr[index]` if `index` is passed in).
+    
+- `operator[]` and `.at()` don’t do compile-time checking.
+    
+
+So we need another tool.
+
+#### 3. `std::get` to the rescue
+
+C++ provides a function template:
+
+```cpp
+template <std::size_t I, class T, std::size_t N>
+constexpr T& get(std::array<T, N>& arr) noexcept;
+```
+
+- The **index `I`** is a **non-type template parameter**, so it **must be a `constexpr`**.
+    
+- This means the compiler **knows the index at compile time**.
+    
+
+Inside the implementation of `std::get`, there is a `static_assert(I < N)` which:
+
+- passes if the index is valid,
+    
+- fails (compilation error) if the index is out of range.
+
+#### 4. Example
+
+```cpp
+#include <array>
+#include <iostream>
+
+int main()
+{
+    constexpr std::array prime{ 2, 3, 5, 7, 11 };
+
+    std::cout << std::get<3>(prime);  // ✅ prints 7
+    std::cout << std::get<9>(prime);  // ❌ compile error, index 9 out of bounds
+}
+```
+
+- `std::get<3>(prime)` works fine, because `3 < 5`.
+    
+- `std::get<9>(prime)` fails at **compile time**, not runtime.
+    
+
+That’s the key difference: unlike `at()` which throws at runtime, `std::get` stops compilation if you use an invalid index.
+
+#### 5. Why this is powerful
+
+- **Zero runtime overhead** → it’s checked before the program even runs.
+    
+- **Safety** → impossible to accidentally use an invalid `constexpr` index.
+    
+- **Performance** → the compiler often inlines it, so it’s just as fast as `operator[]`.
+
+#### ✅ **Summary:**
+
+- `std::get<I>(arr)` requires `I` to be `constexpr`.
+    
+- It performs **compile-time bounds checking** using `static_assert`.
+    
+- If `I >= arr.size()`, your program won’t compile.
+
+---
