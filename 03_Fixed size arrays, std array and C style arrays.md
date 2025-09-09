@@ -990,3 +990,416 @@ There are also a few downsides:
 `std::vector` is move-capable and can be returned by value without making expensive copies. If you’re returning a `std::array` by value, your `std::array` probably isn’t constexpr, and you should consider using (and returning) `std::vector` instead.
 
 ---
+# std::array of class types, and brace elision
+
+>A `std::array` isn’t limited to elements of fundamental types. Rather, the elements of a `std::array` can be any object type, including compound types. This means you can create a `std::array` of pointers, or a `std::array` of structs (or classes)
+
+### Defining and assigning to a `std::array` of structs
+
+Let’s start with a simple struct:
+
+```cpp
+struct House
+{
+    int number{};
+    int stories{};
+    int roomsPerStory{};
+};
+```
+
+Defining a `std::array` of `House` and assigning elements works just like you’d expect:
+
+```cpp
+#include <array>
+#include <iostream>
+
+struct House
+{
+    int number{};
+    int stories{};
+    int roomsPerStory{};
+};
+
+int main()
+{
+    std::array<House, 3> houses{};
+
+    houses[0] = { 13, 1, 7 };
+    houses[1] = { 14, 2, 5 };
+    houses[2] = { 15, 2, 4 };
+
+    for (const auto& house : houses)
+    {
+        std::cout << "House number " << house.number
+                  << " has " << (house.stories * house.roomsPerStory)
+                  << " rooms.\n";
+    }
+
+    return 0;
+}
+```
+
+The above outputs the following:
+
+House number 13 has 7 rooms.
+House number 14 has 10 rooms.
+House number 15 has 8 rooms.
+
+### Initializing a `std::array` of structs
+
+Initializing an array of structs also works just like you’d expect, so long as you are explicit about the element type:
+
+```cpp
+#include <array>
+#include <iostream>
+
+struct House
+{
+    int number{};
+    int stories{};
+    int roomsPerStory{};
+};
+
+int main()
+{
+    constexpr std::array houses { // use CTAD to deduce template arguments <House, 3>
+            House{ 13, 1, 7 },
+            House{ 14, 2, 5 },
+            House{ 15, 2, 4 }
+        };
+
+    for (const auto& house : houses)
+    {
+        std::cout << "House number " << house.number
+            << " has " << (house.stories * house.roomsPerStory)
+            << " rooms.\n";
+    }
+
+    return 0;
+}
+```
+
+In the above example, we’re using CTAD to deduce the type of the `std::array` as `std::array<House, 3>`. We then provide 3 `House` objects as initializers, which works just fine.
+
+### Initialization without explicitly specifying the element type for each initializer
+
+#### 1. Why explicit `House{...}` works
+
+When you write:
+
+```cpp
+constexpr std::array houses {
+    House{ 13, 1, 7 },
+    House{ 14, 2, 5 },
+    House{ 15, 2, 4 }
+};
+```
+
+You’re explicitly saying: _“Each element of this `std::array` is a `House`, so please construct a `House` here.”_  
+The compiler has no ambiguity: each initializer corresponds to one element.
+
+#### 2. Why `{ 13, 1, 7 }` alone doesn’t work
+
+When you try this:
+
+```cpp
+constexpr std::array<House, 3> houses {
+    { 13, 1, 7 },
+    { 14, 2, 5 },
+    { 15, 2, 4 }
+};
+```
+
+It **looks** like you’re giving three `House` initializers.  
+But here’s the trick: `std::array` itself is just a **struct with one data member**, which is a raw C-style array inside:
+
+```cpp
+template<typename T, std::size_t N>
+struct array {
+    T elems[N]; // raw array member
+};
+```
+
+So the compiler interprets your code as:
+
+- First `{ 13, 1, 7 }` → initializing the **only data member** (`elems`).
+    
+- Then it sees two more `{...}` blocks and says: _“Wait, there’s only one member in `std::array`, why are you trying to initialize more?”_  
+    → Compilation error.
+    
+
+That’s why it fails.
+
+#### 3. Why double braces fix it
+
+When you add double braces:
+
+```cpp
+constexpr std::array<House, 3> houses {{
+    { 13, 1, 7 },
+    { 14, 2, 5 },
+    { 15, 2, 4 }
+}};
+```
+
+Now it’s clear:
+
+- **Outer braces** → initialize the `std::array` itself (the struct).
+    
+- **Inner braces** → initialize its only member (`elems`, the C-style array).
+    
+- Inside that, each `{ ... }` is used to initialize each `House`.
+    
+
+So the compiler is happy.
+
+#### 4. Why assignment works differently
+
+With assignment:
+
+```cpp
+houses[0] = { 13, 1, 7 };
+```
+
+The compiler already knows `houses[0]` is a `House`, so `{ 13, 1, 7 }` is automatically treated as a `House` initializer. No confusion, no double braces.
+
+#### 5. Key takeaway
+
+- `std::array` is technically a wrapper around a C-style array → that’s why the compiler sometimes needs “extra help” (double braces) when doing aggregate initialization.
+    
+- Other containers like `std::vector` don’t need this, because they use constructors instead of aggregate initialization.
+
+### Brace elision for aggregates
+
+#### 1. Why single braces work sometimes
+
+Recall:  
+`std::array` is essentially:
+
+```cpp
+template <typename T, std::size_t N>
+struct array {
+    T elems[N]; // the only member
+};
+```
+
+So strictly speaking, initializing it should require **two levels of braces**:
+
+- One for the `std::array` itself (struct).
+    
+- One for its data member (`elems`, the raw C-style array).
+    
+
+Example (the "fully correct" way):
+
+```cpp
+constexpr std::array<int, 5> arr {{ 1, 2, 3, 4, 5 }};
+```
+
+But C++ allows **brace elision**:  
+If it’s clear what you mean, the compiler lets you **omit some inner braces**.
+
+So this also works:
+
+```cpp
+constexpr std::array<int, 5> arr { 1, 2, 3, 4, 5 };
+```
+
+The compiler implicitly interprets it as if you had written double braces.
+
+#### 2. When brace elision applies
+
+Brace elision rules are a bit messy, but for practical purposes:
+
+✅ You can use **single braces** when:
+
+- Initializing with **scalar types** (e.g., `int`, `double`), because the compiler can unambiguously forward the values into the inner array.
+    
+- Initializing with **class/struct types where the type is explicitly named** in each element (`House{...}`).
+    
+
+❌ You need **double braces** when:
+
+- The element type is a struct/class/array, but you don’t explicitly name the type for each element.  
+    Example:
+
+```cpp
+constexpr std::array<House, 3> houses {{ // ✅ works
+    { 13, 1, 7 },
+    { 14, 2, 5 },
+    { 15, 2, 4 }
+}};
+```
+
+If you try single braces here, the compiler gets confused:  
+Is `{ 13, 1, 7 }` meant for the `std::array` itself or for the first `House`?
+
+#### 3. No harm in always using double braces
+
+You could _always_ write:
+
+```cpp
+constexpr std::array<int, 5> arr {{ 1, 2, 3, 4, 5 }};
+```
+
+This always works, because you’re being explicit:
+
+- Outer braces = struct (`std::array`)
+    
+- Inner braces = raw C-style array inside.
+    
+
+But for simple types (`int`, `double`), brace elision makes single braces fine — and people usually prefer it for readability.
+
+#### 4. Rule of thumb
+
+- If **single braces compile**, you can safely use them (brace elision kicked in).
+    
+- If they don’t, just add another pair of braces — that’s the compiler telling you brace elision isn’t allowed here.
+
+👉 In short:  
+Brace elision = “the compiler forgivingly lets you drop extra `{}` in obvious cases.”  
+It works for scalars and explicit struct initializers, but not for more ambiguous cases like `std::array<House, N>` without explicitly writing `House{...}`.
+
+### Another example
+
+Here’s one more example where we initialize a `std::array` with `Student` structs.
+
+```cpp
+#include <array>
+#include <iostream>
+#include <string_view>
+
+// Each student has an id and a name
+struct Student
+{
+	int id{};
+	std::string_view name{};
+};
+
+// Our array of 3 students (single braced since we mention Student with each initializer)
+constexpr std::array students{ Student{0, "Alex"}, Student{ 1, "Joe" }, Student{ 2, "Bob" } };
+
+const Student* findStudentById(int id)
+{
+	// Look through all the students
+	for (auto& s : students)
+	{
+		// Return student with matching id
+		if (s.id == id) return &s;
+	}
+
+	// No matching id found
+	return nullptr;
+}
+
+int main()
+{
+	constexpr std::string_view nobody { "nobody" };
+
+	const Student* s1 { findStudentById(1) };
+	std::cout << "You found: " << (s1 ? s1->name : nobody) << '\n';
+
+	const Student* s2 { findStudentById(3) };
+	std::cout << "You found: " << (s2 ? s2->name : nobody) << '\n';
+
+	return 0;
+}
+```
+
+This prints:
+
+You found: Joe
+You found: nobody
+
+Note that because `std::array students` is constexpr, our `findStudentById()` function must return a const pointer, which means our `Student` pointers in `main()` must also be const.
+
+--> Explanation of the following above:
+
+#### 1. The setup
+
+We have:
+
+```cpp
+constexpr std::array students{
+    Student{0, "Alex"},
+    Student{1, "Joe"},
+    Student{2, "Bob"}
+};
+```
+
+Because we wrote `constexpr std::array`, this array lives in **read-only memory** at compile time — it’s immutable data.
+
+That means:
+
+- You can read from it in a `constexpr` context.
+    
+- But you **cannot modify it** at runtime.
+    
+
+So, the elements inside `students` are treated as `const Student`.
+
+#### 2. Inside `findStudentById`
+
+Your function is:
+
+```cpp
+const Student* findStudentById(int id)
+{
+    for (auto& s : students) {
+        if (s.id == id) return &s;
+    }
+    return nullptr;
+}
+```
+
+Why does the return type need to be `const Student*`?
+
+Because `students` is `constexpr`, the compiler treats its elements as **`const Student` objects**.  
+You can’t legally return a **non-const `Student*`** pointing into a `const` object, because that would allow the caller to modify a `const` thing.
+
+So the function must promise:
+
+> "I will give you a pointer to a `const Student`. You can look at it, but you may not modify it."
+
+#### 3. In `main`
+
+When you do:
+
+```cpp
+const Student* s1 { findStudentById(1) };
+```
+
+Notice `s1` is declared as a `const Student*`.  
+That’s necessary because `findStudentById()` returns `const Student*`.
+
+If you wrote just `Student* s1`, the compiler would reject it, since it would be unsafe (you’d be pretending to be able to modify an immutable student).
+
+#### 4. What if `students` wasn’t `constexpr`?
+
+If instead we wrote:
+
+```cpp
+std::array students{
+    Student{0, "Alex"},
+    Student{1, "Joe"},
+    Student{2, "Bob"}
+};
+```
+
+Now `students` is a normal runtime array (not `constexpr`).  
+In this case, the elements are **mutable `Student` objects**, so `findStudentById()` could return a plain `Student*` (non-const pointer).
+
+Then in `main` you’d be allowed to write:
+
+```cpp
+Student* s1 = findStudentById(1);
+s1->name = "Changed"; // ✅ legal now
+```
+
+But since your array is `constexpr`, that’s forbidden.
+
+✅ **Key point:**  
+Because `constexpr std::array` makes its elements `const`, any function returning pointers to its elements must return `const Student*`. And any variable receiving that pointer must also be declared `const Student*`.
+
+---
