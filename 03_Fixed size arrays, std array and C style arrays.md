@@ -2134,3 +2134,712 @@ int main()
 Technically, this doesn’t work because assignment requires the left-operand to be a modifiable lvalue, and C-style arrays are not considered to be modifiable lvalues.
 
 ---
+# C-style array decay
+
+### Problem in C
+
+#### 📌 The challenge
+
+```cpp
+#include <iostream>
+
+void printElementZero(int arr[1000])
+{
+    std::cout << arr[0]; // print the value of the first element
+}
+
+int main()
+{
+    int x[1000] { 5 };   // define an array with 1000 elements, x[0] is initialized to 5
+    printElementZero(x);
+
+    return 0;
+}
+```
+
+C had **two big problems** when it came to passing arrays (C-style array) to functions:
+
+1. **Performance**:  
+    Copying a whole array (like `int arr[1000]`) into a function parameter every time would be _very expensive_ in both time and memory.  
+    Unlike a single `int`, an array might contain thousands of elements.
+    
+2. **Flexibility**:  
+    We want one function to handle arrays of _any length_.  
+    Writing:
+
+```cpp
+void printElementZero(int arr[7]);
+void printElementZero(int arr[1000]);
+```
+
+	 for every possible size is not practical.
+    
+
+But **C didn’t have references or templates** to solve this elegantly (those came later in C++).
+
+```cpp
+#include <iostream>
+
+void printElementZero(int arr[1000]) // doesn't make a copy
+{
+    std::cout << arr[0]; // print the value of the first element
+}
+
+int main()
+{
+    int x[7] { 5 };      // define an array with 7 elements
+    printElementZero(x); // somehow works!
+
+    return 0;
+}
+```
+
+Somehow, the above example passes a 7 element array to a function expecting a 1000 element array, without any copies being made. In this lesson, we’ll explore how this works.
+
+We’ll also take a look at why the solution the C designers picked is dangerous, and not well suited for use in modern C++.
+
+But first, we need to cover two subtopics.
+
+### Array to pointer conversions (array decay)
+
+>In most cases, when a C-style array is used in an expression, the array will be implicitly converted into a pointer to the element type, initialized with the address of the first element (with index 0). Colloquially, this is called **array decay** (or just **decay** for short).
+
+```cpp
+#include <iomanip> // for std::boolalpha
+#include <iostream>
+
+int main()
+{
+    int arr[5]{ 9, 7, 5, 3, 1 }; // our array has elements of type int
+
+    // First, let's prove that arr decays into an int* pointer
+
+    auto ptr{ arr }; // evaluation causes arr to decay, type deduction should deduce type int*
+    std::cout << std::boolalpha << (typeid(ptr) == typeid(int*)) << '\n'; // Prints true if the type of ptr is int*
+
+    // Now let's prove that the pointer holds the address of the first element of the array
+
+    std::cout << std::boolalpha << (&arr[0] == ptr) << '\n';
+
+    return 0;
+}
+```
+
+#### 📌 What is happening?
+
+```cpp
+int arr[5]{ 9, 7, 5, 3, 1 };
+```
+
+- `arr` here is a **C-style array object**.
+    
+- Its type is `int[5]` → “array of 5 ints”.
+    
+- At this point, it actually knows its length (`5`) at compile time.
+
+Now:
+
+```cpp
+auto ptr{ arr };
+```
+
+- When you use `arr` in most expressions, the compiler **automatically converts it (decays) into a pointer** to its first element.
+    
+- So `arr` becomes `&arr[0]`.
+    
+- That means `auto ptr` deduces to `int*`.
+    
+
+The program then checks this with `typeid` and prints `true`. ✅
+
+#### 📌 Important distinction: Array ≠ Pointer
+
+- **Array (`int[5]`)**:  
+    A real object in memory that contains _5 ints back-to-back_.  
+    The type `int[5]` includes its length.
+    
+- **Pointer (`int*`)**:  
+    A variable that stores a _memory address_.  
+    The type `int*` knows nothing about how many elements exist beyond that address.
+    
+
+👉 That’s why the text says:
+
+> The term “decay” indicates this loss of length type information.
+
+When `arr` decays to a pointer, you lose the fact that it had length `5`.
+
+#### 📌 Verifying the pointer value
+
+```cpp
+std::cout << (&arr[0] == ptr);
+```
+
+- `&arr[0]` is the address of the first element.
+    
+- `ptr` is the decayed pointer (which is also `&arr[0]`).
+    
+- They are equal, so the program prints `true`.
+
+## 📌 Special cases where decay does NOT happen
+
+Normally arrays decay into pointers, **but not always**.  
+Some exceptions:
+
+1. **`sizeof(arr)`**
+    
+    - Here `arr` is treated as an array type, not a pointer.
+        
+    - `sizeof(arr)` gives the total size: `5 * sizeof(int)`.
+        
+2. **`typeid(arr)`**
+    
+    - Will show type `int[5]`, not `int*`.
+        
+3. **`&arr`**
+    
+    - Gives you the address of the _whole array_, not just the first element.
+        
+    - Type: `int (*)[5]` (pointer to an array of 5 ints), different from `int*`.
+        
+4. **Pass by reference**
+
+```cpp
+void func(int (&arr)[5]); // takes reference to array of exactly 5 ints
+```
+
+	Here decay is prevented, and the function still knows the size.
+
+#### 📌 Why this matters
+
+- Because arrays decay silently, many C programmers mistakenly think _arrays are pointers_.  
+    They are not — they just convert easily into one.
+    
+- After decay, you can index `ptr[2]` like an array, but the pointer itself doesn’t know how many elements are valid. If you go past 5, you hit undefined behavior.
+    
+- This is why modern C++ prefers `std::array` or `std::vector`, since they **keep size information** and provide bounds-safe operations.
+    
+
+#### ✅ Key takeaway
+
+- `int arr[5]` has type `int[5]`.
+    
+- In most expressions, it _decays_ into `int*` → pointer to first element. (initialized to first element)
+    
+- **Decay loses size information** (only the starting address remains).
+    
+- Arrays ≠ Pointers, but arrays decay into pointers most of the time.
+
+### Subscripting a C-style array actually applies `operator[]` to the decayed pointer
+
+#### 1. Arrays decay into pointers
+
+When you use a C-style array in an expression, the compiler automatically converts it into a pointer to its first element.
+
+Example:
+
+```cpp
+const int arr[] { 9, 7, 5, 3, 1 };
+const int* ptr { arr }; // arr decays into &arr[0]
+```
+
+Here:
+
+- `arr` has type `const int[5]` (an array of 5 ints).
+    
+- But in most expressions, it _decays_ to `const int*` (pointer to the first element).
+    
+- So `ptr` now holds the same address as `&arr[0]`.
+
+#### 2. Subscript operator on arrays is really on the pointer
+
+When you write:
+
+```cpp
+std::cout << arr[2];
+```
+
+What actually happens is:
+
+1. `arr` decays to a pointer → type `const int*` pointing at `arr[0]`.
+    
+2. Then `arr[2]` is interpreted as:
+
+```cpp
+*(arr + 2)
+```
+
+ - Move 2 elements forward from `arr[0]`
+      
+- Dereference → gives you `arr[2]` (value 5).
+      
+
+So **subscripting an array is just pointer arithmetic under the hood**.
+
+#### 3. Subscript works on pointers directly
+
+Since `arr` decays to a pointer anyway, you can also use subscripting on a pointer:
+
+```cpp
+const int* ptr { arr }; // arr decays into &arr[0]
+std::cout << ptr[2];    // same as *(ptr + 2), prints 5
+```
+
+This works because `operator[]` is defined for pointers as well.
+
+#### 4. Key insight
+
+- `arr[2]` and `ptr[2]` do the exact same thing (if `ptr` points to `arr[0]`).
+    
+- That’s why C treats arrays and pointers as being “interchangeable” in many cases.
+    
+- But ⚠️ an **array is not the same thing as a pointer**:
+    
+    - Array has size info (`int[5]` knows it has 5 elements).
+        
+    - Pointer loses that info (`int*` only knows where it points).
+
+### Array decay solves our C-style array passing issue
+
+#### 1. Arrays normally don’t copy
+
+If arrays worked like other objects, this would happen:
+
+```cpp
+void printArray(int arr[5]) { ... } // looks like pass by value
+```
+
+- You’d expect a full copy of the array.
+    
+- That would be expensive (especially for big arrays).
+    
+
+But **C++ doesn’t do that**. Instead, the array _decays_ to a pointer.
+
+#### 2. Array decay when passing to functions
+
+When you pass an array to a function:
+
+```cpp
+void func(const int* arr);
+
+const int nums[5] { 1,2,3,4,5 };
+func(nums);
+```
+
+- `nums` is of type `const int[5]`.
+    
+- At the function call, it **decays** into a `const int*` → pointer to the first element.
+    
+- That pointer is passed to the function.
+    
+
+So inside `func`, `arr` just points to the same memory as `nums`.  
+➡️ No copy is made, memory-efficient.
+
+#### 3. Why different lengths still work
+
+Arrays of different lengths are technically **different types**:
+
+- `const int[5]`
+    
+- `const int[8]`
+    
+
+You normally can’t assign one to the other. But when they decay:
+
+- `const int[5] → const int*`
+    
+- `const int[8] → const int*`
+    
+
+Now both are the _same type_ → `const int*`.  
+That’s why this works:
+
+```cpp
+void printElementZero(const int* arr) {
+    std::cout << arr[0];
+}
+
+const int prime[]   { 2,3,5,7,11 };           // const int[5]
+const int squares[] { 1,4,9,25,36,49,64,81 }; // const int[8]
+
+printElementZero(prime);   // passes const int*
+printElementZero(squares); // also passes const int*
+```
+
+Output:
+
+```cpp
+2
+1
+```
+
+#### 4. Key insights
+
+- ✅ **Arrays always decay** into pointers when passed to functions (unless passed by reference).
+    
+- ✅ That’s why no copy happens — we’re effectively passing by address.
+    
+- ✅ Different-sized arrays become interchangeable, since both decay into the same pointer type.
+    
+- ⚠️ **Danger**: the size info is lost. Inside `printElementZero`, you only know you have a `const int*`, but not how many elements exist. That’s why you need to separately pass the array size if you want to loop:
+
+>Because a C-style array is passed by address, the function has direct access to the array passed in (not a copy) and can modify its elements. For this reason, it’s a good idea to make sure your function parameter is const if your function does not intend to modify the array elements.
+
+### C-style array function parameter syntax
+
+#### 1. The root problem
+
+When you write a function like this:
+
+```cpp
+void printElementZero(const int* arr);
+```
+
+- Technically correct ✅
+    
+- But to someone reading the function declaration, `arr` just looks like _a pointer to a single int_.
+    
+- It’s not obvious that the function is really meant to take a **whole array (decayed to a pointer)**.
+
+#### 2. The array parameter syntax
+
+C++ lets you write the same function like this:
+
+```cpp
+void printElementZero(const int arr[]);
+```
+
+- The compiler **treats this exactly the same as** `const int* arr`.
+    
+- But for a human reader, `arr[]` gives a _hint_:  
+    → “this parameter is supposed to represent an array (decayed to a pointer), not just any pointer.”
+    
+
+So it’s more expressive / self-documenting.
+
+#### 3. No size information
+
+You might think:
+
+```cpp
+void func(const int arr[5]);
+```
+
+means “an array of 5 ints.”  
+❌ Wrong — the `[5]` is ignored by the compiler. It’s still just a `const int*`.
+
+So these three are **all equivalent**:
+
+```cpp
+void func(const int* arr);
+void func(const int arr[]);
+void func(const int arr[123456]); // size ignored
+```
+
+#### 4. Example
+
+```cpp
+#include <iostream>
+
+void printElementZero(const int arr[]) {
+    std::cout << arr[0]; // works fine, arr is just a const int*
+}
+
+int main() {
+    const int prime[]   { 2, 3, 5, 7, 11 };
+    const int squares[] { 1, 4, 9, 25, 36, 49, 64, 81 };
+
+    printElementZero(prime);   // prime decays → const int*
+    printElementZero(squares); // squares decays → const int*
+}
+```
+
+Output:
+
+```Output
+2
+1
+```
+
+#### 5. Best practice
+
+- ✅ If your function **expects a decayed array**, write the parameter as `int arr[]` (or `const int arr[]`).  
+    → This communicates intent better than `int* arr`.
+    
+- ⚠️ But remember: it’s still just a pointer! The array size information is lost.
+    
+
+If you really need the size:
+
+- Pass it separately (`void func(int arr[], int size)`), or
+    
+- Use **references to arrays** (`template<size_t N> void func(int (&arr)[N])`), or
+    
+- Prefer modern containers (`std::array`, `std::vector`) which carry size with them.
+
+#### 👉 In short:  
+`int* arr` and `int arr[]` are **100% identical to the compiler**, but `arr[]` makes it clearer to humans that “this is meant to represent an array.”
+
+### The problems with array decay
+
+#### ⚡ 1. Loss of size information
+
+When an array decays into a pointer, it **forgets how big it was**.
+
+Example:
+
+```cpp
+int arr[]{ 3, 2, 1 };
+
+std::cout << sizeof(arr) << '\n'; // 12 (3 ints, each 4 bytes)
+
+printArraySize(arr); // passes pointer
+```
+
+Inside the function:
+
+```cpp
+void printArraySize(int arr[]) {
+    std::cout << sizeof(arr) << '\n'; // 4 (size of a pointer, not array!)
+}
+```
+
+So:
+
+- At the call site, `arr` is a real array → `sizeof(arr)` is 12.
+    
+- Inside the function, `arr` has decayed to `int*` → `sizeof(arr)` is 4 or 8 depending on system.
+    
+
+👉 This makes `sizeof(arr) / sizeof(*arr)` dangerous if you accidentally call it on a decayed array.
+
+#### ⚡ 2. Refactoring hazards
+
+Suppose you have working code:
+
+```cpp
+int arr[]{ 1, 2, 3 };
+std::cout << sizeof(arr) / sizeof(*arr); // works → prints 3
+```
+Now you refactor:
+
+```cpp
+void foo(int arr[]) {
+    std::cout << sizeof(arr) / sizeof(*arr); // prints pointer size / int size → wrong
+}
+```
+
+Same code, different meaning, silent bug.  
+👉 This makes splitting code into functions risky with C-style arrays.
+
+#### ⚡ 3. Undefined behavior from unknown length
+
+The biggest danger: **the function has no clue how many elements exist**.
+
+Example:
+
+```cpp
+void printElement2(int arr[]) {
+    std::cout << arr[2] << '\n'; // assumes at least 3 elements
+}
+
+int a[]{ 3, 2, 1 };
+printElement2(a);  // ✅ okay
+
+int b[]{ 7, 6 };
+printElement2(b);  // ❌ UB (index out of bounds)
+
+int c{ 9 };
+printElement2(&c); // ❌ compiles, but UB (not even an array!)
+```
+
+Because there’s no size info, the function can’t enforce preconditions.  
+This can lead to subtle and dangerous runtime errors.
+
+Fortunately, C++17’s better replacement `std::size()` (and C++20’s `std::ssize()`) will fail to compile if passed a pointer value:
+
+#### ⚡ 4. Traversal is hard
+
+How do you know when to stop iterating?
+
+```cpp
+void printAll(int arr[]) {
+    // No way to know where the array ends!
+    for (int i = 0; ???; ++i)
+        std::cout << arr[i];
+}
+```
+
+Without the size passed separately, you’re stuck. Historically, C used _sentinel values_ (like `'\0'` in C-strings) to mark the end, but that doesn’t generalize to all arrays.
+
+Fortunately, C++17’s better replacement `std::size()` (and C++20’s `std::ssize()`) will fail to compile if passed a pointer value:
+
+#### ✅ Modern fixes
+
+To avoid all these pitfalls:
+
+- Use **`std::array`** when the size is fixed at compile time.
+    
+- Use **`std::vector`** when the size is dynamic.
+    
+- Use **`std::span` (C++20)** to pass views of arrays/vectors with both pointer and length.
+    
+- Or, pass the array by reference with templates:
+
+```cpp
+template <std::size_t N>
+void printElement2(const int (&arr)[N]) {
+    if constexpr (N > 2)
+        std::cout << arr[2] << '\n';
+}
+```
+
+👉 **Key takeaway**:  
+Array decay solved C’s performance and flexibility problems, but at the cost of **safety and correctness**. That’s why in modern C++, you should avoid raw arrays for most work and use standard containers or spans instead.
+
+### Working around array length issues
+
+==optional read
+
+Historically, programmers have worked around the lack of array length information via one of two methods.
+
+First, we can pass in both the array and the array length as separate arguments:
+
+```cpp
+#include <cassert>
+#include <iostream>
+
+void printElement2(const int arr[], int length)
+{
+    assert(length > 2 && "printElement2: Array too short"); // can't static_assert on length
+
+    std::cout << arr[2] << '\n';
+}
+
+int main()
+{
+    constexpr int a[]{ 3, 2, 1 };
+    printElement2(a, static_cast<int>(std::size(a)));  // ok
+
+    constexpr int b[]{ 7, 6 };
+    printElement2(b, static_cast<int>(std::size(b)));  // will trigger assert
+
+    return 0;
+}
+```
+
+However, this still has a number of issues:
+
+- The caller needs to make sure that the array and the array length are paired -- if the wrong value for length is passed in, the function will still malfunction.
+- There are potential sign conversion issues if you’re using `std::size()` or a function that returns a length as `std::size_t`.
+- Runtime asserts only trigger when encountered at runtime. If our testing path doesn’t cover all calls to the function, there’s a risk of shipping a program to the customer that will assert when they do something we didn’t explicitly test for. In modern C++, we’d want to use `static_assert` for compile-time validation of the array length of constexpr arrays, but there’s no easy way to do this (as function parameters can’t be constexpr, even in constexpr or consteval functions!).
+- This method only works if we’re making an explicit function call. If the function call is implicit (e.g. we’re calling an operator with the array as an operand), then there’s no opportunity to pass in the length.
+
+Second, if there is an element value that is not semantically valid (e.g. a test score of `-1`), we can instead mark the end of the array using an element of that value. That way, the length of the array can be calculated by counting how many elements exist between the start of the array and this terminating element. The array can also be traversed by iterating from the start until we hit the terminating element. The nice thing about this method is that it works even with implicit function calls.
+
+Key insight
+
+C-style strings (which are C-style arrays) use a null-terminator to mark the end of the string, so that they can be traversed even if they have decayed.
+
+But this method also has a number of issues:
+
+- If the terminating element does not exist, traversal will walk right off the end of the array, causing undefined behavior.
+- Functions that traverse the array need special handling for the terminating element (e.g. a C-style string print function needs to know not to print the terminating element).
+- There is a mismatch between the actual array length and the number of semantically valid elements. If the wrong length is used, the semantically invalid terminating element may be “processed”.
+- This approach only works if a semantically invalid value exists, which is often not the case.
+
+### C-style arrays should be avoided in most cases
+
+>Because of the non-standard passing semantics (pass by address is used instead of pass by value) and risks associated with decayed arrays losing their length information, C-style arrays have generally fallen out of favor. We recommend avoiding them as much as possible.
+
+>[!Best Practice]
+>Avoid C-style arrays whenever practical.
+>
+>>- Prefer `std::string_view` for read-only strings (string literal symbolic constants and string parameters).
+>>- Prefer `std::string` for modifiable strings.
+>>- Prefer `std::array` for non-global constexpr arrays.
+>>- Prefer `std::vector` for non-constexpr arrays.
+>
+>It is okay to use C-style arrays for global constexpr arrays. We’ll discuss this in a moment.
+
+### C-style arrays can be passed by reference
+
+#### 🔹 Normal behavior (decay)
+
+Normally, when you pass a C-style array to a function:
+
+```cpp
+void foo(int arr[]) { }  // really int* arr
+
+int main() {
+    int arr[5]{ 1, 2, 3, 4, 5 };
+    foo(arr);  // arr decays → int* 
+}
+```
+
+👉 The array _decays_ into a pointer → the function doesn’t know the array length anymore.
+
+#### 🔹 Passing by reference (no decay at the call site)
+
+You can **prevent decay** by making the function parameter a reference to an array:
+
+```cpp
+void foo(int (&arr)[5]) {   // reference to array of 5 ints
+    std::cout << sizeof(arr) / sizeof(*arr) << '\n';
+}
+
+int main() {
+    int arr[5]{ 1, 2, 3, 4, 5 };
+    foo(arr); // ✅ No decay here
+}
+```
+
+Here:
+
+- `int (&arr)[5]` means _“arr is a reference to an array of exactly 5 ints”_.
+    
+- No decay happens at the call site → inside the function, `sizeof(arr)` is 20 (if ints are 4 bytes).
+    
+- This fixes the size-loss problem.
+
+#### 🔹 The catch: fixed size
+
+The downside?  
+That function only works for arrays of **exactly 5 ints**. If you try:
+
+```cpp
+int arr2[7]{};
+foo(arr2);  // ❌ compile error, wrong size
+```
+
+it won’t compile.  
+So this isn’t very flexible unless you add templates.
+
+#### 🔹 Using templates to handle different sizes
+
+You can generalize with a template:
+
+```cpp
+template <std::size_t N>
+void foo(int (&arr)[N]) {   // reference to array of N ints
+    std::cout << N << '\n'; // we know the size at compile time!
+}
+```
+
+### So when are C-style arrays used in modern C++?
+
+In modern C++, C-style arrays are typically used in two cases:
+
+1. To store constexpr global (or constexpr static local) program data. Because such arrays can be accessed directly from anywhere in the program, we do not need to pass the array, which avoids decay-related issues. The syntax for defining C-style arrays can be a little less wonky than `std::array`. More importantly, indexing such arrays does not have sign conversion issues like the standard library container classes do.
+2. As parameters to functions or classes that want to handle non-constexpr C-style string arguments directly (rather than requiring a conversion to `std::string_view`). There are two possible reasons for this: First, converting a non-constexpr C-style string to a `std::string_view` requires traversing the C-style string to determine its length. If the function is in a performance critical section of code and the length isn’t needed (e.g. because the function is going to traverse the string anyway) then avoiding the conversion may be useful. Second, if the function (or class) calls other functions that expect C-style strings, converting to a `std::string_view` just to convert back may be suboptimal (unless you have other reasons for wanting a `std::string_view`).
+
+>Explanation of 2:
+Sometimes functions/classes accept raw C-style strings (`const char*`) instead of `std::string_view` for efficiency.
+
+- **Reason 1**: Converting to `std::string_view` requires scanning the C-string to find its length, which may be wasted work if the length isn’t needed.
+    
+- **Reason 2**: If the function just forwards the string to another API that already expects a C-style string, converting back and forth is unnecessary overhead.
+
+---
