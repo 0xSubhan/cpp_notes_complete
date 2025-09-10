@@ -1877,3 +1877,260 @@ red
 blue
 
 ---
+# Introduction to C-style arrays
+
+C-style arrays were inherited from the C language, and are built-in to the core language of C++ (unlike the rest of the array types, which are standard library container classes). This means we don’t need to `#include` a header file to use them.
+
+### Declaring a C-style array
+
+Because they are part of the core language, C-style arrays have their own special declaration syntax. In an C-style array declaration, we use square brackets (`[]`) to tell the compiler that a declared object is a C-style array. Inside the square brackets, we can optionally provide the length of the array, which is an integral value of type `std::size_t` that tells the compiler how many elements are in the array.
+
+The following definition creates a C-style array variable named `testScore` which contains 30 elements of type `int`:
+
+```cpp
+int main()
+{
+    int testScore[30] {};      // Defines a C-style array named testScore that contains 30 value-initialized int elements (no include required)
+
+//  std::array<int, 30> arr{}; // For comparison, here's a std::array of 30 value-initialized int elements (requires #including <array>)
+
+    return 0;
+}
+```
+
+>The length of a C-style array must be at least 1. The compiler will error if the array length is zero, negative, or a non-integral value.
+
+### The array length of a c-style array must be a constant expression
+
+Just like `std::array`, when declaring a C-style array, the length of the array must be a constant expression (of type `std::size_t`, though this typically doesn’t matter).
+
+### Subscripting a C-style array
+
+Just like with a `std::array`, C-style arrays can be indexed using the subscript operator (`operator[]`):
+
+```cpp
+#include <iostream>
+
+int main()
+{
+    int arr[5]; // define an array of 5 int values
+
+    arr[1] = 7; // use subscript operator to index array element 1
+    std::cout << arr[1]; // prints 7
+
+    return 0;
+}
+```
+
+>Unlike the standard library container classes (which use unsigned indices of type `std::size_t` only), the index of a C-style array can be a value of any integral type (signed or unsigned) or an unscoped enumeration. This means that C-style arrays are not subject to all of the sign conversion indexing issues that the standard library container classes have!
+
+```cpp
+#include <iostream>
+
+int main()
+{
+    const int arr[] { 9, 8, 7, 6, 5 };
+
+    int s { 2 };
+    std::cout << arr[s] << '\n'; // okay to use signed index
+
+    unsigned int u { 2 };
+    std::cout << arr[u] << '\n'; // okay to use unsigned index
+
+    return 0;
+}
+```
+
+>[!Tip]
+>C-style arrays will accept signed or unsigned indexes (or unscoped enumerations).
+
+>[!As an aside]
+>When declaring an array (e.g. `int arr[5]`), the use of `[]` is part of the declaration syntax, not an invocation of the subscript operator `operator[]`.
+
+### Aggregate initialization of C-style arrays
+
+#### **1. What is aggregate initialization?**
+
+- An _aggregate_ in C++ is basically a class or type (like arrays, structs, or `std::array`) that can be initialized by directly listing its members in **braces `{}`**.
+    
+- For C-style arrays, aggregate initialization just means we can give the elements directly in braces, in order.
+    
+
+Example:
+
+```cpp
+int fib[6] = {0, 1, 1, 2, 3, 5}; // initializes fib[0]..fib[5]
+int primes[5]{2, 3, 5, 7, 11};   // same thing (preferred modern style)
+```
+
+#### **2. Default initialization vs value initialization**
+
+If you don’t provide initializers, the behavior depends on how you define the array:
+
+```cpp
+int arr1[5];    // default initialization -> uninitialized garbage values
+int arr2[5] {}; // value initialization -> all elements set to 0
+```
+
+👉 Always prefer `{}` so you don’t get random garbage.
+
+#### **3. Too many or too few initializers**
+
+- If you give **more elements than the size**, you get a compile error:
+
+```cpp
+int a[4]{1, 2, 3, 4, 5}; // ❌ error (too many)
+```
+
+If you give **fewer elements**, the rest are value-initialized (zero for ints):
+
+```cpp
+int b[4]{1, 2}; // becomes {1, 2, 0, 0}
+```
+
+#### **4. Downsides of C-style arrays**
+
+- You must explicitly write the type:
+
+```cpp
+int numbers[3]{1, 2, 3}; // must specify `int`
+```
+
+You **can’t use `auto` with them**:
+
+```cpp
+auto squares[5]{1, 4, 9, 16, 25}; // ❌ compile error
+```
+
+because `auto` doesn’t work with raw arrays.
+
+👉 But with `std::array` or `std::vector`, you can use `auto` (thanks to CTAD in C++17+).
+
+#### ✅ **Summary**:  
+C-style arrays can be aggregate-initialized with braces. Uninitialized arrays give garbage, `{}` gives zeros. Too many values = error, fewer = zeros fill. But C-style arrays are limited (no type deduction, unsafe), which is why modern C++ prefers `std::array` or `std::vector`.
+
+### Omitted length
+
+There’s a subtle redundancy in the following array definition. See it?
+
+```cpp
+int main()
+{
+    const int prime[5] { 2, 3, 5, 7, 11 }; // prime has length 5
+
+    return 0;
+}
+```
+
+We’re explicitly telling the compiler the array has length 5, and then we’re also initializing it with 5 elements. When we initialize a C-style array with an initializer list, we can omit the length (in the array definition) and let the compiler deduce the length of the array from the number of initializers.
+
+The following array definitions behave identically:
+
+```cpp
+int main()
+{
+    const int prime1[5] { 2, 3, 5, 7, 11 }; // prime1 explicitly defined to have length 5
+    const int prime2[] { 2, 3, 5, 7, 11 };  // prime2 deduced by compiler to have length 5
+
+    return 0;
+}
+```
+
+This only works when initializers are explicitly provided for all array members.
+
+```cpp
+int main()
+{
+    int bad[] {}; // error: the compiler will deduce this to be a zero-length array, which is disallowed!
+
+    return 0;
+}
+```
+
+When using an initializer list to initialize all elements of a C-style array, it’s preferable to omit the length and let the compiler calculate the length of the array. That way, if initializers are added or removed, the length of the array will automatically adjust, and we are not at risk for a mismatch between the defined array length and number of initializers provided.
+
+>[!Best Practice]
+>Prefer omitting the length of a C-style array when explicitly initializing every array element with a value.
+
+### Const and constexpr C-style arrays
+
+>Just like `std::array`, C-style arrays can be `const` or `constexpr`. Just like other const variables, const arrays must be initialized, and the value of the elements cannot be changed afterward.
+
+```cpp
+#include <iostream>
+
+namespace ProgramData
+{
+    constexpr int squares[5] { 1, 4, 9, 16, 25 }; // an array of constexpr int
+}
+
+int main()
+{
+    const int prime[5] { 2, 3, 5, 7, 11 }; // an array of const int
+    prime[0] = 17; // compile error: can't change const int
+
+    return 0;
+}
+```
+
+### The sizeof a C-style array
+
+In previous lessons, we used the `sizeof()` operator to get the size of an object or type in bytes. Applied to a C-style array, `sizeof()` returns the number of bytes used by the entire array:
+
+```cpp
+#include <iostream>
+
+int main()
+{
+    const int prime[] { 2, 3, 5, 7, 11 }; // the compiler will deduce prime to have length 5
+
+    std::cout << sizeof(prime); // prints 20 (assuming 4 byte ints)
+
+    return 0;
+}
+```
+
+Assuming 4 byte ints, the above program prints `20`. The `prime` array contains 5 `int` elements that are 4 bytes each, so 5 * 4 = 20 bytes.
+
+Note that there is no overhead here. An C-style array object contains its elements and nothing more.
+
+### Getting the length of a C-style array
+
+In C++17, we can use `std::size()` (defined in the `<iterator>` header), which returns the array length as an unsigned integral value (of type `std::size_t`). In C++20, we can also use `std::ssize()`, which returns the array length as a signed integral value (of a large signed integral type, probably `std::ptrdiff_t`).
+
+```cpp
+#include <iostream>
+#include <iterator> // for std::size and std::ssize
+
+int main()
+{
+    const int prime[] { 2, 3, 5, 7, 11 };   // the compiler will deduce prime to have length 5
+
+    std::cout << std::size(prime) << '\n';  // C++17, returns unsigned integral value 5
+    std::cout << std::ssize(prime) << '\n'; // C++20, returns signed integral value 5
+
+    return 0;
+}
+```
+
+>[!Tip]
+>The canonical header for the definition of `std::size()` and `std::ssize()` is `<iterator>`. However, because these functions are so useful, many other headers also make them available, including `<array>` and `<vector>`. When using `std::size()` or `std::ssize()` on a C-style array, we may not have already included one of the other headers. In such a case, the `<iterator>` header is the one that’s conventionally included.
+
+### C-style arrays don’t support assignment
+
+Perhaps surprisingly, C++ arrays don’t support assignment:
+
+```cpp
+int main()
+{
+    int arr[] { 1, 2, 3 }; // okay: initialization is fine
+    arr[0] = 4;            // assignment to individual elements is fine
+    arr = { 5, 6, 7 };     // compile error: array assignment not valid
+
+    return 0;
+}
+```
+
+Technically, this doesn’t work because assignment requires the left-operand to be a modifiable lvalue, and C-style arrays are not considered to be modifiable lvalues.
+
+---
