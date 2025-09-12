@@ -2836,10 +2836,439 @@ In modern C++, C-style arrays are typically used in two cases:
 2. As parameters to functions or classes that want to handle non-constexpr C-style string arguments directly (rather than requiring a conversion to `std::string_view`). There are two possible reasons for this: First, converting a non-constexpr C-style string to a `std::string_view` requires traversing the C-style string to determine its length. If the function is in a performance critical section of code and the length isn’t needed (e.g. because the function is going to traverse the string anyway) then avoiding the conversion may be useful. Second, if the function (or class) calls other functions that expect C-style strings, converting to a `std::string_view` just to convert back may be suboptimal (unless you have other reasons for wanting a `std::string_view`).
 
 >Explanation of 2:
+
 Sometimes functions/classes accept raw C-style strings (`const char*`) instead of `std::string_view` for efficiency.
 
 - **Reason 1**: Converting to `std::string_view` requires scanning the C-string to find its length, which may be wasted work if the length isn’t needed.
     
 - **Reason 2**: If the function just forwards the string to another API that already expects a C-style string, converting back and forth is unnecessary overhead.
+
+---
+# Pointer arithmetic and subscripting
+
+we mentioned that arrays are stored sequentially in memory. In this lesson, we’ll take a deeper look at how arrays indexing math works.
+
+Although we won’t use the indexing math in future lessons, the topics covered in this lesson will give you insight into how range-based for loops actually work, and will come in handy again later when we cover iterators.
+
+### What is pointer arithmetic?
+
+**Pointer arithmetic** is a feature that allows us to apply certain integer arithmetic operators (addition, subtraction, increment, or decrement) to a pointer to produce a new memory address.
+
+Given some pointer `ptr`, `ptr + 1` returns the address of the _next object_ in memory (based on the type being pointed to). So if `ptr` is an `int*`, and an `int` is 4 bytes, `ptr + 1` will return the memory address that is 4 bytes after `ptr`, and `ptr + 2` will return the memory address that is 8 bytes after `ptr`.
+
+#### Example with `int*` (assume `int` = 4 bytes):
+
+```cpp
+int x {};
+const int* ptr{ &x };
+
+std::cout << ptr << '\n';     // prints address of x
+std::cout << ptr + 1 << '\n'; // address + 4 bytes
+std::cout << ptr + 2 << '\n'; // address + 8 bytes
+```
+
+If `ptr = 00AFFD80`, then:
+
+- `ptr + 1 = 00AFFD84`
+    
+- `ptr + 2 = 00AFFD88`
+    
+
+So the pointer **jumps by 4 bytes** each time (because `sizeof(int) == 4`).
+
+#### 🔹 Increment & Decrement (`++` and `--`)
+
+They are just shorthand:
+
+- `++ptr` → `ptr = ptr + 1`
+    
+- `--ptr` → `ptr = ptr - 1`
+
+They also assigns the new address to the pointer!
+#### 🔹 Key insight
+
+Pointer arithmetic moves to the **next/previous object of that type**, not just the next memory byte.
+
+For example:
+
+- `double*` would move by 8 bytes per step (if `sizeof(double) == 8`).
+    
+- `char*` would move by 1 byte per step (since `sizeof(char) == 1`).
+
+#### ⚠️ Warning
+
+Pointer arithmetic is only **well-defined inside arrays**.  
+Outside arrays (like just taking `&x` and then doing `ptr + 1`) → it’s **undefined behavior** (though compilers usually let it slide).
+
+### Subscripting is implemented via pointer arithmetic
+
+#### 1. **What “subscripting is implemented via pointer arithmetic” means**
+
+When you write something like:
+
+```cpp
+ptr[n]
+```
+
+the compiler **doesn’t** treat it as a special operator only for arrays. Instead, it literally translates it into:
+
+```cpp
+*(ptr + n)
+```
+
+That is:
+
+1. Move `n` elements forward from the memory location `ptr` points to.
+    
+2. Dereference that new location to access the value.
+    
+
+So **subscript `[]` is just shorthand for pointer arithmetic**.
+
+#### 2. **Step-by-step with your first example**
+
+```cpp
+const int arr[] { 9, 7, 5, 3, 1 };
+const int* ptr{ arr }; // arr decays to &arr[0]
+std::cout << ptr[2];   // prints 5
+```
+
+- `arr` → decays to a pointer to the first element (`&arr[0]`).
+    
+- `ptr` → now holds the address of element `0` (which stores `9`).
+    
+- `ptr[2]` → compiler rewrites as `*(ptr + 2)`.
+    
+    - `ptr + 2` → pointer arithmetic: move forward `2 × sizeof(int)` bytes.
+        
+    - If `ptr` was pointing to `arr[0]`, then `ptr + 2` points to `arr[2]`.
+        
+    - Dereferencing → gives the value `5`.
+
+#### 3. **Why does pointer arithmetic work like this?**
+
+Because array elements are stored **contiguously** in memory:
+
+```cpp
+arr[0]   arr[1]   arr[2]   arr[3]   arr[4]
+  9        7        5        3        1
+ ↑
+ ptr
+```
+
+- `arr` points to the beginning.
+    
+- `(arr + 1)` points to the next element.
+    
+- `(arr + 2)` points to the second element past the start.
+    
+
+This works because the compiler knows the **size of each element** (e.g., `int` is 4 bytes on your machine).  
+So `(arr + 1)` really means: _add `1 × sizeof(int)` bytes to the address_.
+
+That’s why you saw addresses like:
+
+```cpp
+00AFFD80   00AFFD84   00AFFD88
+```
+
+Each one is `+4` from the previous.
+
+### 4.  Why arrays start at index 0
+
+If arrays were 1-based, the compiler would need to do `*(ptr + (n-1))` for every lookup.  
+With **0-based indexing**, the math is cleaner:
+
+- `arr[0]` → `*(arr + 0)` → first element directly.
+    
+- `arr[1]` → `*(arr + 1)` → second element.  
+    Efficient and no extra subtraction.
+
+#### 5. **Weird trivia: `n[ptr]` works**
+
+Since:
+
+```cpp
+ptr[n] == *(ptr + n)
+```
+
+and addition is commutative (`a + b == b + a`):
+
+```cpp
+ptr[n] == *(n + ptr) == n[ptr]
+```
+
+So yes, this works:
+
+```cpp
+std::cout << 2[ptr]; // also prints 5
+```
+
+But it’s **bad style**—very confusing to readers.
+
+#### ✅ **In short:**
+
+- `[]` is just sugar for `*(pointer + offset)`.
+    
+- Arrays are 0-based so the math works cleanly.
+    
+- You can even do `n[ptr]`, but don’t.
+
+### Pointer arithmetic and subscripting are relative addresses
+
+When first learning about array subscripting, it’s natural to assume that the index represents a fixed element within the array: Index 0 is always the first element, index 1 is always the second element, etc…
+
+This is a illusion. Array indices are actually relative positions. The indices just appear fixed because we almost always index from the start (element 0) of the array!
+
+Remember, given some pointer `ptr`, both `*(ptr + 1)` and `ptr[1]` return the _next object_ in memory (based on the type being pointed to). Next is a relative term, not an absolute one. Thus, if `ptr` is pointing to element 0, then both `*(ptr + 1)` and `ptr[1]` will return element 1. But if `ptr` is pointing to element 3 instead, then both `*(ptr + 1)` and `ptr[1]` will return element 4!
+
+The following example demonstrates this:
+
+```cpp
+#include <array>
+#include <iostream>
+
+int main()
+{
+    const int arr[] { 9, 8, 7, 6, 5 };
+    const int *ptr { arr }; // arr decays into a pointer to element 0
+
+    // Prove that we're pointing at element 0
+    std::cout << *ptr << ptr[0] << '\n'; // prints 99
+    // Prove that ptr[1] is element 1
+    std::cout << *(ptr+1) << ptr[1] << '\n'; // prints 88
+
+    // Now set ptr to point at element 3
+    ptr = &arr[3];
+
+    // Prove that we're pointing at element 3
+    std::cout << *ptr << ptr[0] << '\n'; // prints 66
+    // Prove that ptr[1] is element 4!
+    std::cout << *(ptr+1) << ptr[1] << '\n'; // prints 55
+
+    return 0;
+}
+```
+
+However, you’ll also note that our program is a lot more confusing if we can’t assume that `ptr[1]` is always the element with index 1. For this reason, we recommend using subscripting only when indexing from the start of the array (element 0). Use pointer arithmetic only when doing relative positioning.
+
+>[!Best Practice]
+>Favor subscripting when indexing from the start of the array (element 0), so the array indices line up with the element.
+Favor pointer arithmetic when doing relative positioning from a given element.
+
+### Negative indices
+
+At the top of this lesson, we noted that `*(ptr-1)` returns the _previous object_ in memory. Want to guess what the subscript equivalent is? Yup, `ptr[-1]`.
+
+```cpp
+#include <array>
+#include <iostream>
+
+int main()
+{
+    const int arr[] { 9, 8, 7, 6, 5 };
+
+    // Set ptr to point at element 3
+    const int* ptr { &arr[3] };
+
+    // Prove that we're pointing at element 3
+    std::cout << *ptr << ptr[0] << '\n'; // prints 66
+    // Prove that ptr[-1] is element 2!
+    std::cout << *(ptr-1) << ptr[-1] << '\n'; // prints 77
+
+    return 0;
+}
+```
+
+### Pointer arithmetic can be used to traverse an array
+
+One of the most common uses of pointer arithmetic is to iterate through a C-style array without explicit indexing. The following example illustrates how this is done:
+
+```cpp
+#include <iostream>
+
+int main()
+{
+	constexpr int arr[]{ 9, 7, 5, 3, 1 };
+
+	const int* begin{ arr };                // begin points to start element
+	const int* end{ arr + std::size(arr) }; // end points to one-past-the-end element
+
+	for (; begin != end; ++begin)           // iterate from begin up to (but excluding) end
+	{
+		std::cout << *begin << ' ';     // dereference our loop variable to get the current element
+	}
+
+	return 0;
+}
+```
+
+#### 1. **What does “pointer arithmetic can be used to traverse an array” mean?**
+
+Normally, when we loop through an array, we write:
+
+```cpp
+for (int i = 0; i < size; ++i)
+    std::cout << arr[i];
+```
+
+But since `arr[i]` is just shorthand for `*(arr + i)`, we can instead move a **pointer** along the array using pointer arithmetic (`++ptr`), and dereference it (`*ptr`) to get each element.  
+This avoids using an index at all.
+
+#### 2. **Step-by-step in the example**
+
+```cpp
+constexpr int arr[]{ 9, 7, 5, 3, 1 };
+
+const int* begin{ arr };                // points to arr[0]
+const int* end{ arr + std::size(arr) }; // points to "one past the last element"
+```
+
+- `begin` → points to the **first element** (`&arr[0]`).
+    
+- `end` → points to **one-past-the-last element** (`&arr[5]`).
+    
+    - This is valid in C++: you can point one past the end, but you must not dereference it.
+        
+
+Now the loop:
+
+```cpp
+for (; begin(address) != end(address); ++begin)
+{
+    std::cout << *begin << ' ';
+}
+```
+
+- `*begin` → dereferences the current pointer → prints the element.
+    
+- `++begin` → moves the pointer to the **next element**.
+    
+- Loop stops when `begin == end`, i.e., after the last element.
+    
+
+Output:
+
+```cpp
+9 7 5 3 1
+```
+
+#### 3. **Why one-past-the-end is used**
+
+This is a very common idiom in C++ (also used in STL containers).
+
+- If you stopped at `arr + (size - 1)`, you’d need special handling for the last element.
+    
+- By using `end = arr + size`, you can just say `begin != end` and stop cleanly.
+    
+
+This is exactly how iterators work in the standard library.
+
+#### 4. **Refactoring into a function**
+
+Because the loop only needs two pointers (`begin` and `end`), we can put it into a function:
+
+```cpp
+void printArray(const int* begin, const int* end)
+{
+    for (; begin != end; ++begin)
+        std::cout << *begin << ' ';
+    std::cout << '\n';
+}
+```
+
+Then call it like this:
+
+```cpp
+printArray(arr, arr + std::size(arr));
+```
+
+Notice that we **never pass the array directly**.  
+Instead, we pass:
+
+- a pointer to the first element,
+    
+- and a pointer to one-past-the-last element.
+    
+
+That’s all the function needs to traverse the array.
+
+#### 5. **Important safety rule**
+
+Pointer arithmetic is only defined if:
+
+- The pointer stays **within the array**,
+    
+- Or points to **one past the last element**.
+    
+
+Anything beyond that = **undefined behavior** (even if you don’t dereference it).
+
+#### ✅ **In short:**
+
+- Traversing with pointers = `for (p = arr; p != arr+size; ++p)`.
+    
+- `end` points one-past-the-last.
+    
+- `*p` gives the element at the current position.
+    
+- This pattern is the foundation of C++ iterators.
+
+### Range-based for loops over C-style arrays are implemented using pointer arithmetic
+
+Consider the following range-based for loop:
+
+```cpp
+#include <iostream>
+
+int main()
+{
+	constexpr int arr[]{ 9, 7, 5, 3, 1 };
+
+	for (auto e : arr)         // iterate from `begin` up to (but excluding) `end`
+	{
+		std::cout << e << ' '; // dereference our loop variable to get the current element
+	}
+
+	return 0;
+}
+```
+
+If you look at the [documentation](https://en.cppreference.com/w/cpp/language/range-for) for range-based for loops, you’ll see that they are typically implemented something like this:
+
+{
+    auto __begin = begin-expr;
+    auto __end = end-expr;
+
+    for ( ; __begin != __end; ++__begin)
+    {
+        range-declaration = *__begin;
+        loop-statement;
+    }
+}
+
+Let’s replace the range-based for loop in the prior example with this implementation:
+
+```cpp
+#include <iostream>
+
+int main()
+{
+	constexpr int arr[]{ 9, 7, 5, 3, 1 };
+
+	auto __begin = arr;                // arr is our begin-expr
+	auto __end = arr + std::size(arr); // arr + std::size(arr) is our end-expr
+
+	for ( ; __begin != __end; ++__begin)
+	{
+		auto e = *__begin;         // e is our range-declaration
+		std::cout << e << ' ';     // here is our loop-statement
+	}
+
+	return 0;
+}
+```
+
+Note how similar this is to the example we wrote in the prior section! The only difference is that we’re assigning `*__begin` to `e` and using `e` rather than just using `*__begin` directly!
 
 ---
