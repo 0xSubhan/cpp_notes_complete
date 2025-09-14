@@ -13,7 +13,7 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "03_Fixed size arrays, std array and C style arrays.md",
+                "file": "C++_Complete_Notes/Object Oriented Programming in C++/03_Fixed size arrays, std array and C style arrays.md",
                 "mode": "source",
                 "source": false
               },
@@ -172,9 +172,9 @@
   },
   "active": "545e478b272b3803",
   "lastOpenFiles": [
-    "Untitled.md",
-    "03_Fixed size arrays, std array and C style arrays.md",
     "C++_Complete_Notes/Object Oriented Programming in C++/02_Dynamic arrays, std_vector.md",
+    "C++_Complete_Notes/Object Oriented Programming in C++/03_Fixed size arrays, std array and C style arrays.md",
+    "Untitled.md",
     "Untitled 1.md",
     "C++_Complete_Notes/Object Oriented Programming in C++/01_More on Classes.md",
     "C++_Complete_Notes/Chapter 02 - C++ Basics  Functions and Files.md",
