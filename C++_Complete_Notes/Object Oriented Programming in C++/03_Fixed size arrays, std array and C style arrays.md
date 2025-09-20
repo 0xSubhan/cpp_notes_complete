@@ -3452,3 +3452,119 @@ In the rare case that you do need to work with C-style strings or fixed buffer s
 Avoid non-const C-style string objects in favor of `std::string`.
 
 ---
+# C-style string symbolic constants
+
+### 🔹 1. Two common ways to create them
+
+```cpp
+const char name[] { "Alex" };        // case 1: const C-style array
+const char* const color{ "Orange" }; // case 2: const pointer to C-style string literal
+```
+
+✅ Both print the same (`Alex Orange`), but memory handling differs:
+
+- **Case 1 (`const char name[]`)**
+    
+    - Compiler stores `"Alex"` in memory.
+        
+    - Then makes a **copy** into the local array `name[5]` (`A l e x \0`).
+        
+    - Wasteful if you don’t need to modify it (two copies exist).
+        
+- **Case 2 (`const char* const`)**
+    
+    - Compiler stores `"Orange"` in read-only memory.
+        
+    - `color` just points to that literal (no extra copy).
+        
+    - More efficient.
+
+### 🔹 2. Compiler optimization (string literal pooling)
+
+```cpp
+const char* name1{ "Alex" };
+const char* name2{ "Alex" };
+```
+
+- Both may point to the **same address** in memory (compiler optimization).
+    
+- This saves memory since string literals are immutable.
+
+### 🔹 3. Type deduction with C-style strings
+
+```cpp
+auto s1{ "Alex" };   // const char*
+auto* s2{ "Alex" };  // const char*
+auto& s3{ "Alex" };  // const char(&)[5] (reference to array of 5 chars)
+```
+
+So `"Alex"` is basically `const char[5]` → usually decays to `const char*`.
+
+### 🔹 4. Printing arrays & pointers with `std::cout`
+
+```cpp
+int narr[]{ 9,7,5,3,1 };
+char carr[]{ "Hello!" };
+const char* ptr{ "Alex" };
+
+std::cout << narr << '\n'; // prints address (int* pointer)
+std::cout << carr << '\n'; // prints string "Hello!" (char* pointer)
+std::cout << ptr  << '\n'; // prints string "Alex"
+```
+
+- For `int*` → prints **address**.
+    
+- For `char*` → prints as **C-style string** (until `'\0'`).
+    
+
+👉 Special behavior: `cout` assumes `char*` means "string".
+
+### 🔹 5. Pitfall: printing addresses of chars
+
+```cpp
+char c{ 'Q' };
+std::cout << &c; // ❌ UB (treated as C-string, no null terminator)
+```
+
+- Prints `'Q'` + random memory garbage until a `'\0'` is found.
+    
+- Solution if you want the address:
+	 ```cpp
+	  std::cout << static_cast<const void*>(&c);
+	  ```
+- Same for C-string pointers:
+
+```cpp
+const char* ptr{ "Alex" };
+std::cout << ptr;                           // "Alex"
+std::cout << static_cast<const void*>(ptr); // address
+```
+
+### 🔹 6. Modern best practice
+
+Instead of C-style symbolic constants:
+
+```cpp
+constexpr std::string_view name{ "Alex" };
+constexpr std::string_view color{ "Orange" };
+```
+
+- No copies, efficient, safe.
+    
+- Works like a reference to the literal but behaves consistently.
+
+### ✅ Summary
+
+- `const char name[] = "Alex";` → makes a copy into local array.
+    
+- `const char* const color = "Orange";` → pointer to string literal (efficient).
+    
+- Compiler may optimize identical literals to share memory.
+    
+- `cout` treats `char*` as a string, but other pointers as addresses.
+    
+- Printing a `char*` not pointing to a null-terminated string → **undefined behavior**.
+    
+- **Best practice**: use `constexpr std::string_view` for string constants.
+
+---
