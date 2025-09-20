@@ -3568,3 +3568,583 @@ constexpr std::string_view color{ "Orange" };
 - **Best practice**: use `constexpr std::string_view` for string constants.
 
 ---
+# Multidimensional C-style Arrays
+
+### Introduction
+
+#### 1. **Storing Tic-Tac-Toe as 9 variables**
+
+You could store each square of the tic-tac-toe board in a separate variable:
+
+```cpp
+int c0, c1, c2, c3, c4, c5, c6, c7, c8;
+```
+
+But this is **messy**—imagine writing win-checking logic with 9 different names.
+
+#### 2. **Using a one-dimensional (1D) array**
+
+Instead, you use an array:
+
+```cpp
+int ttt[9];  // values: 0 = empty, 1 = player 1, 2 = player 2
+```
+
+Here, the array has **9 elements arranged in memory one after another**:
+
+```cpp
+ttt[0]  ttt[1]  ttt[2]  ttt[3]  ttt[4]  ttt[5]  ttt[6]  ttt[7]  ttt[8]
+```
+
+✅ Advantage: You can loop through the board.  
+❌ Disadvantage: A flat line of 9 numbers doesn’t really **look like a 3×3 grid**.
+
+#### 3. **Enter two-dimensional (2D) arrays**
+
+Since an array’s elements can themselves be arrays, we can define a **2D array**:
+
+```cpp
+int a[3][5];  // 3 rows, 5 columns
+```
+
+Conceptually, this looks like a **table**:
+
+```cpp
+col 0   col 1   col 2   col 3   col 4
+a[0][0] a[0][1] a[0][2] a[0][3] a[0][4]   ← row 0
+a[1][0] a[1][1] a[1][2] a[1][3] a[1][4]   ← row 1
+a[2][0] a[2][1] a[2][2] a[2][3] a[2][4]   ← row 2
+```
+
+To access elements, you use two indices:
+
+```cpp
+a[2][3] = 7;  // row 2, column 3
+```
+
+#### 4. **Tic-Tac-Toe with a 2D array**
+
+Now the board naturally becomes a **3×3 grid**:
+
+```cpp
+int ttt[3][3];  // 3 rows, 3 columns
+```
+
+It looks like:
+
+```cpp
+ttt[0][0]  ttt[0][1]  ttt[0][2]   ← row 0
+ttt[1][0]  ttt[1][1]  ttt[1][2]   ← row 1
+ttt[2][0]  ttt[2][1]  ttt[2][2]   ← row 2
+```
+
+So if player 1 marks the middle cell:
+
+```cpp
+ttt[1][1] = 1;  // row 1, col 1 (center of the board)
+```
+
+It’s much easier to **think in terms of rows and columns**, which matches the actual game board.
+
+#### ✅ **Summary:**
+
+- A **1D array** is a simple sequence (`ttt[9]`).
+    
+- A **2D array** models a grid naturally (`ttt[3][3]`).
+    
+- For a tic-tac-toe game, a 2D array makes the code easier to understand and map to the board.
+
+### Multidimensional arrays
+
+Arrays with more than one dimension are called **multidimensional arrays**.
+
+C++ even supports multidimensional arrays with more than 2 dimensions:
+
+```cpp
+int threedee[4][4][4]; // a 4x4x4 array (an array of 4 arrays of 4 arrays of 4 ints)
+```
+
+For example, the terrain in Minecraft is divided into 16x16x16 blocks (called chunk sections).
+
+Arrays with dimensions higher than 3 are supported, but rare.
+
+### Minecraft World Example With multidimensional data
+
+#### 1. **How Minecraft stores the world**
+
+Minecraft doesn’t keep the _entire infinite world_ in memory at once.  
+Instead, it divides the world into **chunks**:
+
+- Each chunk = **16 × 16 × 256 blocks**
+    
+    - 16 blocks wide (X axis)
+        
+    - 16 blocks long (Z axis)
+        
+    - 256 blocks tall (Y axis = world height)
+        
+
+But to optimize memory, each chunk is broken into **chunk sections**:
+
+- A **chunk section = 16 × 16 × 16 blocks** (a cube).
+    
+- A full chunk (256 high) is made of `256 / 16 = 16` such sections stacked vertically.
+    
+
+So the **basic building block of the world** is:
+
+```cpp
+int chunkSection[16][16][16];
+```
+
+- The Minecraft world is infinite (well, technically 30 million blocks in each direction 😅).
+    
+- To make this manageable, the world is divided into **chunks**:
+    
+    - Each chunk is **16 × 16 blocks wide** and **256 blocks tall**.
+        
+    - So one chunk = **65,536 blocks**.
+
+- If Minecraft tried to store **65,536 blocks per chunk** as one big array, it would:
+
+- Waste a lot of memory (most areas underground are just stone).
+    
+- Be slow to load/unload when you move around.
+
+To solve this, Mojang split chunks into **smaller vertical slices** called **chunk sections**:
+
+- Each section = **16 × 16 × 16 = 4,096 blocks** (a cube).
+    
+- A full chunk (height 256) is made of **16 sections stacked vertically** (because 256 ÷ 16 = 16).
+    
+
+So instead of handling one huge block of memory, Minecraft only loads the **chunk sections** you’re near.
+
+- If you’re walking at surface level, Minecraft might only load:
+    
+    - The section with grass, trees, and surface caves.
+        
+    - Maybe a few underground sections if you dig.
+        
+- The rest of the underground sections **don’t need to stay in memory** until you actually visit them.
+    
+
+This is like splitting a book into chapters — you don’t need the whole 1,000-page book open at once, just the chapter you’re reading.
+
+#### 2. **Mapping to a 3D array**
+
+Let’s say we want to represent one **chunk section**:
+
+```cpp
+int chunkSection[16][16][16]; 
+// chunkSection[x][y][z]
+```
+
+- `x` → east-west direction (0 to 15)
+    
+- `y` → up-down (height) (0 to 15 _inside a section_, later stacked to 256)
+    
+- `z` → north-south direction (0 to 15)
+    
+
+Example:
+
+```cpp
+chunkSection[5][10][7] = 2; 
+```
+
+This might mean: "At position (x=5, y=10, z=7), the block is stone (block ID 2)."
+
+#### 3. **Full chunk (stack of sections)**
+
+A full **16×16×256 chunk** can be represented two ways:
+
+##### Option A: Direct 3D array
+
+```cpp
+int chunk[16][256][16]; 
+// x, y, z directly
+```
+
+So:
+
+```cpp
+chunk[3][70][12] = 1; // at x=3, y=70, z=12, place grass block (ID = 1)
+```
+
+Option B: Array of 16 sections
+
+```cpp
+int chunk[16][16][16][16]; // sectionIndex, x, y, z
+```
+
+Here, the first index selects which **16-block-high section** you’re in.
+
+#### 4. **Visualizing the cube**
+
+Think of `chunkSection[16][16][16]` as a **cube of little cubes**:
+
+```cpp
+layer y=0 (ground level of section):
+[x0z0] [x1z0] [x2z0] ... [x15z0]
+[x0z1] [x1z1] [x2z1] ... [x15z1]
+...
+
+layer y=1 (1 block higher):
+[x0z0] [x1z0] [x2z0] ...
+...
+```
+
+Stack **16 layers (y=0..15)** and you get the full cube.
+
+Now, stack 16 such cubes vertically → you get a 16×16×256 chunk.
+
+#### 5. **Real world analogy**
+
+Imagine Minecraft like a **Lego tower**:
+
+- Each Lego block = one `chunkSection[16][16][16]` cube.
+    
+- Stacking 16 of them makes the whole chunk up to world height.
+    
+- And putting chunks side by side makes the infinite Minecraft world.
+
+![[Gemini_Generated_Image_mgluvtmgluvtmglu.png]]
+
+#### 🟦 Why _3D_ would be enough
+
+Normally, a chunk is **16 × 256 × 16**, so you could just store:
+
+```cpp
+int chunk[16][256][16];  // X, Y, Z
+```
+
+That’s already 3D — and it matches the world directly (X, Y, Z).  
+So, why bother with 4D? 🤔
+
+#### 🟩 Why Minecraft uses _4D_ (chunk sections)
+
+Instead of making one giant Y dimension (0–255), Mojang **splits it into 16-block-high slices**, called **sections**.  
+So:
+
+- First index = `sectionIndex` (which 16-block slice vertically)
+    
+- Then inside each section, `y` goes from `0–15`
+    
+
+Now Y = `sectionIndex × 16 + y`.
+
+So we get:
+
+```cpp
+chunk[sectionIndex][x][y][z];  // 4D
+```
+
+#### 🟧 Benefits of splitting into 4D
+
+1. **Memory management**
+    
+    - Each section is a **16×16×16 cube = 4096 blocks**.
+        
+    - Instead of loading the whole 65,536 blocks of a chunk at once, Minecraft can load/unload **sections** dynamically.
+        
+    - Example: If a player is at height 70, you don’t need to touch the top or bottom sections.
+        
+2. **Performance (lighting & updates)**
+    
+    - Lighting, redstone, and block updates only affect nearby sections.
+        
+    - With sections, the game can calculate updates much faster instead of checking all 256 Y levels.
+        
+3. **Compression & saving**
+    
+    - In storage, sections can be compressed individually.
+        
+    - If a section is all “air”, it takes almost no space.
+        
+
+#### 🟥 Analogy
+
+Think of it like a **bookshelf**:
+
+- A 3D array is one giant book (256 pages tall).
+    
+- A 4D array splits that book into **16 smaller books (sections)**, each only 16 pages tall.
+    
+- Easier to pull out, replace, or ignore books you don’t need.
+
+### How 2d arrays are laid out in memory
+
+Memory is linear (1-dimensional), so multidimensional arrays are actually stored as a sequential list of elements.
+
+There are two possible ways for the following array to be stored in memory:
+
+```cpp
+// col 0   col 1   col 2   col 3   col 4
+// [0][0]  [0][1]  [0][2]  [0][3]  [0][4]  row 0
+// [1][0]  [1][1]  [1][2]  [1][3]  [1][4]  row 1
+// [2][0]  [2][1]  [2][2]  [2][3]  [2][4]  row 2
+```
+
+C++ uses **row-major order**, where elements are sequentially placed in memory row-by-row, ordered from left to right, top to bottom:
+
+``[0][0] [0][1] [0][2] [0][3] [0][4] [1][0] [1][1] [1][2] [1][3] [1][4] [2][0] [2][1] [2][2] [2][3] [2][4]``
+
+Some other languages (like Fortran) use **column-major order**, elements are sequentially placed in memory column-by-column, from top to bottom, left to right:
+
+`[0][0] [1][0] [2][0] [0][1] [1][1] [2][1] [0][2] [1][2] [2][2] [0][3] [1][3] [2][3] [0][4] [1][4] [2][4]`
+
+In C++, when initializing an array, elements are initialized in row-major order. And when traversing an array, it is most efficient to access elements in the order they are laid out in memory.
+
+### Initializing two-dimensional arrays
+
+To initialize a two-dimensional array, it is easiest to use nested braces, with each set of numbers representing a row:
+
+```cpp
+int array[3][5]
+{
+  { 1, 2, 3, 4, 5 },     // row 0
+  { 6, 7, 8, 9, 10 },    // row 1
+  { 11, 12, 13, 14, 15 } // row 2
+};
+```
+
+Although some compilers will let you omit the inner braces, we highly recommend you include them anyway for readability purposes.
+
+When using inner braces, missing initializers will be value-initialized:
+
+```cpp
+int array[3][5]
+{
+  { 1, 2 },          // row 0 = 1, 2, 0, 0, 0
+  { 6, 7, 8 },       // row 1 = 6, 7, 8, 0, 0
+  { 11, 12, 13, 14 } // row 2 = 11, 12, 13, 14, 0
+};
+```
+
+An initialized multidimensional array can omit (only) the leftmost length specification:
+
+```cpp
+int array[][5]
+{
+  { 1, 2, 3, 4, 5 },
+  { 6, 7, 8, 9, 10 },
+  { 11, 12, 13, 14, 15 }
+};
+```
+
+In such cases, the compiler can do the math to figure out what the leftmost length is from the number of initializers.
+
+Omitting non-leftmost dimensions is not allowed:
+
+```cpp
+int array[][]
+{
+  { 1, 2, 3, 4 },
+  { 5, 6, 7, 8 }
+};
+```
+
+Just like normal arrays, multidimensional arrays can still be initialized to 0 as follows:
+
+```cpp
+int array[3][5] {};
+```
+
+### Two-dimensional arrays and loops
+
+- With a one-dimensional array, we can use a single loop to iterate through all of the elements in the array:
+- With a two-dimensional array, we need two loops: one to select the row, and another to select the column.
+
+>And with two loops, we also need to determine which loop will be the outer loop, and which will be the inner loop. It is most efficient to access elements in the order they are laid out in memory. Since C++ uses row-major order, the row selector should be the outer loop, and the column selector should be the inner loop.
+
+```cpp
+#include <iostream>
+
+int main()
+{
+    int arr[3][4] {
+        { 1, 2, 3, 4 },
+        { 5, 6, 7, 8 },
+        { 9, 10, 11, 12 }};
+
+    // double for-loop with indices
+    for (std::size_t row{0}; row < std::size(arr); ++row) // std::size(arr) returns the number of rows
+    {
+        for (std::size_t col{0}; col < std::size(arr[0]); ++col) // std::size(arr[0]) returns the number of columns
+            std::cout << arr[row][col] << ' ';
+
+        std::cout << '\n';
+    }
+
+    // double range-based for-loop
+    for (const auto& arow: arr)   // get each array row
+    {
+        for (const auto& e: arow) // get each element of the row
+            std::cout << e << ' ';
+
+        std::cout << '\n';
+    }
+
+    return 0;
+}
+```
+
+### A two-dimensional array example
+
+Let’s take a look at a practical example of a two-dimensional array:
+
+```cpp
+#include <iostream>
+
+int main()
+{
+    constexpr int numRows{ 10 };
+    constexpr int numCols{ 10 };
+
+    // Declare a 10x10 array
+    int product[numRows][numCols]{};
+
+    // Calculate a multiplication table
+    // We don't need to calc row and col 0 since mult by 0 always is 0
+    for (std::size_t row{ 1 }; row < numRows; ++row)
+    {
+        for (std::size_t col{ 1 }; col < numCols; ++col)
+        {
+            product[row][col] = static_cast<int>(row * col);
+        }
+     }
+
+    for (std::size_t row{ 1 }; row < numRows; ++row)
+    {
+        for (std::size_t col{ 1 }; col < numCols; ++col)
+        {
+            std::cout << product[row][col] << '\t';
+        }
+
+        std::cout << '\n';
+     }
+
+
+    return 0;
+}
+```
+
+This program calculates and prints a multiplication table for all values between 1 and 9 (inclusive). Note that when printing the table, the for loops start from 1 instead of 0. This is to omit printing the 0 column and 0 row, which would just be a bunch of 0s! Here is the output:
+
+```
+1    2    3    4    5    6    7    8    9
+2    4    6    8    10   12   14   16   18
+3    6    9    12   15   18   21   24   27
+4    8    12   16   20   24   28   32   36
+5    10   15   20   25   30   35   40   45
+6    12   18   24   30   36   42   48   54
+7    14   21   28   35   42   49   56   63
+8    16   24   32   40   48   56   64   72
+9    18   27   36   45   54   63   72   81
+```
+
+### Cartesian coordinates vs Array indices
+
+#### 🟦 1. Cartesian coordinates (Math world)
+
+![[Pasted image 20250920134928.png]]
+
+- In geometry, we usually think in **(x, y)** form.
+    
+- **x** → horizontal axis (columns).
+    
+- **y** → vertical axis (rows).
+    
+
+So if I say:
+
+```cpp
+(2, 1)
+```
+
+That means:
+
+- Move **2 units right** along the x-axis.
+    
+- Move **1 unit up** along the y-axis.
+
+#### 🟩 2. Array indices (Programming world)
+
+In C++ arrays, we don’t use `(x, y)`. Instead, we use:
+
+```cpp
+array[row][col]
+```
+
+- First index = **row number** (vertical).
+    
+- Second index = **column number** (horizontal).
+    
+
+Example 2D array layout:
+
+```cpp
+// col 0   col 1   col 2
+// [0][0]  [0][1]  [0][2]   row 0
+// [1][0]  [1][1]  [1][2]   row 1
+// [2][0]  [2][1]  [2][2]   row 2
+```
+
+Here:
+
+- `[row][col] = [y][x]`
+
+#### 🟧 3. The **Mismatch**
+
+This is where confusion happens:
+
+- In **math (Cartesian)**: `(x, y)`
+    
+- In **C++ arrays**: `[y][x]`
+    
+
+So if you want the block at `(x = 2, y = 1)` in Cartesian, you’d actually access:
+
+```cpp
+array[1][2];  // row 1, column 2
+```
+
+#### 🟥 4. Why loops look “backwards”
+
+That’s why when iterating:
+
+```cpp
+for (std::size_t y{0}; y < rows; ++y)      // row first
+{
+    for (std::size_t x{0}; x < cols; ++x)  // column second
+    {
+        std::cout << arr[y][x] << ' ';
+    }
+}
+```
+
+- Outer loop = y (rows)
+    
+- Inner loop = x (columns)
+    
+- Access as `arr[y][x]`
+    
+
+So we loop vertically **first**, then horizontally.
+
+#### ✅ Summary
+
+- Cartesian `(x, y)` = `(horizontal, vertical)`
+    
+- Array `[row][col]` = `[y][x]`
+    
+- Conversion:
+
+```cpp
+Cartesian (x, y)  →  Array[y][x]
+```
+
+That’s why it feels _flipped_ when coding compared to math.
+
+---
