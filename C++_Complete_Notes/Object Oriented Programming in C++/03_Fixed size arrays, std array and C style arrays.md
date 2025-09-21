@@ -4592,3 +4592,6 @@ This should be fairly straightforward, but there are a few things worth noting:
 - In C++23, `operator[]` accepts multiple indices, so we use `[row, col]` as our index instead of `[row][col]`.
 
 ---
+# [Summary And Quiz](https://www.learncpp.com/cpp-tutorial/chapter-17-summary-and-quiz/)
+
+---
