@@ -4,11 +4,11 @@
     "type": "split",
     "children": [
       {
-        "id": "645efac5ee9c1021",
+        "id": "f8c05c1c29f65c58",
         "type": "tabs",
         "children": [
           {
-            "id": "f991f3936e5afa81",
+            "id": "a3b3ad903a842d5d",
             "type": "leaf",
             "state": {
               "type": "markdown",
@@ -170,7 +170,7 @@
       "command-palette:Open command palette": false
     }
   },
-  "active": "f991f3936e5afa81",
+  "active": "a3b3ad903a842d5d",
   "lastOpenFiles": [
     "home/subhan/Documents/Notes/C++_Complete_Notes/Projects/Potion_shop.md",
     "C++_Complete_Notes/Object Oriented Programming in C++/03_Fixed size arrays, std array and C style arrays.md",
@@ -180,10 +180,11 @@
     "home/subhan/Documents",
     "home/subhan",
     "home",
+    "Projects/Potion_shop.md",
+    "Projects",
     "C++_Complete_Notes/Projects/Potion_shop/main.cpp",
     "C++_Complete_Notes/Projects/Potion_shop/main",
     "C++_Complete_Notes/Projects/Potion_shop/Random.h",
-    "C++_Complete_Notes/Projects/Potion_shop",
     "Roscoe’s potion emporium Shop.md",
     "Pasted image 20250920134928.png",
     "Gemini_Generated_Image_mgluvtmgluvtmglu.png",
@@ -208,8 +209,6 @@
     "****.md",
     "README.md",
     "learncpp.com/Chapter 0 Introduction/0.9 & 0.10 Build Configurations and Compiler extension.md",
-    "learncpp.com/Chapter 0 Introduction/0.4 and 0.5 Introduction to C++ development.md",
-    "learncpp.com/Chapter 0 Introduction/0.3 Introduction to C-C++.md",
     "Pasted image 20250519184156.png",
     "Pasted image 20250506200737.png",
     "memviz1.webp",

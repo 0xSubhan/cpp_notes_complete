@@ -4594,6 +4594,6 @@ This should be fairly straightforward, but there are a few things worth noting:
 ---
 # [Summary And Quiz](https://www.learncpp.com/cpp-tutorial/chapter-17-summary-and-quiz/)
 
-### Made Roscoe’s potion emporium Shop in c++, here view the code[Here](/home/subhan/Documents/Notes/C++_Complete_Notes/Projects/Potion_shop)
+### Made Roscoe’s potion emporium Shop in c++, here view the code // See in Projects Folder!
 
 ---
