@@ -1,6 +1,7 @@
 #include <string>
 #include <string_view>
 #include <array>
+#include <utility> // Required for std::pair
 #include <cassert>
 #include <algorithm> // for std::shuffle
 #include "Random.h"  // for Random::mt
@@ -64,8 +65,6 @@ struct Card
     Rank rankCard {};
     Suits suitCard {};
 
-
-
     friend std::ostream& operator<<(std::ostream& out, const Card &card)
     {
         static std::array<char,maxRank> rank { 'A','2','3','4','5','6','7','8','9','T','J','Q','K' };
@@ -74,9 +73,9 @@ struct Card
         out << rank[card.rankCard] << suit[card.suitCard];
         return out;
     }
-    int val()
+    int val() const
     {
-        std::array rankVal {11,2,3,4,5,6,7,8,9,10,10,10,10};
+        static constexpr std::array<int,maxRank> rankVal {11,2,3,4,5,6,7,8,9,10,10,10,10};
         return rankVal[rankCard];
     }
 };
@@ -118,6 +117,9 @@ namespace Settings
 struct Player
 {
     int score {0};
+    // Handling the case where ace is 1 which was previously 11: || Ace Counter -->
+    int aceCount {0};
+
 };
 bool dealerTurn(Deck& deck, Player& dealer)
 {
@@ -125,6 +127,17 @@ bool dealerTurn(Deck& deck, Player& dealer)
     {
         Card card { deck.dealCard() };
         dealer.score += card.val();
+        // Dealer : Handling Ace Logic for 1 point conversion from 11:
+        if (card.val() == 11)
+        {
+            dealer.aceCount++;
+        }
+        while (dealer.score > Settings::dealerLimit && dealer.aceCount > 0)
+        {
+            dealer.score -= 10;
+            dealer.aceCount--;
+        }
+        //
         std::cout << "The Dealer Flips a " << card << ".\t" << "They now have: " << dealer.score << '\n';  
     }
     if (dealer.score > Settings::dealerLimit)
@@ -158,6 +171,17 @@ bool playerturn(Deck& deck, Player& player)
     {
         Card card { deck.dealCard() };
         player.score += card.val();
+        // Player : Handling Ace Logic for 1 point conversion from 11:
+        if (card.val() == 11)
+        {
+            player.aceCount++;
+        }
+        while (player.score > Settings::bustLimit && player.aceCount > 0)
+        {
+            player.score -= 10;
+            player.aceCount--;
+        }
+        //
         std::cout << "You were dealt " << card << ".\t" << "You now have: " << player.score << '\n';
     }
     if (player.score > Settings::bustLimit)
@@ -169,42 +193,65 @@ bool playerturn(Deck& deck, Player& player)
     
     
 } 
-bool playBlackJack()
+enum Result
+{
+    Tie,
+    Win, // Player Won
+    Lose, // Dealer Won
+};
+Result playBlackJack()
 {
     Deck deck{};
     deck.shuffle();
     // Dealer Turns:
     Player dealer {};
-    dealer.score = { deck.dealCard().val() };
-    std::cout << "The Dealer is showing: " << dealer.score << "\n"; 
+    // you will need to show the dealer’s initial card
+    Card initialCard_Dealer { deck.dealCard() };
+    dealer.score = { initialCard_Dealer.val() };
+    std::cout << "The Dealer is showing " << initialCard_Dealer << " (" << dealer.score << ")" <<"\n"; 
+    //
     // Player Turns:
     Player player {};
-    player.score = { deck.dealCard().val() + deck.dealCard().val() };
-    std::cout << "The Player is showing: " << player.score << "\n"; 
+    // you will need to show the player's initial card both in this case:
+
+    std::pair<Card,Card> initialCard_Player {deck.dealCard(),deck.dealCard()};
+    player.score = { initialCard_Player.first.val() + initialCard_Player.second.val() };
+    std::cout << "You are showing : " << initialCard_Player.first << " " << initialCard_Player.second << " (" << player.score << ")" << "\n"; 
+
+    //
     // Player Logic here:
     if (playerturn(deck,player))
     {
-        return false; // If player went bust, then return false which will mean that player lost and dealer won!
+        return Result::Lose; // If player went bust, then return false which will mean that player lost and dealer won!
     }
-    
     // Dealer Logic here:   
     if (dealerTurn(deck,dealer))
-        return true; // for player , because if dealer went bust then player won!
-    
+        return Result::Win; // for player , because if dealer went bust then player won!
+    // Tie Logic Here:
+    if (player.score == dealer.score)
+    {
+        return Result::Tie;
+    }
+    //    
     // Deciding If we won or not:
-    return ( player.score > dealer.score );
+    return ( player.score > dealer.score ? Result::Win : Result::Lose );
 }
 
 
 int main() {
     // Black Jack Game: 
-    if( playBlackJack())
+    Result resultOfGame {playBlackJack()};
+    if( resultOfGame == Result::Win )
     {
         std::cout << "You win\n";  
     }
-    else
+    else if( resultOfGame == Result::Lose ) 
     {
         std::cout << "You Lose!\n";
+    }
+    else
+    {
+        std::cout << "Tie!\n";
     }
 
 
