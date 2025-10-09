@@ -540,3 +540,145 @@ Dynamically allocated memory has dynamic duration and will stay allocated until 
 Be careful not to perform dereference a dangling or null pointers.
 
 ---
+# Dynamically allocating arrays
+
+### 🔍 What Are Dynamically Allocated Arrays?
+
+In normal (fixed) arrays like:
+
+```cpp
+int arr[5];
+```
+
+The size (`5`) must be **known at compile time** — it must be a constant.
+
+But what if we only know the size **at runtime** (when the program is running)?  
+That’s where **dynamic arrays** come in — created using `new[]`.
+
+### 🧠 Why Use Dynamic Arrays?
+
+- ✅ Size decided by **user input or runtime logic**
+    
+- ✅ Can create **very large arrays**
+    
+- ❌ Must be manually **deleted** to free memory
+
+#### 🧱 Syntax: Dynamic Array with `new[]`
+
+```cpp
+int* array = new int[length];
+```
+
+- `new int[length]` → Allocates an array of `int` with the given size.
+    
+- `array` is a pointer to the first element.
+    
+
+#### 🗑️ Freeing Memory: Use `delete[]`
+
+```cpp
+delete[] array;
+```
+
+> **Important:** Use `delete[]` for arrays  
+> Use `delete` for single variables
+
+#### 🧪 Example Explained
+
+```cpp
+#include <cstddef>
+#include <iostream>
+
+int main()
+{
+    std::cout << "Enter a positive integer: ";
+    std::size_t length{};
+    std::cin >> length;
+
+    int* array{ new int[length]{} }; // Dynamically allocate array
+
+    std::cout << "I just allocated an array of integers of length " << length << '\n';
+
+    array[0] = 5;  // Example usage
+
+    delete[] array; // Free memory
+
+    return 0;
+}
+```
+
+#### 💡 Benefits of Dynamic Allocation
+
+|Feature|Fixed Array (`int arr[5];`)|Dynamic Array (`new int[n];`)|
+|---|---|---|
+|Size known at|Compile-time|Runtime|
+|Memory location|Stack|Heap|
+|Max size|Limited|Very large possible|
+|Can resize later?|No|No (but can reallocate)|
+#### 🧭 Author’s Note Mentioned:
+
+> _Why not use `std::array` or `std::vector`?_
+
+- `std::array` is fixed-size → compile-time only
+    
+- `std::vector` is **better** than raw dynamic arrays → auto memory management
+    
+- We use `new[]` here **only for learning purposes**
+
+#### ✅ Final Key Points
+
+- Use `new[]` to create runtime-sized arrays
+    
+- Always pair it with `delete[]`
+    
+- Use `std::size_t` for array sizes
+    
+- Modern C++ prefers `std::vector` for safety
+
+### Dynamically deleting arrays
+
+When deleting a dynamically allocated array, we have to use the array version of delete, which is delete[].
+
+>One often asked question of array delete[] is, “How does array delete know how much memory to delete?” The answer is that array new[] keeps track of how much memory was allocated to a variable, so that array delete[] can delete the proper amount. Unfortunately, this size/length isn’t accessible to the programmer.
+
+### Dynamic arrays are almost identical to fixed arrays
+
+you learned that a fixed array holds the memory address of the first array element. You also learned that a fixed array can decay into a pointer that points to the first element of the array. In this decayed form, the length of the fixed array is not available (and therefore neither is the size of the array via sizeof()), but otherwise there is little difference.
+
+A dynamic array starts its life as a pointer that points to the first element of the array. Consequently, it has the same limitations in that it doesn’t know its length or size. A dynamic array functions identically to a decayed fixed array, with the exception that the programmer is responsible for deallocating the dynamic array via the delete[] keyword.
+
+### Initializing dynamically allocated arrays
+
+If you want to initialize a dynamically allocated array to 0, the syntax is quite simple:
+
+```cpp
+int* array{ new int[length]{} };
+```
+
+starting with C++11, it’s now possible to initialize dynamic arrays using initializer lists!
+
+```cpp
+int fixedArray[5] = { 9, 7, 5, 3, 1 }; // initialize a fixed array before C++11
+int* array{ new int[5]{ 9, 7, 5, 3, 1 } }; // initialize a dynamic array since C++11
+// To prevent writing the type twice, we can use auto. This is often done for types with long names.
+auto* array{ new int[5]{ 9, 7, 5, 3, 1 } };
+```
+
+Note that this syntax has no operator= between the array length and the initializer list.
+
+For consistency, fixed arrays can also be initialized using uniform initialization:
+
+```cpp
+int fixedArray[]{ 9, 7, 5, 3, 1 }; // initialize a fixed array in C++11
+char fixedArray[]{ "Hello, world!" }; // initialize a fixed array in C++11
+```
+
+Explicitly stating the size of the array is optional.
+
+### Resizing arrays
+
+Dynamically allocating an array allows you to set the array length at the time of allocation. However, C++ does not provide a built-in way to resize an array that has already been allocated. It is possible to work around this limitation by dynamically allocating a new array, copying the elements over, and deleting the old array. However, this is error prone, especially when the element type is a class (which have special rules governing how they are created).
+
+Consequently, we recommend avoiding doing this yourself. Use `std::vector` instead.
+
+---
