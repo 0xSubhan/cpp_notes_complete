@@ -682,3 +682,234 @@ Dynamically allocating an array allows you to set the array length at the time o
 Consequently, we recommend avoiding doing this yourself. Use `std::vector` instead.
 
 ---
+# Destructors
+
+###  🧹 What Is a **Destructor** in C++?
+
+A **destructor** is a special member function in a class that is automatically called when an object is **destroyed**.
+
+- A **constructor** is used to **set up** the object (initialization).
+    
+- A **destructor** is used to **clean up** the object (release resources).
+
+#### 🕒 When Is a Destructor Called?
+
+A destructor is called automatically when:
+
+✅ An object **goes out of scope**  
+✅ A dynamically allocated object is **deleted using `delete`**
+
+You don’t call a destructor yourself — C++ handles it for you.
+
+#### 🛑 Why Do We Need a Destructor?
+
+For **simple classes** (only normal variables like `int`, `std::string`), C++ automatically cleans memory — no need for a destructor.
+
+But if a class uses **external resources**, such as:
+
+- 🧠 Dynamic memory (`new`)
+    
+- 📁 File handles
+    
+- 🔌 Database or network connections
+    
+
+Then we _must_ clean these resources manually before the object is destroyed. That’s what a destructor is for.
+
+#### 💡 Key Takeaway
+
+> Use a **destructor** when your class manages resources that won’t be cleaned up automatically — like memory allocated with `new`.
+
+>Generally you should not call a destructor explicitly (as it will be called automatically when the object is destroyed), since there are rarely cases where you’d want to clean up an object more than once. However, destructors may safely call other member functions since the object isn’t destroyed until after the destructor executes.
+
+### A destructor example
+
+Let’s take a look at a simple class that uses a destructor:
+
+```cpp
+#include <iostream>
+#include <cassert>
+#include <cstddef>
+
+class IntArray
+{
+private:
+	int* m_array{};
+	int m_length{};
+
+public:
+	IntArray(int length) // constructor
+	{
+		assert(length > 0);
+
+		m_array = new int[static_cast<std::size_t>(length)]{};
+		m_length = length;
+	}
+
+	~IntArray() // destructor
+	{
+		// Dynamically delete the array we allocated earlier
+		delete[] m_array;
+	}
+
+	void setValue(int index, int value) { m_array[index] = value; }
+	int getValue(int index) { return m_array[index]; }
+
+	int getLength() { return m_length; }
+};
+
+int main()
+{
+	IntArray ar ( 10 ); // allocate 10 integers
+	for (int count{ 0 }; count < ar.getLength(); ++count)
+		ar.setValue(count, count+1);
+
+	std::cout << "The value of element 5 is: " << ar.getValue(5) << '\n';
+
+	return 0;
+} // ar is destroyed here, so the ~IntArray() destructor function is called here
+```
+
+>On the first line of main(), we instantiate a new IntArray class object called ar, and pass in a length of 10. This calls the constructor, which dynamically allocates memory for the array member. We must use dynamic allocation here because we do not know at compile time what the length of the array is (the caller decides that).
+
+At the end of main(), ar goes out of scope. This causes the ~IntArray() destructor to be called, which deletes the array that we allocated in the constructor!
+
+### Constructor and destructor timing
+
+Constructor and destructor timing
+
+As mentioned previously, the constructor is called when an object is created, and the destructor is called when an object is destroyed. In the following example, we use cout statements inside the constructor and destructor to show this:
+
+```cpp
+#include <iostream>
+
+class Simple
+{
+private:
+    int m_nID{};
+
+public:
+    Simple(int nID)
+        : m_nID{ nID }
+    {
+        std::cout << "Constructing Simple " << nID << '\n';
+    }
+
+    ~Simple()
+    {
+        std::cout << "Destructing Simple" << m_nID << '\n';
+    }
+
+    int getID() { return m_nID; }
+};
+
+int main()
+{
+    // Allocate a Simple on the stack
+    Simple simple{ 1 };
+    std::cout << simple.getID() << '\n';
+
+    // Allocate a Simple dynamically
+    Simple* pSimple{ new Simple{ 2 } };
+
+    std::cout << pSimple->getID() << '\n';
+
+    // We allocated pSimple dynamically, so we have to delete it.
+    delete pSimple;
+
+    return 0;
+} // simple goes out of scope here
+```
+
+This program produces the following result:
+
+Constructing Simple 1
+1
+Constructing Simple 2
+2
+Destructing Simple 2
+Destructing Simple 1
+
+Note that “Simple 1” is destroyed after “Simple 2” because we deleted pSimple before the end of the function, whereas simple was not destroyed until the end of main().
+
+Global variables are constructed before main() and destroyed after main().
+
+### 🏛️ What is **RAII** in C++?
+
+**RAII** stands for **Resource Acquisition Is Initialization**.
+
+It’s a technique in C++ where **resource management** (like memory, files, sockets, etc.) is tied to the **lifetime of an object**.
+
+#### 🎯 Why RAII is Important?
+
+RAII helps prevent:
+
+❌ **Memory leaks** (forgetting `delete`)  
+❌ **File handles left open**  
+❌ **Resource misuse**
+
+✅ RAII ensures resources are _always cleaned up_, even if exceptions occur.
+
+#### 🧭 How RAII Works Internally
+
+| Operation                                          | Happens in            |
+| -------------------------------------------------- | --------------------- |
+| Acquire resource (`new`, open file, connect to DB) | **Constructor**       |
+| Use the resource                                   | While object is alive |
+| Release resource (`delete`, close file)            | **Destructor**        |
+#### 🔎 Example of RAII Concept
+
+```cpp
+class FileHandler {
+private:
+    FILE* file;
+public:
+    FileHandler(const char* filename) {
+        file = fopen(filename, "r");  // acquire resource
+    }
+
+    ~FileHandler() {
+        fclose(file);  // automatically release resource
+    }
+};
+```
+
+When `FileHandler` object goes out of scope → file is automatically closed.  
+No risk of forgetting!
+
+#### 🧰 Real RAII Examples in C++
+
+| Class             | Resource Managed              |
+| ----------------- | ----------------------------- |
+| `std::string`     | Dynamic memory for characters |
+| `std::vector`     | Dynamic memory for elements   |
+| `std::fstream`    | File handles                  |
+| `std::unique_ptr` | Dynamically allocated memory  |
+
+All of these classes **automatically** clean their resources in destructors → following RAII.
+
+#### 🔐 RAII = Safety
+
+> **RAII ties resource lifetime to object lifetime**  
+> → No need for manual cleanup  
+> → No memory leaks  
+> → Exception-safe code
+
+#### 🏁 Final Summary
+
+|Concept|Meaning|
+|---|---|
+|RAII|Resource Acquisition Is Initialization|
+|Constructor|Gets the resource|
+|Destructor|Releases it automatically|
+|Benefit|No leaks, safer code|
+
+### A warning about the std::exit() function
+
+Note that if you use the std::exit() function, your program will terminate and no destructors will be called. Be wary if you’re relying on your destructors to do necessary cleanup work (e.g. write something to a log file or database before exiting).
+
+### Summary
+
+==As you can see, when constructors and destructors are used together, your classes can initialize and clean up after themselves without the programmer having to do any special work! This reduces the probability of making an error, and makes classes easier to use.
+
+---
