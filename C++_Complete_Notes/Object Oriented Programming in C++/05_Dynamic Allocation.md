@@ -913,3 +913,459 @@ Note that if you use the std::exit() function, your program will terminate and n
 ==As you can see, when constructors and destructors are used together, your classes can initialize and clean up after themselves without the programmer having to do any special work! This reduces the probability of making an error, and makes classes easier to use.
 
 ---
+# Pointers to pointers and dynamic multidimensional arrays
+
+>This lesson is optional, for advanced readers who want to learn more about C++. No future lessons build on this lesson.
+
+A pointer to a pointer is exactly what you’d expect: a pointer that holds the address of another pointer.
+
+### 🔗 What Is a **Pointer to a Pointer**?
+
+A **pointer to a pointer** is a variable that stores the **address of another pointer** — not directly the address of an int or other value.
+
+It adds an _extra level of indirection_.
+
+#### 🧱 Levels of Indirection
+
+|Type|Meaning|
+|---|---|
+|`int`|Normal integer value|
+|`int*`|Pointer to an integer (stores address of `int`)|
+|`int**`|Pointer to a pointer to an integer (stores address of `int*`)|
+#### 🖋 Declaration
+
+```cpp
+int* ptr;      // Pointer to int
+int** ptrptr;  // Pointer to a pointer to int
+```
+
+#### 🧪 Example with Dereferencing
+
+```cpp
+int value { 5 };
+
+int* ptr { &value };        // ptr points to value
+std::cout << *ptr << '\n';  // Dereference once -> value of 'value'
+
+int** ptrptr { &ptr };      // ptrptr points to ptr
+std::cout << **ptrptr << '\n'; // Double dereference -> value of 'value'
+```
+
+```Output
+5
+5
+```
+
+#### 🚫 Invalid Attempt
+
+```cpp
+int value { 5 };
+int** ptrptr { &&value }; // ❌ Not valid!
+```
+
+Why?
+
+- `&value` is an **rvalue** (temporary)
+    
+- `&` operator needs an **lvalue**
+    
+- You cannot take the address of a temporary
+
+#### ✅ Valid Null Initialization
+
+```cpp
+int** ptrptr { nullptr }; // Allowed
+```
+
+### **Arrays of pointers**
+
+#### 🧵 What Is an **Array of Pointers**?
+
+It is an array where **each element is a pointer** (not a normal value like `int` or `char`).
+
+Example:
+
+```cpp
+int** array = new int*[10];
+```
+
+#### What does this mean?
+
+- `array` is a pointer to **the first element of an array**
+    
+- The array has **10 elements**
+    
+- Each element is an `int*` (pointer to integer)  
+    → So it's **an array of 10 integer pointers**
+
+#### 🧱 Visualization
+
+Imagine we created:
+
+```cpp
+int** array = new int*[3];
+```
+
+|Index|array[i] (each element)|
+|---|---|
+|array[0]|Pointer to int (`int*`)|
+|array[1]|Pointer to int (`int*`)|
+|array[2]|Pointer to int (`int*`)|
+
+But right now, these pointers are **uninitialized** — they don’t point anywhere yet!
+
+#### 🧪 Example: Using Array of Pointers
+
+```cpp
+int** array = new int*[3];  // Array of 3 int pointers
+
+array[0] = new int(10);     // Each pointer points to separate int
+array[1] = new int(20);
+array[2] = new int(30);
+
+std::cout << *array[0] << '\n'; // 10
+std::cout << *array[1] << '\n'; // 20
+std::cout << *array[2] << '\n'; // 30
+```
+
+### **Two-dimensional dynamically allocated arrays**
+
+Another common use for pointers to pointers is to facilitate dynamically allocated multidimensional arrays.
+
+#### ❌ Why `int** array { new int[10][5] };` Won’t Work
+
+You might think:
+
+```cpp
+int** array = new int[10][5]; // WRONG!
+```
+
+But this fails because:
+
+- `int**` means “pointer to pointer to int”.
+    
+- `new int[10][5]` creates a **block of 50 integers** in continuous memory — NOT a pointer-to-pointer structure.
+    
+- They are incompatible types.
+
+#### ✅ Solution 1: If Rightmost Dimension is Constant
+
+> We will skip this because its not practical because columns needs to be constant.
+> 
+
+#### 🧱 Solution 2: True Dynamic 2D Array Using `int**`
+
+##### Step 1️⃣: Allocate an array of row pointers
+
+```cpp
+int** array { new int*[10] }; // 10 rows
+```
+
+Now memory layout:
+
+```cpp
+array → [ * ][ * ][ * ][ * ] ... (10 pointers)
+         |   |   |
+         ?   ?   ?
+```
+
+Each pointer will point to a row.
+
+##### Step 2️⃣: Allocate each row separately
+
+```cpp
+for (int i {0}; i < 10; ++i)
+    array[i] = new int[5];   // 5 columns
+```
+
+Now memory layout:
+
+```cpp
+array → row0 → [ ][ ][ ][ ][ ]
+         row1 → [ ][ ][ ][ ][ ]
+         row2 → [ ][ ][ ][ ][ ]
+         ...
+```
+
+✅ Now you can access like:
+
+```cpp
+array[9][4] = 3;
+```
+
+>Since each row is allocated separately, each row can have **different column sizes**!
+
+#### 🗑 Deallocating Memory Properly (Very Important!)
+
+Delete EVERY row first:
+
+```cpp
+for (int i {0}; i < 10; ++i)
+    delete[] array[i];   // delete each row
+```
+
+Then delete main row pointer array:
+
+```cpp
+delete[] array;
+```
+
+⚠️ If you do `delete[] array` first → you lose access to rows → memory leak / UB.
+
+#### 🧮 Tip: Flatten 2D to 1D (Simpler & Faster)
+
+Instead of complex `int**`, just use a **single 1D array** with size `rows * cols`.
+
+```cpp
+int* array { new int[50] }; // A 10x5 array
+```
+
+To convert (row, col) → single index:
+
+```cpp
+int getSingleIndex(int row, int col, int numCols)
+{
+    return (row * numCols) + col;
+}
+
+array[getSingleIndex(9, 4, 5)] = 3;
+```
+
+This is common in **competitive programming and graphics (like OpenGL)**.
+
+### **Passing a pointer by address**
+
+#### 🎯 Goal: Change What a Pointer Points To (Inside a Function)
+
+Normally, when you pass a pointer to a function, you can modify the value it _points to_, but **you cannot change where that pointer itself points** (its address) unless you pass it by address or reference.
+
+#### 🧵 Part 1: Passing a Pointer by Address (Using `int**` address of that pointer) 
+
+You use **pointer to pointer** (`int**`) so the function can modify the original pointer.
+
+##### 🛠 Example: Using `int**`
+
+```cpp
+#include <iostream>
+using namespace std;
+
+void changePointer(int** ptr) {   // ptr is a pointer to pointer
+    *ptr = new int;  // single astrik because we are dereferencing the pointer so we will get pointer and we can change where that pointer is pointing            // change where original pointer points
+    **ptr = 20;                   // assign value
+}
+
+int main() {
+    int* p = nullptr;
+    changePointer(&p);            // pass address of pointer
+    cout << *p;                   // output: 20
+    delete p;
+}
+```
+
+##### 🧠 Explanation
+
+- `p` is a pointer in `main`.
+    
+- We pass `&p` (address of pointer) → so inside function we get `int**`.
+    
+- Inside `changePointer`, we modify `*ptr` (the real pointer `p`) to point to a new memory address.
+
+##### 💡 Problem with `int**`
+
+Using `int**` is:
+
+- Hard to read.
+    
+- Easy to make mistakes.
+    
+- More confusing for beginners.
+
+#### ✅ Better Way: Reference to Pointer (`int*&`)
+
+This is cleaner and safer. Instead of `int**`, we use **reference to a pointer**.
+
+##### ✨ Example using Reference to Pointer (`int*&`)
+
+```cpp
+#include <iostream>
+using namespace std;
+
+void changePointer(int*& ptr) {  // ptr is a reference to pointer
+    ptr = new int;               // directly modify original pointer
+    *ptr = 30;
+}
+
+int main() {
+    int* p = nullptr;
+    changePointer(p);            // pass pointer directly (easier!)
+    cout << *p;                  // output: 30
+    delete p;
+}
+```
+
+#### 🆚 Comparison: `int**` vs `int*&`
+
+|Method|Syntax|Readability|Recommended|
+|---|---|---|---|
+|`int**`|Hard (`&p` required)|Confusing|❌ Less clear|
+|`int*&`|Simple (`p` only)|Much clearer|✅ Yes!|
+
+#### 🔍 Why Reference to Pointer is Better?
+
+✔ You pass the pointer like normal (`changePointer(p)`)  
+✔ No need to use `&p`  
+✔ The function can _change where your pointer points_  
+✔ Syntax is cleaner and more C++-style
+
+#### 🎓 Final Understanding
+
+> If you want a function to **change the pointer itself** (not just the data it points to),  
+> you must pass the pointer **by address (`int**`)** or **by reference (`int*&`)**.
+> 
+> 🔔 **In modern C++, use reference to pointer — it’s cleaner.**
+
+### **Conclusion**
+
+We recommend avoiding using pointers to pointers unless no other options are available, because they’re complicated to use and potentially dangerous. It’s easy enough to dereference a null or dangling pointer with normal pointers — it’s doubly easy with a pointer to a pointer since you have to do a double-dereference to get to the underlying value!
+
+---
+# Void Pointer
+
+### 🧩 What is a **void pointer**?
+
+A **void pointer (`void*`)** is a **generic pointer**.  
+It can point to **any data type**, but it doesn't know the type it points to.
+
+```cpp
+void* ptr {}; // ptr is a void pointer
+```
+
+### 🎯 Why is it special?
+
+|Feature|What it can do|
+|---|---|
+|✅ Can store the address of **any data type**||
+|❌ Cannot be dereferenced directly (you must cast it first)||
+|❌ Cannot do pointer arithmetic (like ptr + 1)||
+|❌ Cannot be deleted safely without casting back||
+### 🧪 Example: Void pointer holding different types
+
+```cpp
+int nValue {};
+float fValue {};
+struct Something { int n; float f; } sValue {};
+
+void* ptr {};
+ptr = &nValue;  // OK
+ptr = &fValue;  // OK
+ptr = &sValue;  // OK
+```
+
+This flexibility is why it's called a **generic pointer**.
+
+### 🚫 But there’s a BIG problem…
+
+Because `void*` doesn’t know **what type it points to**, you **cannot directly dereference** it.
+
+```cpp
+int value{ 5 };
+void* voidPtr{ &value };
+
+// std::cout << *voidPtr;  // ❌ ERROR! Type unknown!
+```
+
+### 🛠 Solution: CAST before using
+
+To use the value, convert (`static_cast`) the void pointer back to the correct type:
+
+```cpp
+int* intPtr = static_cast<int*>(voidPtr);
+std::cout << *intPtr << '\n';   // ✅ Output: 5
+```
+
+### ❓ But how do we know what type to cast back to?
+
+**YOU must remember it!**  
+The compiler doesn’t know — this is why void pointers are dangerous.
+
+### 🖨️ Practical Use Example: Printing different types
+
+```cpp
+#include <iostream>
+#include <cassert>
+
+enum class Type { tInt, tFloat, tCString };
+
+void printValue(void* ptr, Type type)
+{
+    switch (type)
+    {
+    case Type::tInt:
+        std::cout << *static_cast<int*>(ptr) << '\n';
+        break;
+    case Type::tFloat:
+        std::cout << *static_cast<float*>(ptr) << '\n';
+        break;
+    case Type::tCString:
+        std::cout << static_cast<char*>(ptr) << '\n'; // char* directly prints string
+        break;
+    default:
+        std::cerr << "Invalid type\n";
+        assert(false);
+    }
+}
+
+int main()
+{
+    int nValue{ 5 };
+    float fValue{ 7.5f };
+    char szValue[]{ "Mollie" };
+
+    printValue(&nValue, Type::tInt);
+    printValue(&fValue, Type::tFloat);
+    printValue(szValue, Type::tCString);
+}
+```
+
+5
+7.5
+Mollie
+
+### ⚠️ Important Rules About `void*`
+
+|Rule|Explanation|
+|---|---|
+|✅ Can be `nullptr`|`void* ptr = nullptr;`|
+|❌ Cannot be dereferenced|Must cast to correct type first|
+|❌ Cannot do pointer arithmetic|Because no type/size info|
+|❌ Cannot delete safely|Must cast back before deleting|
+|❌ No void references|`void&` doesn't exist|
+### 🧨 Danger Example (Compiler Won’t Stop You)
+
+```cpp
+int nValue{ 5 };
+printValue(&nValue, Type::tCString); // Wrong type passed!
+```
+
+This compiles, but output is **garbage**.  
+No type checking — dangerous!
+
+### 🛡 Final Advice
+
+|Is `void*` safe?|Better Alternatives|
+|---|---|
+|❌ No type safety|✅ Function overloading|
+|❌ Easy to misuse|✅ Templates|
+|❌ Hard to debug|✅ `std::variant`, `std::any`|
+### 🏁 Conclusion
+
+> **Use void pointers only when necessary (low-level code, C libraries).**  
+> In modern C++, there are **much safer methods** that retain type checking.
+
+==What’s the difference between a void pointer and a null pointer?
+
+>A void pointer is a pointer that can point to any type of object, but does not know what type of object it points to. A void pointer must be explicitly cast into another type of pointer to perform indirection. A null pointer is a pointer that does not point to an address. A void pointer can be a null pointer.
+
+Thus, a void pointer refers to the type of the pointer, whereas a null pointer refers to the value (address) of the pointer.
+
+---
