@@ -1213,3 +1213,617 @@ In the above program, a stack frame is pushed on the stack every time function e
 - Because the stack is relatively small, it is generally not a good idea to do anything that eats up lots of stack space. This includes allocating or copying large arrays or other memory-intensive structures.
 
 ---
+# Recursion
+
+>A **recursive function** in C++ is a function that calls itself. Here is an example of a poorly-written recursive function:
+
+```cpp
+#include <iostream>
+
+void countDown(int count)
+{
+    std::cout << "push " << count << '\n';
+    countDown(count-1); // countDown() calls itself recursively
+}
+
+int main()
+{
+    countDown(5);
+
+    return 0;
+}
+```
+
+When countDown(5) is called, “push 5” is printed, and countDown(4) is called. countDown(4) prints “push 4” and calls countDown(3). countDown(3) prints “push 3” and calls countDown(2). The sequence of countDown(n) calling countDown(n-1) is repeated indefinitely, effectively forming the recursive equivalent of an infinite loop.
+
+you learned that every function call causes data to be placed on the call stack. Because the countDown() function never returns (it just calls countDown() again), this information is never being popped off the stack! Consequently, at some point, the computer will run out of stack memory, stack overflow will result, and the program will crash or terminate. On the author’s machine, this program counted down to -11732 before terminating!
+
+### **Recursive termination conditions**
+
+Recursive function calls generally work just like normal function calls. However, the program above illustrates the most important difference with recursive functions: you must include a recursive termination condition, or they will run “forever” (actually, until the call stack runs out of memory). A **recursive termination** is a condition that, when met, will cause the recursive function to stop calling itself.
+
+>Recursive termination generally involves using an if statement. Here is our function redesigned with a termination condition (and some extra output):
+
+```cpp
+#include <iostream>
+
+void countDown(int count)
+{
+    std::cout << "push " << count << '\n';
+
+    if (count > 1) // termination condition
+        countDown(count-1);
+
+    std::cout << "pop " << count << '\n';
+}
+
+int main()
+{
+    countDown(5);
+    return 0;
+}
+```
+
+Now when we run our program, countDown() will start by outputting the following:
+
+push 5
+push 4
+push 3
+push 2
+push 1
+
+>Because of the termination condition, countDown(1) does not call countDown(0) -- instead, the “if statement” does not execute, so it prints “pop 1” and then terminates. At this point, countDown(1) is popped off the stack, and control returns to countDown(2). countDown(2) resumes execution at the point after countDown(1) was called, so it prints “pop 2” and then terminates. The recursive function calls get subsequently popped off the stack until all instances of countDown have been removed.
+
+Thus, this program in total outputs:
+
+push 5
+push 4
+push 3
+push 2
+push 1
+pop 1
+pop 2
+pop 3
+pop 4
+pop 5
+
+>It’s worth noting that the “push” outputs happen in forward order since they occur before the recursive function call. The “pop” outputs occur in reverse order because they occur after the recursive function call, as the functions are being popped off the stack (which happens in the reverse order that they were put on).
+
+### **A more useful example**
+
+Now that we’ve discussed the basic mechanics of recursive function calls, let’s take a look at another recursive function that is slightly more typical:
+
+```cpp
+// return the sum of all the integers between 1 (inclusive) and sumto (inclusive)
+// returns 0 for negative numbers
+int sumTo(int sumto)
+{
+    if (sumto <= 0)
+        return 0; // base case (termination condition) when user passed in an unexpected argument (0 or negative)
+    if (sumto == 1)
+        return 1; // normal base case (termination condition)
+
+    return sumTo(sumto - 1) + sumto; // recursive function call
+}
+```
+
+>Recursive programs are often hard to figure out just by looking at them. It’s often instructive to see what happens when we call a recursive function with a particular value. So let’s see what happens when we call this function with parameter sumto = 5.
+
+#### 🧮 Goal: `sumTo(5)`
+
+We want to calculate:  
+**1 + 2 + 3 + 4 + 5 = 15**
+
+But the function does it using **recursion** (calling itself).
+
+#### 🛑 First: Base Rules in the Function
+
+- If number is **1** → return **1** (Stop here)
+    
+- For any number **greater than 1** → ask for `sumTo(number - 1)` and then **add that number**
+
+#### 🔁 Let's Start with `sumTo(5)` (Going Down)
+
+|Function Call|What it asks|Doesn't know yet|
+|---|---|---|
+|sumTo(5)|"What is sumTo(4)?" + 5|Waiting|
+|sumTo(4)|"What is sumTo(3)?" + 4|Waiting|
+|sumTo(3)|"What is sumTo(2)?" + 3|Waiting|
+|sumTo(2)|"What is sumTo(1)?" + 2|Waiting|
+|sumTo(1)|I know: **1**|✅ Answer found!|
+
+#### 🧵 Now We Return Back (Coming Up and Adding)
+
+|Call|Calculation|Result|
+|---|---|---|
+|sumTo(1)|1|1|
+|sumTo(2)|1 + 2|3|
+|sumTo(3)|3 + 3|6|
+|sumTo(4)|6 + 4|10|
+|sumTo(5)|10 + 5|15|
+#### 🎉 Final Answer
+
+**sumTo(5) = 15**
+
+#### 📝 Short Visual Story
+
+```cpp
+sumTo(5) → sumTo(4) + 5
+sumTo(4) → sumTo(3) + 4
+sumTo(3) → sumTo(2) + 3
+sumTo(2) → sumTo(1) + 2
+sumTo(1) → 1   (stop here!)
+```
+
+Now add everything while returning back:
+
+```cpp
+1
+1 + 2 = 3
+3 + 3 = 6
+6 + 4 = 10
+10 + 5 = 15  ✅
+```
+
+Because recursive functions can be hard to understand by looking at them, good comments are particularly important.
+
+>Note that in the above code, we recurse with value `sumto - 1` rather than `--sumto`. We do this because `operator--` has a side effect, and using a variable that has a side effect applied more than once in a given expression will result in undefined behavior. Using `sumto - 1` avoids side effects, making sumto safe to use more than once in the expression.
+
+### **Recursive algorithms**
+
+#### 🧠 What Are Recursive Algorithms?
+
+A **recursive algorithm** is a way to solve a problem by:
+
+1. **Breaking the problem into a smaller version of itself.**
+    
+2. **Solving that smaller version (repeat, repeat…)**
+    
+3. **Then using that smaller solution to get the final answer.**
+
+#### 🔍 Using `sumTo(value)` as an Example
+
+```cpp
+sumTo(value)
+   = 1 + 2 + 3 + ... + value
+```
+
+How recursion solves it:
+
+- It **does not** add everything at once.
+    
+- It first solves a **smaller problem** → `sumTo(value - 1)`
+    
+- Then it just **adds the missing part (`value`)** at the end.
+    
+
+👉 Example for value = 5
+
+```cpp
+sumTo(5) = sumTo(4) + 5
+sumTo(4) = sumTo(3) + 4
+sumTo(3) = sumTo(2) + 3
+sumTo(2) = sumTo(1) + 2
+```
+
+#### 🛑 What Is a Base Case?
+
+Some inputs are **so simple** that we already know the answer without any recursion.  
+These simple answers are called **base cases**.
+
+Example:  
+`sumTo(1)` → The answer is **1** (you don't need recursion to know that).
+
+✅ Base Case = A simple input with a direct answer.
+
+#### 🔐 Why Base Case Is Important?
+
+- It **stops the recursion**.
+    
+- Without a base case, the function would call itself **forever** and crash.
+
+#### 🧪 Common Base Cases in Recursion
+
+|Type|Base Case Example|
+|---|---|
+|Numbers|0 or 1|
+|Strings|"" (empty string)|
+|Pointers|null|
+
+These are values where the answer is obvious and no recursion is needed.
+
+#### 🧵 Summary (In One Line)
+
+> A recursive algorithm solves a big problem by solving a smaller problem first…  
+> and stops when input becomes so simple that the answer is obvious (base case).
+
+### **Fibonacci numbers**
+
+**Fibonacci numbers**
+
+One of the most famous mathematical recursive algorithms is the Fibonacci sequence. Fibonacci sequences appear in many places in nature, such as branching of trees, the spiral of shells, the fruitlets of a pineapple, an uncurling fern frond, and the arrangement of a pine cone.
+
+Here is a picture of a Fibonacci spiral:  
+![](https://www.learncpp.com/images/CppTutorial/Section7/Fibonacci.png)
+
+```cpp
+#include <iostream>
+
+int fibonacci(int count)
+{
+    if (count == 0)
+        return 0; // base case (termination condition)
+    if (count == 1)
+        return 1; // base case (termination condition)
+    return fibonacci(count-1) + fibonacci(count-2);
+}
+
+// And a main program to display the first 13 Fibonacci numbers
+int main()
+{
+    for (int count { 0 }; count < 13; ++count)
+        std::cout << fibonacci(count) << ' ';
+
+    return 0;
+}
+```
+
+#### 🔢 Fibonacci Sequence (Basic Idea)
+
+The numbers go like this:
+
+**0, 1, 1, 2, 3, 5, 8, 13, 21, 34, ...**
+
+How do we get these?
+
+> Each number = **Sum of the previous two numbers**
+
+#### 🧮 Mathematical Definition
+
+```cpp
+F(0) = 0
+F(1) = 1
+F(n) = F(n-1) + F(n-2) , when n > 1
+```
+
+#### 🧠 How Recursion Works Here
+
+When you call `fibonacci(n)`:
+
+- If **n = 0 or 1** → Directly return 0 or 1 (Base Case)
+    
+- If **n > 1** → Return `fibonacci(n-1) + fibonacci(n-2)`  
+    (Call function again for smaller values)
+
+### Let’s explain **Fibonacci recursion for 5** in a very clear and simple way, step by step.
+
+We want to find:
+
+```cpp
+fibonacci(5)
+```
+
+#### 🪜 Step-by-Step Recursive Breakdown
+
+```cpp
+fibonacci(5)
+= fibonacci(4) + fibonacci(3)
+```
+
+Now calculate both parts:
+
+##### 🔹 Part 1: fibonacci(4)
+
+```cpp
+fibonacci(4) = fibonacci(3) + fibonacci(2)
+```
+
+##### 🔸 Part 2: fibonacci(3)
+
+```cpp
+fibonacci(3) = fibonacci(2) + fibonacci(1)
+```
+
+Now let’s go deeper:
+
+#### 📌 Break Down fibonacci(4)
+
+```cpp
+fibonacci(4)
+= fibonacci(3) + fibonacci(2)
+```
+
+Break fibonacci(3):
+
+```cpp
+fibonacci(3) = fibonacci(2) + fibonacci(1)
+```
+
+Break fibonacci(2):
+
+```cpp
+fibonacci(2) = fibonacci(1) + fibonacci(0)
+```
+
+#### 🧠 Let’s Replace Base Cases
+
+We know:
+
+```cpp
+fibonacci(1) = 1
+fibonacci(0) = 0
+```
+
+Now build back up:
+
+|Call|Result|
+|---|---|
+|fibonacci(2)|1 + 0 = **1**|
+|fibonacci(3)|1 + 1 = **2**|
+|fibonacci(4)|2 + 1 = **3**|
+|fibonacci(5)|3 + 2 = **5**|
+#### ✅ Final Answer:
+
+```cpp
+fibonacci(5) = 5
+```
+
+#### 🌳 Visual Tree of Calls
+
+```markdown
+            fibonacci(5)
+           /            \
+      fib(4)            fib(3)
+      /    \            /    \
+   fib(3)  fib(2)    fib(2)  fib(1)
+   /  \     /   \     /  \
+fib(2) fib(1) fib(1) fib(0) fib(1) fib(0)
+ / \
+fib(1) fib(0)
+```
+
+Now substitute base cases and add everything up!
+
+### **Memoization algorithms**
+
+**Memoization** means:  
+🗂️ _“Remember the results of expensive function calls, so we don’t calculate them again.”_
+
+#### 🧠 Problem with Normal Recursive Fibonacci
+
+The basic recursive Fibonacci function:
+
+```cpp
+fibonacci(n) = fibonacci(n-1) + fibonacci(n-2)
+```
+
+This creates **many repeated calculations**.
+
+Example:
+
+- fibonacci(5) calls fibonacci(4) and fibonacci(3)
+    
+- fibonacci(4) again calls fibonacci(3) and fibonacci(2)
+    
+- fibonacci(3) gets calculated **many times again and again**
+    
+
+❗ **Too slow!**  
+The normal recursive Fibonacci for `n=12` makes **1205 function calls** → very inefficient!
+
+#### 💡 Solution: Memoization
+
+**Memoization = Save answers you already calculated.**  
+Next time, just reuse it — don’t recalculate!
+
+#### 🧾 Memoized Fibonacci Code Explanation
+
+```cpp
+static std::vector results{ 0, 1 }; // store known Fibonacci values
+```
+
+This vector saves results like:
+
+```cpp
+Index:   0   1   2   3   4   5   6  ...
+Value:   0   1   1   2   3   5   8  ...
+```
+
+#### 🔍 How the Function Works
+
+```cpp
+int fibonacci(std::size_t count)
+{
+    static std::vector results{ 0, 1 };
+
+    // 1️⃣ If we already calculated fibonacci(count), return it from cache
+    if (count < results.size())
+        return results[count];
+
+    // 2️⃣ Otherwise, compute it and store it in the vector
+    results.push_back(fibonacci(count - 1) + fibonacci(count - 2));
+
+    return results[count];
+}
+```
+
+#### 🏁 Why This Is Faster?
+
+|Version|Function Calls|
+|---|---|
+|Normal Recursion|1205 calls|
+|With Memoization|**35 calls** ✅|
+
+Memoization avoids recalculating the same values again.
+
+#### 🧩 Simple Analogy
+
+Imagine solving math problems:
+
+- Without memoization: You solve **2 + 2** every time from scratch.
+    
+- With memoization: You remember **2 + 2 = 4** and reuse it. 🧠
+
+
+let’s walk **exactly** what the memoized `fibonacci` does for `count = 5`, step-by-step. I’ll show the function calls, the `results` cache contents at each point, and what each call returns.
+
+**Initial state**
+
+- `results = [0, 1]` (static cache)
+    
+- Call we make: `fibonacci(5)`
+
+#### Trace (in order of actual function calls)
+
+1. `fibonacci(5)` — _call #1_
+    
+    - `count = 5` → not in cache (`5 >= results.size()`), so we must compute `fibonacci(4) + fibonacci(3)`.
+        
+2. `fibonacci(4)` — _call #2_ (called from `fibonacci(5)`)
+    
+    - `count = 4` → not in cache, compute `fibonacci(3) + fibonacci(2)`.
+        
+3. `fibonacci(3)` — _call #3_ (called from `fibonacci(4)`)
+    
+    - `count = 3` → not in cache, compute `fibonacci(2) + fibonacci(1)`.
+        
+4. `fibonacci(2)` — _call #4_ (called from `fibonacci(3)`)
+    
+    - `count = 2` → not in cache, compute `fibonacci(1) + fibonacci(0)`.
+        
+5. `fibonacci(1)` — _call #5_ (called from `fibonacci(2)`)
+    
+    - Base case: returns `1`.
+        
+    - **No change** to `results` (still `[0,1]`).
+        
+6. `fibonacci(0)` — _call #6_ (called from `fibonacci(2)`)
+    
+    - Base case: returns `0`.
+        
+    - **No change** to `results`.
+        
+7. Back in `fibonacci(2)` — now we have `fibonacci(1)=1` and `fibonacci(0)=0`.
+    
+    - Compute `1 + 0 = 1`.
+        
+    - **Store** it: `results.push_back(1)` → `results = [0, 1, 1]`.
+        
+    - `fibonacci(2)` returns `1`.
+        
+8. Back in `fibonacci(3)` — it needed `fibonacci(2)` and `fibonacci(1)`.
+    
+    - `fibonacci(2)` is now **cached** (index 2), so we use `results[2] = 1` (no new call).
+        
+    - `fibonacci(1)` is base case (we could return it directly or use cache index 1 = 1).
+        
+    - Compute `1 + 1 = 2`.
+        
+    - **Store** it: `results.push_back(2)` → `results = [0, 1, 1, 2]`.
+        
+    - `fibonacci(3)` returns `2`.
+        
+9. Back in `fibonacci(4)` — it needed `fibonacci(3)` and `fibonacci(2)`.
+    
+    - Both are now cached: `results[3] = 2`, `results[2] = 1`.
+        
+    - Compute `2 + 1 = 3`.
+        
+    - **Store** it: `results.push_back(3)` → `results = [0, 1, 1, 2, 3]`.
+        
+    - `fibonacci(4)` returns `3`.
+        
+10. Back in `fibonacci(5)` — it needed `fibonacci(4)` and `fibonacci(3)`.
+    
+    - Both cached: `results[4] = 3`, `results[3] = 2`.
+        
+    - Compute `3 + 2 = 5`.
+        
+    - **Store** it: `results.push_back(5)` → `results = [0, 1, 1, 2, 3, 5]`.
+        
+    - `fibonacci(5)` returns `5`.
+        
+
+#### Summary
+
+- **Final result:** `fibonacci(5) = 5`
+    
+- **Final cache (`results`):** `[0, 1, 1, 2, 3, 5]`
+    
+- **Total actual function calls made:** **6**
+    
+    - (Calls were for counts 5,4,3,2,1,0 — after those, remaining uses read from the cache)
+
+#### Why memoization helped here
+
+Instead of re-computing the same `fibonacci(k)` multiple times, each newly computed Fibonacci number is stored once in `results`. After being stored, later requests reuse it with **no extra recursive calls**, so the number of calls is linear in `n` (roughly `n+1` calls in this small example) rather than exponential.
+
+#### 🧾 The Cache Vector (results)
+
+```cpp
+static std::vector results{ 0, 1 };
+```
+
+This vector stores **calculated Fibonacci values** using **index positions**:
+
+| Index | Value stored in vector |
+| ----- | ---------------------- |
+| 0     | 0 (Fibonacci of 0)     |
+| 1     | 1 (Fibonacci of 1)     |
+| 2     | 1 (Fibonacci of 2)     |
+| 3     | 2 (Fibonacci of 3)     |
+| 4     | 3 (Fibonacci of 4)     |
+| 5     | 5 (Fibonacci of 5)     |
+#### 📌 How Indexing Works
+
+When we write:
+
+```cpp
+return results[count];
+```
+
+It simply means:
+
+👉 **Return the Fibonacci number already stored at position `count`** in the vector.
+
+#### 🧠 Example: fibonacci(5)
+
+##### Step-by-step:
+
+1️⃣ **Start:**  
+`results = {0, 1}`  
+Indexes → `0 : 0`, `1 : 1`
+
+2️⃣ Need `fibonacci(2)`  
+Not in vector → calculate → store at `results[2] = 1`
+
+3️⃣ Need `fibonacci(3)`  
+Calculated → `results[3] = 2`
+
+4️⃣ Need `fibonacci(4)`  
+Calculated → `results[4] = 3`
+
+5️⃣ Need `fibonacci(5)`  
+Calculated → `results[5] = 5`
+
+### **Recursive vs iterative**
+
+One question that is often asked about recursive functions is, “Why use a recursive function if you can do many of the same tasks iteratively (using a _for loop_ or _while loop_)?”. It turns out that you can always solve a recursive problem iteratively -- however, for non-trivial problems, the recursive version is often much simpler to write (and read). For example, while it’s possible to write the Fibonacci function iteratively, it’s a little more difficult! (Try it!)
+
+Iterative functions (those using a for-loop or while-loop) are almost always more efficient than their recursive counterparts. This is because every time you call a function there is some amount of overhead that takes place in pushing and popping stack frames. Iterative functions avoid this overhead.
+
+That’s not to say iterative functions are always a better choice. Sometimes the recursive implementation of a function is so much cleaner and easier to follow that incurring a little extra overhead is more than worth it for the benefit in maintainability, particularly if the algorithm doesn’t need to recurse too many times to find a solution.
+
+In general, recursion is a good choice when most of the following are true:
+
+- The recursive code is much simpler to implement.
+- The recursion depth can be limited (e.g. there’s no way to provide an input that will cause it to recurse down 100,000 levels).
+- The iterative version of the algorithm requires managing a stack of data.
+- This isn’t a performance-critical section of code.
+
+However, if the recursive algorithm is simpler to implement, it may make sense to start recursively and then optimize to an iterative algorithm later.
+
+>Best practice
+>Generally favor iteration over recursion, except when recursion really makes sense.
+
+---
