@@ -2144,3 +2144,228 @@ Arg 2: 100
 ```
 
 ---
+# Ellipsis (and why to avoid them)
+
+### 🔍 What Are Ellipsis (`...`) in C++?
+
+Ellipsis (`...`) allow a function to accept a **variable number of arguments** (like `printf` in C).  
+Normally, C++ functions must know **exactly how many arguments** they will receive, but ellipsis breaks that rule.
+
+```cpp
+return_type function_name(fixed_arguments, ...);
+```
+
+### ⚠ Why Learn This?
+
+Ellipsis are **rarely used and unsafe**. You’ll mostly see them in C-style code or libraries like `printf()`.  
+Modern C++ prefers **variadic templates** instead (Safer, type-checked).
+
+In all of the functions we’ve seen so far, the number of parameters a function will take must be known in advance (even if they have default values). However, there are certain cases where it can be useful to be able to pass a variable number of parameters to a function. C++ provides a special specifier known as ellipsis (aka “…”) that allow us to do precisely this.
+
+Because ellipsis are rarely used, potentially dangerous, and we recommend avoiding their use, this section can be considered optional reading.
+
+```
+return_type function_name(argument_list, ...)
+```
+
+The _argument_list_ is one or more normal function parameters. Note that functions that use ellipsis must have at least one non-ellipsis parameter. Any arguments passed to the function must match the argument_list parameters first.
+
+The ellipsis (which are represented as three periods in a row) must always be the last parameter in the function. The ellipsis capture any additional arguments (if there are any). Though it is not quite accurate, it is conceptually useful to think of the ellipsis as an array that holds any additional parameters beyond those in the argument_list.
+
+### **An ellipsis example**
+
+The best way to learn about ellipsis is by example. So let’s write a simple program that uses ellipsis. Let’s say we want to write a function that calculates the average of a bunch of integers. We’d do it like this:
+
+```cpp
+#include <iostream>
+#include <cstdarg> // needed to use ellipsis
+
+// The ellipsis must be the last parameter
+// count is how many additional arguments we're passing
+double findAverage(int count, ...)
+{
+    int sum{ 0 };
+
+    // We access the ellipsis through a va_list, so let's declare one
+    std::va_list list;
+
+    // We initialize the va_list using va_start.  The first argument is
+    // the list to initialize.  The second argument is the last non-ellipsis
+    // parameter.
+    va_start(list, count);
+
+    // Loop through all the ellipsis values
+    for (int arg{ 0 }; arg < count; ++arg)
+    {
+         // We use va_arg to get values out of our ellipsis
+         // The first argument is the va_list we're using
+         // The second argument is the type of the value
+         sum += va_arg(list, int);
+    }
+
+    // Cleanup the va_list when we're done.
+    va_end(list);
+
+    return static_cast<double>(sum) / count;
+}
+
+int main()
+{
+    std::cout << findAverage(5, 1, 2, 3, 4, 5) << '\n';
+    std::cout << findAverage(6, 1, 2, 3, 4, 5, 6) << '\n';
+
+    return 0;
+}
+```
+
+This code prints:
+
+3
+3.5
+
+As you can see, this function takes a variable number of parameters! Now, let’s take a look at the components that make up this example.
+
+First, we have to include the cstdarg header. This header defines va_list, va_arg, va_start, and va_end, which are macros that we need to use to access the parameters that are part of the ellipsis.
+
+We then declare our function that uses the ellipsis. Remember that the argument list must be one or more fixed parameters. In this case, we’re passing in a single integer that tells us how many numbers to average. The ellipsis always comes last.
+
+Note that the ellipsis parameter has no name! Instead, we access the values in the ellipsis through a special type known as va_list. It is conceptually useful to think of va_list as a pointer that points to the ellipsis array. First, we declare a va_list, which we’ve called “list” for simplicity.
+
+![Ezoic](https://go.ezodn.com/utilcave_com/ezoicbwa.png "ezoic")
+
+The next thing we need to do is make list point to our ellipsis parameters. We do this by calling va_start(). va_start() takes two parameters: the va_list itself, and the name of the _last_ non-ellipsis parameter in the function. Once va_start() has been called, va_list points to the first parameter in the ellipsis.
+
+To get the value of the parameter that va_list currently points to, we use va_arg(). va_arg() also takes two parameters: the va_list itself, and the type of the parameter we’re trying to access. Note that va_arg() also moves the va_list to the next parameter in the ellipsis!
+
+Finally, to clean up when we are done, we call va_end(), with va_list as the parameter.
+
+Note that va_start() can be called again any time we want to reset the va_list to point to the first parameter in the ellipses again.
+
+#### 📌 How It Works Internally
+
+|Step|Function/Macro|Purpose|
+|---|---|---|
+|`va_list list;`|Declare handler to access extra arguments||
+|`va_start(list, count);`|Start at the first variable argument after `count`||
+|`va_arg(list, int);`|Read next variable (`int`)||
+|`va_end(list);`|Cleanup||
+### 📦 Key Concept: No Type Safety!
+
+Ellipsis **do not know** the types of extra values. You must manually tell it using `va_arg(list, TYPE)`.
+
+🚨 Example Problem:
+
+```cpp
+findAverage(3, 1.0, 2, 3);   // OOPS! 1.0 is double, but expected int
+```
+
+Output? **Garbage!** Because it's reading double bytes as if it's an int.
+
+### 💣 2 Major Dangers of Ellipsis
+
+|Danger|Explanation|
+|---|---|
+|❌ No Type Checking|Compiler doesn’t stop wrong types|
+|❌ No Argument Count|Function doesn’t know how many were passed|
+
+### 🛑 Common Mistakes (Hard Bugs!)
+
+#### ❗ Wrong Count
+
+```cpp
+findAverage(5, 1, 2, 3, 4);   // Says 5 values, gave 4 → reads garbage
+```
+
+#### ❗ Extra Values
+
+```cpp
+findAverage(5, 1, 2, 3, 4, 5, 6);  // Extra ignored or causes wrong value
+```
+
+### 🏁 Final Recommendation
+
+❌ Avoid ellipsis in C++  
+✅ Use **containers**, **std::vector**, or **variadic templates** (C++11+)
+
+Example Modern Alternative:
+
+```cpp
+template<typename... Args>
+double findAverage(Args... args) {
+    std::vector<int> nums{args...};
+    double sum = 0;
+    for (int n : nums) sum += n;
+    return sum / nums.size();
+}
+```
+
+==typename... Args means many types which will store as a Args and that many types will be appointed to ... args which mean many variables or parameters so all set think of it like we made ... elipse for first types and then for parameters from which that types will be appointed.  
+
+### 🧱 1. `template<typename... Args>`
+
+This tells C++:
+
+> "I am writing a function that can accept **any number of arguments of any type**."
+
+- `Args...` is called a **parameter pack** (means many types).
+
+### 📥 2. `double findAverage(Args... args)`
+
+This is the function itself.
+
+- `Args... args` = all the values you pass (like 1, 2, 3, 4, 5).
+    
+- If you write:
+
+```cpp
+findAverage(2, 4, 6);
+```
+
+- Then `args...` will contain `{2, 4, 6}`.
+
+### 📦 3. `std::vector<int> nums{args...};`
+
+This line **collects all the arguments** and puts them into a vector of integers.
+
+Example:
+
+```cpp
+findAverage(1, 2, 3, 4);
+```
+
+→ `nums = {1, 2, 3, 4}`
+
+### ➕ 4. Sum All Numbers
+
+```cpp
+double sum = 0;
+for (int n : nums) sum += n;
+```
+
+- Goes through each number in `nums`
+    
+- Adds them into `sum`
+
+### 🧮 5. Calculate and Return Average
+
+```cpp
+return sum / nums.size();
+```
+
+- `sum` = total of all numbers
+    
+- `nums.size()` = how many numbers
+    
+- Final result = sum / count
+
+```cpp
+std::cout << findAverage(1, 2, 3, 4, 5); // → 3
+std::cout << findAverage(10, 20);       // → 15
+```
+
+### 🛑 Important Point!
+
+This example assumes **all inputs are integers** (because vector is `std::vector<int>`). It will not correctly work for `double` like `findAverage(1.5, 2.5)`. We can improve that later.
+
+---
+
