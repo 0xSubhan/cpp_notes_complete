@@ -1324,13 +1324,13 @@ But the function does it using **recursion** (calling itself).
 
 #### 🔁 Let's Start with `sumTo(5)` (Going Down)
 
-|Function Call|What it asks|Doesn't know yet|
-|---|---|---|
-|sumTo(5)|"What is sumTo(4)?" + 5|Waiting|
-|sumTo(4)|"What is sumTo(3)?" + 4|Waiting|
-|sumTo(3)|"What is sumTo(2)?" + 3|Waiting|
-|sumTo(2)|"What is sumTo(1)?" + 2|Waiting|
-|sumTo(1)|I know: **1**|✅ Answer found!|
+| Function Call | What it asks            | Doesn't know yet |
+| ------------- | ----------------------- | ---------------- |
+| sumTo(5)      | "What is sumTo(4)?" + 5 | Waiting          |
+| sumTo(4)      | "What is sumTo(3)?" + 4 | Waiting          |
+| sumTo(3)      | "What is sumTo(2)?" + 3 | Waiting          |
+| sumTo(2)      | "What is sumTo(1)?" + 2 | Waiting          |
+| sumTo(1)      | I know: **1**           | ✅ Answer found!  |
 
 #### 🧵 Now We Return Back (Coming Up and Adding)
 
@@ -1825,5 +1825,322 @@ However, if the recursive algorithm is simpler to implement, it may make sense t
 
 >Best practice
 >Generally favor iteration over recursion, except when recursion really makes sense.
+
+---
+# Command line arguments
+
+### 🔍 **1. Why Do We Need Command Line Arguments?**
+
+Normally, when a program starts, it begins at `main()` and waits for the user to **enter input** using `std::cin`.
+
+Example:
+
+```cpp
+std::cout << "Enter image filename: ";
+std::string filename;
+std::cin >> filename;
+```
+
+❗ Problem:  
+This approach **forces the user to input manually** every time the program runs. This is fine for small tasks, but becomes inefficient when:
+
+- You want to process **hundreds of files automatically**
+    
+- Another **program or script** wants to call your program
+    
+- Your program needs to run on a **server or website** (no user typing!)
+
+### 🏁 Solution → Command Line Arguments
+
+Command line arguments allow us to give input **at the moment of launching the program**, like this:
+
+```bash
+WordCount MyFile.txt
+```
+
+📌 Here:
+
+- `WordCount` → Program name
+    
+- `MyFile.txt` → Input provided directly via command line
+    
+
+💡 This means no asking the user with `cin`. The program **starts and directly has the input** it needs.
+
+### 🧠 2. How Do We Use Command Line Arguments?
+
+We use a different version of `main()`:
+
+```cpp
+int main(int argc, char* argv[])
+```
+
+#### 🔍 What are `argc` and `argv`?
+
+|Parameter|Meaning|
+|---|---|
+|`argc`|Argument Count → Number of arguments|
+|`argv`|Argument Vector → Array of arguments (C-style strings)|
+#### ✅ Key Concept: C-String = Pointer to First Character
+
+In C/C++, a **string** is not a built-in type. A string is just an **array of characters** that ends with a special null character: `'\0'`.
+
+📌 And in C++, the **name of an array** decays to a **pointer to its first element**.
+
+So, when you write:
+
+```cpp
+char* str = "Hello";
+```
+
+- `"Hello"` is stored as: `H e l l o \0`
+    
+- `str` is a **pointer to the first character ('H')**
+    
+- But since we know strings continue until `'\0'`, we treat it as the **entire string**
+
+#### 🪢 Now What About `char* arr[]`?
+
+```cpp
+char* names[] = {"Ali", "Ahmed", "Sara"};
+```
+
+This is:
+
+- An **array (`[]`)**
+    
+- Each element is a `char*` → pointer to the first character of a separate string
+
+```cpp
+names[0] → "Ali"   → points to 'A'
+names[1] → "Ahmed" → points to 'A'
+names[2] → "Sara"  → points to 'S'
+```
+
+📦 Memory Picture
+
+```cpp
+names array:
++----------+----------+----------+
+| names[0] | names[1] | names[2] |
++----------+----------+----------+
+     ↓          ↓          ↓
+   "Ali"     "Ahmed"     "Sara"
+```
+
+### 🗂 Example Command
+
+```bash
+MyArgs Myfile.txt 100
+```
+
+|Index|Argument Value|
+|---|---|
+|`argv[0]`|Program name (e.g., MyArgs.exe or ./MyArgs)|
+|`argv[1]`|`"Myfile.txt"`|
+|`argv[2]`|`"100"`|
+|`argc`|`3` (total arguments)|
+
+### 🔬 3. Inside the Program
+
+Example code:
+
+```cpp
+#include <iostream>
+
+int main(int argc, char* argv[])
+{
+    std::cout << "There are " << argc << " arguments:\n";
+
+    for (int i = 0; i < argc; ++i)
+        std::cout << i << " " << argv[i] << '\n';
+
+    return 0;
+}
+```
+
+#### Output when run:
+
+```bash
+MyArgs Myfile.txt 100
+```
+
+```sql
+There are 3 arguments:
+0 C:\MyArgs
+1 Myfile.txt
+2 100
+```
+
+### 🔢 4. Numeric Arguments (Conversion Required)
+
+All command-line arguments are **strings**, even if they look like numbers.
+
+To convert argument `"567"` to integer:
+
+```cpp
+#include <sstream>
+#include <string>
+#include <iostream>
+
+int main(int argc, char* argv[])
+{
+    std::stringstream convert{ argv[1] };  // argv[1] = "567"
+    int num{};
+    convert >> num;
+    std::cout << "Got integer: " << num << '\n';
+}
+```
+
+#### 💡 3️⃣ Using `std::stringstream` to Convert String → Integer
+
+```cpp
+std::stringstream convert{ argv[1] };
+```
+
+- This creates a **stringstream object**.
+    
+- It stores the string `"567"` inside it.
+
+#### 🔁 4️⃣ Extract Integer from Stream
+
+```cpp
+int num{};
+convert >> num;
+```
+
+- Works just like reading from `std::cin`
+    
+- It tries to read an **int** from the stored string
+    
+- `"567"` → 567 (as integer)
+
+#### 🖨 5️⃣ Output
+
+```cpp
+std::cout << "Got integer: " << num << '\n';
+```
+
+✨ Example output:
+
+```cpp
+Got integer: 567
+```
+
+### 🧵 5. How OS Processes Arguments
+
+Examples:
+
+```bash
+MyArgs Hello world!
+```
+
+Output:
+
+```bash
+1 Hello
+2 world!
+```
+
+But with quotes:
+
+```bash
+MyArgs "Hello world!"
+```
+
+Output:
+
+```bash
+1 Hello world!
+```
+
+### 🎯 Final Summary
+
+|Feature|Purpose|
+|---|---|
+|Command Line Arguments|Pass input at startup (no need for `cin`)|
+|`argc`|Number of arguments|
+|`argv`|Array of string arguments|
+|Use Case|Automation, scripting, server programs, batch operations|
+### 🧾 Practical Tip
+
+Make input required → Use command-line argument  
+If missing → Ask user with `cin`  
+This gives flexibility to run both manually or automatically.
+
+### 🛠 Passing Command Line Arguments in **VS Code**
+
+In VS Code, command line arguments are set in a file called **`launch.json`** inside the `.vscode` folder.
+
+### 📍 Step-by-Step Guide
+
+#### ✅ Step 1: Run Your Program Once
+
+- Press **`Run > Run Without Debugging`** or **`Ctrl + F5`**
+    
+- VS Code will ask you to create a **debug configuration**
+    
+- Choose **"C++ (GDB/LLDB)"** or your compiler option
+
+#### ✅ Step 2: Open `launch.json`
+
+If it didn't open automatically:
+
+- Go to **Run → Open Configurations**
+    
+- Or press `Ctrl + Shift + P` → _type_ `"Open launch.json"`
+
+#### ✅ Step 3: Add Your Arguments Here
+
+Inside `launch.json`, find or add:
+
+```cpp
+"args": ["Myfile.txt", "100"]
+```
+
+#### 📌 Example `launch.json`
+
+```cpp
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "C++ Run",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${fileDirname}/${fileBasenameNoExtension}",
+            "args": ["Myfile.txt", "100"],
+            "stopAtEntry": false,
+            "cwd": "${fileDirname}",
+            "environment": [],
+            "externalConsole": true,
+            "MIMode": "gdb"
+        }
+    ]
+}
+```
+
+#### 🧪 Now In Your Program (`main()`)
+
+```cpp
+#include <iostream>
+using namespace std;
+
+int main(int argc, char* argv[])
+{
+    cout << "Argument Count: " << argc << endl;
+    for (int i = 0; i < argc; ++i)
+        cout << "Arg " << i << ": " << argv[i] << endl;
+}
+```
+
+💻 When you **Run with Debugger (`F5`)**, Output:
+
+```cpp
+Argument Count: 3
+Arg 0: C:\path\program
+Arg 1: Myfile.txt
+Arg 2: 100
+```
 
 ---
