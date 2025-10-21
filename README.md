@@ -4,7 +4,7 @@ Welcome! This repository contains my personal, in-depth notes while studying C++
 
 ---
 
-## 🚀 Why This Repo?
+## 🚀 Why This Repo? ---
 
 While LearnCpp.com is an amazing resource, I’m creating a more **user-friendly**, **example-rich**, and **insightful** version of the material. These notes are designed to help not just me, but **any beginner or intermediate learner** who wants to understand C++ clearly and practically.
 
