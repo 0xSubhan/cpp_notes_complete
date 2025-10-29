@@ -3111,5 +3111,5 @@ Lambdas are great, but they don’t replace regular functions for all cases. Pre
 [Quiz](https://www.learncpp.com/cpp-tutorial/introduction-to-lambdas-anonymous-functions/#:~:text=and%20reusable%20cases.-,Quiz%20time,-Question%20%231)
 
 ---
-# Lambda captures
+
 
