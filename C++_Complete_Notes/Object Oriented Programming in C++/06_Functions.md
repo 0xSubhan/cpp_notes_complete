@@ -3113,5 +3113,437 @@ Lambdas are great, but they don’t replace regular functions for all cases. Pre
 ---
 # Lambda Captures
 
+Now, let’s modify the nut example and let the user pick a substring to search for. This isn’t as intuitive as you might expect.
 
+```cpp
+#include <algorithm>
+#include <array>
+#include <iostream>
+#include <string_view>
+#include <string>
 
+int main()
+{
+  std::array<std::string_view, 4> arr{ "apple", "banana", "walnut", "lemon" };
+
+  // Ask the user what to search for.
+  std::cout << "search for: ";
+
+  std::string search{};
+  std::cin >> search;
+
+  auto found{ std::find_if(arr.begin(), arr.end(), [](std::string_view str) {
+    // Search for @search rather than "nut".
+    return str.find(search) != std::string_view::npos; // Error: search not accessible in this scope
+  }) };
+
+  if (found == arr.end())
+  {
+    std::cout << "Not found\n";
+  }
+  else
+  {
+    std::cout << "Found " << *found << '\n';
+  }
+
+  return 0;
+}
+```
+
+This code won’t compile. Unlike nested blocks, where any identifier accessible in the outer block is accessible in the nested block, lambdas can only access certain kinds of objects that have been defined outside the lambda. This includes:
+
+- Objects with static (or thread local) storage duration (this includes global variables and static locals)
+- Objects that are constexpr (explicitly or implicitly)
+
+Since `search` fulfills none of these requirements, the lambda can’t see it.
+
+>[!Tip]
+>Lambdas can only access certain kinds of objects that have been defined outside the lambda, including those with static storage duration (e.g. global variables and static locals) and constexpr objects.
+
+To access `search` from within the lambda, we’ll need to use a capture clause.
+
+### The capture clause
+
+The **capture clause** is used to (indirectly) give a lambda access to variables available in the surrounding scope that it normally would not have access to. All we need to do is list the entities we want to access from within the lambda as part of the capture clause. In this case, we want to give our lambda access to the value of variable `search`, so we add it to the capture clause:
+
+```cpp
+#include <algorithm>
+#include <array>
+#include <iostream>
+#include <string_view>
+#include <string>
+
+int main()
+{
+  std::array<std::string_view, 4> arr{ "apple", "banana", "walnut", "lemon" };
+
+  std::cout << "search for: ";
+
+  std::string search{};
+  std::cin >> search;
+
+  // Capture @search                                vvvvvv
+  auto found{ std::find_if(arr.begin(), arr.end(), [search](std::string_view str) {
+    return str.find(search) != std::string_view::npos;
+  }) };
+
+  if (found == arr.end())
+  {
+    std::cout << "Not found\n";
+  }
+  else
+  {
+    std::cout << "Found " << *found << '\n';
+  }
+
+  return 0;
+}
+```
+
+The user can now search for an element of our array.
+
+Output
+
+search for: nana
+Found banana
+
+### 🧩 1. What _actually happens_ when a lambda “captures” something
+
+When you write a lambda like this:
+
+```cpp
+int search{42};
+
+auto find = [search]() {
+    std::cout << search << '\n';
+};
+```
+
+It might look like the lambda is directly accessing `search` from `main()`, but **it’s not**.
+
+👉 What’s really happening:
+
+- When the lambda is _defined_, the compiler **creates an object** behind the scenes.
+    
+- That object has **member variables** for every captured variable.
+    
+- So `search` in the capture becomes a _data member_ of the lambda object.
+    
+- That data member is **initialized (copied)** from the current value of `search` at that moment.
+    
+
+So:
+
+- The lambda now has its **own copy** of `search`.
+    
+- Changing `search` in main() won’t affect the lambda’s `search`, and vice versa.
+    
+
+🧠 **Key idea:**
+
+> Captured variables are _copies_ (clones) stored inside the lambda object — not direct references to the originals (unless you use reference capture).
+
+### ⚙️ 2. Lambdas are actually **objects** (functors)
+
+Even though lambdas _look_ like functions, they’re **actually objects** that behave like functions — i.e., they are **functors** (objects with an overloaded `operator()`).
+
+Example:
+
+```cpp
+auto f = []() { std::cout << "Hello"; };
+```
+
+is basically like writing:
+
+```cpp
+struct LambdaGenerated {
+    void operator()() const {
+        std::cout << "Hello";
+    }
+};
+
+LambdaGenerated f;
+```
+
+So when you “call the lambda” using `f();`, you’re really calling `f.operator()();`.
+
+And any variable captured is a **member** of this object.
+
+### 🧱 3. Captures are **const** by default
+
+Example:
+
+```cpp
+int ammo{10};
+
+auto shoot = [ammo]() {
+    --ammo; // ❌ ERROR
+};
+```
+
+This fails because:
+
+- Captured variables are copied as _const members_ inside the lambda object.
+    
+- The lambda’s `operator()` is `const` by default.
+    
+- So you can’t modify captured values unless you mark the lambda as `mutable`.
+
+### ✏️ 4. Making captures **mutable**
+
+You can allow modification like this:
+
+```cpp
+int ammo{10};
+
+auto shoot = [ammo]() mutable {
+    --ammo;
+    std::cout << "Pew! " << ammo << '\n';
+};
+```
+
+Now it compiles and runs.
+
+Output:
+
+```cpp
+Pew! 9
+Pew! 8
+10 shot(s) left
+```
+
+👉 Explanation:
+
+- `mutable` allows modifying the _lambda’s copy_ of `ammo`.
+    
+- But it does **not** modify the original `ammo` in `main()`.
+    
+- The lambda keeps its internal copy, which persists across calls.
+    
+
+🧠 So when you call it twice, it decrements its own copy from 10 → 9 → 8.
+
+### 🔗 5. Capture by **reference (&)**
+
+If you want the lambda to modify the original variable, capture by **reference**:
+
+```cpp
+int ammo{10};
+
+auto shoot = [&ammo]() {
+    --ammo;
+    std::cout << "Pew! " << ammo << '\n';
+};
+
+shoot();
+std::cout << ammo;  // prints 9
+```
+
+Now it modifies the original `ammo` in `main()`.
+
+💡 When capturing by reference:
+
+- The lambda doesn’t copy the variable.
+    
+- It stores a _reference_ to the original variable.
+    
+- If that variable changes (or goes out of scope), the lambda “sees” that.
+
+### ⚔️ 6. Capturing **multiple variables**
+
+You can capture multiple variables by mixing values and references:
+
+```cpp
+[health, armor, &enemies]() { /* ... */ };
+```
+
+- `health` and `armor` are captured by value (copies)
+    
+- `enemies` is captured by reference
+    
+
+### 🧮 7. Default captures (= and &)
+
+Typing every variable name can be annoying, so you can tell the compiler how to _automatically_ capture variables.
+
+|Default capture|Meaning|
+|---|---|
+|`[=]`|Capture _all used variables_ by value|
+|`[&]`|Capture _all used variables_ by reference|
+
+Example:
+
+```cpp
+auto found = std::find_if(areas.begin(), areas.end(),
+                          [=](int knownArea) {
+                              return width * height == knownArea;
+                          });
+```
+
+Here, `width` and `height` are captured by **value** automatically.
+
+You can mix defaults with explicit captures:
+
+```cpp
+[=, &enemies]() {};  // all by value, except enemies by reference
+[&, armor]() {};     // all by reference, except armor by value
+```
+
+⚠️ Rules:
+
+- Default capture must appear first.
+    
+- You can’t capture the same variable twice.
+    
+- `[&, &armor]` or `[=, armor]` are illegal.
+
+### 🧠 8. Defining **new variables** in capture
+
+You can define new variables inside the capture list:
+
+```cpp
+[userArea{width * height}](int knownArea) {
+    return userArea == knownArea;
+}
+```
+
+Here:
+
+- `userArea` is calculated _once_ when the lambda is created.
+    
+- It’s stored inside the lambda object.
+    
+- It’s not re-evaluated every time the lambda runs.
+    
+
+### ⚠️ 9. **Dangling captures** (a common mistake)
+
+If you capture a variable **by reference**, but that variable dies, the lambda is left holding a _dangling reference_ → **undefined behavior**.
+
+Example:
+
+```cpp
+auto makeWalrus(const std::string& name)
+{
+  return [&]() {
+    std::cout << name << '\n'; // ❌ undefined behavior
+  };
+}
+
+int main() {
+  auto sayName = makeWalrus("Roofus"); // "Roofus" is temporary
+  sayName(); // dangling reference used
+}
+```
+
+When `makeWalrus` returns, the parameter `name` is destroyed.  
+The lambda still points to it — bad!
+
+✅ Fix: capture by **value**
+
+```cpp
+return [=]() {
+  std::cout << name << '\n'; // safe
+};
+```
+
+### 🧍‍♂️ 10. Unintended **copies** of mutable lambdas
+
+Because lambdas are objects, **they can be copied.**
+
+Example:
+
+```cpp
+auto count = [i = 0]() mutable {
+  std::cout << ++i << '\n';
+};
+
+count();       // prints 1
+auto other = count;  // copy lambda object (copies i = 1)
+count();       // prints 2
+other();       // prints 2
+```
+
+Each lambda object keeps its own copy of captured variables.
+
+### 💡 11. Copies in `std::function` parameters
+
+If you pass a lambda into a function expecting a `std::function`, the lambda gets **copied**.
+
+```cpp
+void myInvoke(const std::function<void()>& fn) {
+    fn();
+}
+
+auto count = [i = 0]() mutable { std::cout << ++i << '\n'; };
+
+myInvoke(count);
+myInvoke(count);
+myInvoke(count);
+```
+
+Output:
+
+```cpp
+1
+1
+1
+```
+
+Why? Because `myInvoke(count)` creates a **temporary `std::function`**, which copies the lambda each time.
+
+### ✅ Fixes for this issue
+
+#### Option 1 — Store it in a `std::function` first:
+
+```cpp
+std::function<void()> count = [i = 0]() mutable {
+  std::cout << ++i << '\n';
+};
+
+myInvoke(count); // No extra copies
+myInvoke(count);
+```
+
+Output:
+
+```cpp
+1
+2
+3
+```
+
+#### Option 2 — Use `std::ref()` (reference wrapper)
+
+```cpp
+myInvoke(std::ref(count));
+```
+
+This makes sure the lambda is **not copied**, only _referenced_.
+
+### 🧭 12. Best Practices Summary
+
+✅ **Capture by value**  
+– When you only need to read variables, not modify them.  
+– Safer, no dangling references.
+
+✅ **Capture by reference**  
+– When you want to modify external variables.  
+– Make sure captured variables _outlive_ the lambda.
+
+✅ **Avoid mutable lambdas**  
+– They can be confusing and cause bugs when copied or used in multithreaded contexts.
+
+✅ **If using mutable lambdas in std::function**  
+– Use `std::ref()` or wrap in `std::function` yourself to avoid unintentional copies.
+
+✅ **Define new variables in capture** only when short and clear.
+
+==Quiz Remaining 
+https://www.learncpp.com/cpp-tutorial/lambda-captures/#:~:text=add%20parallel%20execution.-,Quiz%20time,-Question%20%231
+
+---
+
+# [Summary And Quiz Of Whole Chapter](https://www.learncpp.com/cpp-tutorial/chapter-20-summary-and-quiz/)
+
+---
