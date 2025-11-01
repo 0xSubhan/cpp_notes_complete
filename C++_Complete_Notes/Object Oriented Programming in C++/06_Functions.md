@@ -3544,6 +3544,6 @@ https://www.learncpp.com/cpp-tutorial/lambda-captures/#:~:text=add%20parallel%20
 
 ---
 
-# [Summary And Quiz Of Whole Chapter](https://www.learncpp.com/cpp-tutorial/chapter-20-summary-and-quiz/)
+# ==[Summary And Quiz Of Whole Chapter](https://www.learncpp.com/cpp-tutorial/chapter-20-summary-and-quiz/)
 
 ---
