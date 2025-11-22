@@ -430,3 +430,312 @@ One question that new programmers often ask when it comes to object composition 
 In this case of our example, it makes sense that Creature shouldn’t have to worry about how Points are implemented, or how the name is being stored. Creature’s job isn’t to know those intimate details. Creature’s job is to worry about how to coordinate the data flow and ensure that each of the class members knows _what_ it is supposed to do. It’s up to the individual classes to worry about _how_ they will do it.
 
 ---
+# Aggregation
+
+To qualify as an **aggregation**, a whole object and its parts must have the following relationship:
+
+- The part (member) is part of the object (class)
+- The part (member) can (if desired) belong to more than one object (class) at a time
+- The part (member) does _not_ have its existence managed by the object (class)
+- The part (member) does not know about the existence of the object (class)
+
+>Like a composition, an aggregation is still a part-whole relationship, where the parts are contained within the whole, and it is a unidirectional relationship. However, unlike a composition, parts can belong to more than one object at a time, and the whole object is not responsible for the existence and lifespan of the parts. When an aggregation is created, the aggregation is not responsible for creating the parts. When an aggregation is destroyed, the aggregation is not responsible for destroying the parts.
+
+For example, consider the relationship between a person and their home address. In this example, for simplicity, we’ll say every person has an address. However, that address can belong to more than one person at a time: for example, to both you and your roommate or significant other. However, that address isn’t managed by the person -- the address probably existed before the person got there, and will exist after the person is gone. Additionally, a person knows what address they live at, but the addresses don’t know what people live there. Therefore, this is an aggregate relationship.
+
+>Alternatively, consider a car and an engine. A car engine is part of the car. And although the engine belongs to the car, it can belong to other things as well, like the person who owns the car. The car is not responsible for the creation or destruction of the engine. And while the car knows it has an engine (it has to in order to get anywhere) the engine doesn’t know it’s part of the car.
+
+When it comes to modeling physical objects, the use of the term “destroyed” can be a little dicey. One might argue, “If a meteor fell out of the sky and crushed the car, wouldn’t the car parts all be destroyed too?” Yes, of course. But that’s the fault of the meteor. The important point is that the car is not responsible for destruction of its parts (but an external force might be).
+
+We can say that aggregation models “has-a” relationships (a department has teachers, the car has an engine).
+
+Similar to a composition, the parts of an aggregation can be singular or multiplicative.
+
+### Implementing aggregations
+
+Aggregation is a **weaker form of the “part-of” relationship** compared to composition.
+
+Both composition and aggregation are part-whole relationships, but the **key difference** is:
+
+> **In aggregation, the whole does NOT own the part.  
+> The part can outlive the whole.**
+
+This is why aggregation is also called a **“shared ownership” or “has-a (but doesn’t own)”** relationship.
+
+#### How Aggregation is Implemented
+
+Aggregation is implemented similarly to composition, but with one crucial difference:
+
+##### ✔ Composition uses _actual_ member objects
+
+##### ✔ Aggregation uses _references or pointers_ to objects created elsewhere
+
+Meaning:
+
+##### 🔹 The parts are **NOT** created inside the class
+
+##### 🔹 The class only **points** to objects created outside
+
+##### 🔹 When the class is destroyed, it does **NOT** destroy those objects
+
+### ✔ **How Aggregation Works Internally**
+
+#### 1. **Parts come from outside the class**
+
+The aggregating object (the “whole”) does not create the parts.  
+They are passed in or added later.
+
+#### 2. **Member variable is a pointer or reference**
+
+Instead of:
+
+```cpp
+Teacher m_teacher; // would be composition
+```
+
+We Use:
+
+```cpp
+const Teacher& m_teacher; // aggregation
+```
+
+This means “I refer to a Teacher, but I don’t own it.”
+
+#### 3. **When the aggregator dies, the part stays alive**
+
+Only the pointer/reference member is destroyed, not the object it pointed to.
+
+### ⭐ **Example: Teacher & Department**
+
+```cpp
+#include <iostream>
+#include <string>
+#include <string_view>
+
+class Teacher
+{
+private:
+  std::string m_name{};
+
+public:
+  Teacher(std::string_view name)
+      : m_name{ name }
+  {
+  }
+
+  const std::string& getName() const { return m_name; }
+};
+
+class Department
+{
+private:
+  const Teacher& m_teacher; // This dept holds only one teacher for simplicity, but it could hold many teachers
+
+public:
+  Department(const Teacher& teacher)
+      : m_teacher{ teacher }
+  {
+  }
+};
+
+int main()
+{
+  // Create a teacher outside the scope of the Department
+  Teacher bob{ "Bob" }; // create a teacher
+
+  {
+    // Create a department and use the constructor parameter to pass
+    // the teacher to it.
+    Department department{ bob };
+
+  } // department goes out of scope here and is destroyed
+
+  // bob still exists here, but the department doesn't
+
+  std::cout << bob.getName() << " still exists!\n";
+
+  return 0;
+}
+```
+
+#### 🔸 **Teacher bob is created first**
+
+He exists independently.
+
+```cpp
+Teacher bob{ "Bob" };
+```
+
+#### 🔸 Then Department is created, and it receives a reference to bob
+
+```cpp
+Department department{ bob };
+```
+
+- Department _does not_ own bob
+    
+- It only **refers** to bob
+    
+- bob lives outside Department
+    
+
+#### 🔸 When Department goes out of scope, it is destroyed
+
+```cpp
+} // department is destroyed here
+```
+
+But bob **still exists**, because Department did NOT create bob and does NOT manage bob's lifetime.
+
+### 🔍 **Why this is Aggregation (not Composition)?**
+
+Let’s check the rules:
+
+#### **1. Part is part of the whole?**
+
+Yes.  
+A Department _has-a_ Teacher.
+
+#### **2. Part can belong to many wholes?**
+
+Yes.  
+A Teacher can be associated with multiple Departments (in a bigger example).
+
+In composition, this would NOT be allowed.
+
+#### **3. Whole does NOT manage the part’s lifetime**
+
+✔ Correct — this is the BIG difference.
+
+- Department does NOT create Teacher
+    
+- Department does NOT destroy Teacher
+    
+
+bob continues existing after Department is gone.
+
+#### **4. The part may or may not know about the whole**
+
+In this example:
+
+- Teacher does NOT know about Department
+    
+- The relationship is **unidirectional**
+    
+
+(This can also happen in composition, but it's more common in aggregation.)
+
+### 🎯 **Key Points in the Code**
+
+### ✔ `Teacher bob{ "Bob" };`
+
+Teacher bob is created in main().  
+He exists independently.
+
+### ✔ `Department department{ bob };`
+
+Department receives a **reference** to bob.
+
+### ✔ `m_teacher` is a reference
+
+So Department does NOT own or manage bob.
+
+### ✔ Department is destroyed when the inner scope ends
+
+But bob is NOT destroyed.
+
+### 🔵 **Aggregation vs Composition Summary**
+
+|Feature|Composition|Aggregation|
+|---|---|---|
+|Ownership|Whole _owns_ the part|Whole _uses_ the part but doesn't own it|
+|Lifetime|Part dies with whole|Part lives independently|
+|Implementation|Member object|Pointer or reference|
+|Example|Person → Heart|Department → Teacher|
+|Strong or weak?|Strong relationship|Weak relationship|
+
+### Pick the right relationship for what you’re modeling
+
+Although it might seem a little silly in the above example that the Teachers don’t know what Department they’re working for, that may be totally fine in the context of a given program. When you’re determining what kind of relationship to implement, implement the simplest relationship that meets your needs, not the one that seems like it would fit best in a real-life context.
+
+>For example, if you’re writing a body shop simulator, you may want to implement a car and engine as an aggregation, so the engine can be removed and put on a shelf somewhere for later. However, if you’re writing a racing simulation, you may want to implement a car and an engine as a composition, since the engine will never exist outside of the car in that context.
+
+>[!Tip]
+>Implement the simplest relationship type that meets the needs of your program, not what seems right in real-life.
+
+### Summarizing composition and aggregation
+
+Compositions:
+
+- Typically use normal member variables
+- Can use pointer members if the class handles object allocation/deallocation itself
+- Responsible for creation/destruction of parts
+
+Aggregations:
+
+- Typically use pointer or reference members that point to or reference objects that live outside the scope of the aggregate class
+- Not responsible for creating/destroying parts
+
+It is worth noting that the concepts of composition and aggregation can be mixed freely within the same class. It is entirely possible to write a class that is responsible for the creation/destruction of some parts but not others. For example, our Department class could have a name and a Teacher. The name would probably be added to the Department by composition, and would be created and destroyed with the Department. On the other hand, the Teacher would be added to the department by aggregation, and created/destroyed independently.
+
+While aggregations can be extremely useful, they are also potentially more dangerous, because aggregations do not handle deallocation of their parts. Deallocations are left to an external party to do. If the external party no longer has a pointer or reference to the abandoned parts, or if it simply forgets to do the cleanup (assuming the class will handle that), then memory will be leaked.
+
+For this reason, compositions should be favored over aggregations.
+
+### std::reference_wrapper
+
+In the `Department`/`Teacher` example above, we used a reference in the `Department` to store the `Teacher`. This works fine if there is only one `Teacher`, but what if a Department has multiple Teachers? We’d like to store those Teachers in a list of some kind (e.g. a `std::vector`) but fixed arrays and the various standard library lists can’t hold references (because list elements must be assignable, and references can’t be reassigned).
+
+```cpp
+std::vector<const Teacher&> m_teachers{}; // Illegal
+```
+
+Instead of references, we could use pointers, but that would open the possibility to store or pass null pointers. In the `Department`/`Teacher` example, we don’t want to allow null pointers. To solve this, there’s `std::reference_wrapper`.
+
+Essentially, `std::reference_wrapper` is a class that acts like a reference, but also allows assignment and copying, so it’s compatible with lists like `std::vector`.
+
+The good news is that you don’t really need to understand how it works to use it. All you need to know are three things:
+
+1. `std::reference_wrapper` lives in the `<functional>` header.
+2. When you create your `std::reference_wrapper` wrapped object, the object can’t be an anonymous object (since anonymous objects have expression scope, and this would leave the reference dangling).
+3. When you want to get your object back out of `std::reference_wrapper`, you use the `get()` member function.
+
+Here’s an example using `std::reference_wrapper` in a `std::vector`:
+
+```cpp
+#include <functional> // std::reference_wrapper
+#include <iostream>
+#include <vector>
+#include <string>
+
+int main()
+{
+  std::string tom{ "Tom" };
+  std::string berta{ "Berta" };
+
+  std::vector<std::reference_wrapper<std::string>> names{ tom, berta }; // these strings are stored by reference, not value
+
+  std::string jim{ "Jim" };
+
+  names.emplace_back(jim);
+
+  for (auto name : names)
+  {
+    // Use the get() member function to get the referenced string.
+    name.get() += " Beam";
+  }
+
+  std::cout << jim << '\n'; // prints Jim Beam
+
+  return 0;
+}
+```
+
+To create a vector of const references, we’d have to add const before the `std::string` like so
+
+```cpp
+// Vector of const references to std::string
+std::vector<std::reference_wrapper<const std::string>> names{ tom, berta };
+```
+
+---
