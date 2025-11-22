@@ -4,21 +4,21 @@
     "type": "split",
     "children": [
       {
-        "id": "73f53736e4c37f0b",
+        "id": "f29af3c8f704d4ce",
         "type": "tabs",
         "children": [
           {
-            "id": "5062aa9c61f4cb21",
+            "id": "913973b7bed00a3b",
             "type": "leaf",
             "state": {
               "type": "markdown",
               "state": {
-                "file": "C++_Complete_Notes/Object Oriented Programming in C++/06_Functions.md",
+                "file": "C++_Complete_Notes/Object Oriented Programming in C++/07_Object Relationships.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "06_Functions"
+              "title": "07_Object Relationships"
             }
           }
         ]
@@ -171,8 +171,9 @@
       "command-palette:Open command palette": false
     }
   },
-  "active": "5062aa9c61f4cb21",
+  "active": "913973b7bed00a3b",
   "lastOpenFiles": [
+    "C++_Complete_Notes/Object Oriented Programming in C++/07_Object Relationships.md",
     "C++_Complete_Notes/Object Oriented Programming in C++/06_Functions.md",
     "C++_Complete_Notes/Object Oriented Programming in C++/03_Fixed size arrays, std array and C style arrays.md",
     "C++_Complete_Notes/Object Oriented Programming in C++/05_Dynamic Allocation.md",
@@ -210,7 +211,6 @@
     "C++_Complete_Notes/Chapter 05 - Constants and Strings.md",
     "C++_Complete_Notes/Chapter 12 - Compound Types  References and Pointers.md",
     "C++_Complete_Notes/Chapter 11 - Function Overloading and Function Templates.md",
-    "****.md",
     "Pasted image 20250519184156.png",
     "Pasted image 20250506200737.png",
     "memviz1.webp",
