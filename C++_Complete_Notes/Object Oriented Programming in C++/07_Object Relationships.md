@@ -1489,3 +1489,181 @@ Here’s a summary table to help you remember the difference between composition
 |Relationship verb|Part-of|Has-a|Uses-a|
 
 ---
+# Dependencies
+
+## ⭐ **What Are Dependencies in C++?**
+
+So far you’ve learned:
+
+- **Composition** → “has-a” AND owns the lifetime
+    
+- **Aggregation** → “has-a” but _does NOT own_ the lifetime
+    
+- **Association** → “uses/knows-about” long-term (unidirectional or bidirectional)
+    
+
+Now comes the **simplest and weakest relationship**:
+
+## 🔵 **Dependency ("uses temporarily")**
+
+A **dependency** happens when:
+
+> One object temporarily uses another object **to perform a task**, but does not store it, own it, or maintain a long-term link.
+
+In simple words:
+
+- You **use** something _momentarily_ to get something done.
+    
+- You **don’t keep it**, and you don’t “know it” permanently.
+    
+
+Example in real life:
+
+- You use crutches only when your foot is broken (temporary).
+    
+- A plant _depends_ on bees only for pollination (not always).
+    
+
+In programming:
+
+- A class “depends on” another class when it **calls its functions** to get some work done.
+
+## 🔵 **Key characteristics of a dependency**
+
+✔ It is **temporary**
+
+✔ It does **not appear as a data member** inside the class
+
+✔ It is almost always **unidirectional**
+
+✔ If the depended-on class changes, the dependent code may break
+
+## ⭐ Example: `Point` depending on `std::ostream`
+
+```cpp
+friend std::ostream& operator<< (std::ostream& out, const Point& point);
+```
+
+Here:
+
+- The `Point` class **does not store** a `std::ostream` object
+    
+- It only **uses** it when printing
+    
+- The dependency happens **only during the operator<< call**
+    
+
+So:
+
+- `Point` **does not have** an ostream
+    
+- It **uses** ostream _temporarily_ → that is a **dependency**
+
+## 🔵 **Where is the dependency visible?**
+
+### 1. Inside the class declaration
+
+`Point` declares:
+
+```cpp
+friend std::ostream& operator<<(std::ostream&, const Point&);
+```
+
+This means `Point` must know that `std::ostream` exists → it depends on it.
+
+### 2. In `main()`
+
+```cpp
+std::cout << point1;
+```
+
+The program depends on:
+
+- `std::cout`
+    
+- The overloaded `operator<<`
+    
+- `std::ostream`
+    
+
+All to accomplish **printing**.
+
+##  **Dependencies vs Associations — What’s the Difference?**
+
+Many people confuse these two. Here’s the clean difference:
+
+## 🔷 **Association ("knows long-term")**
+
+✔ The depending object _stores_ some form of link:
+
+- pointer
+    
+- reference
+    
+- ID
+    
+- vector of pointers
+    
+- etc.
+    
+
+✔ It keeps knowing about the other object for its **entire lifetime**
+
+Example:
+
+```cpp
+class Doctor {
+    std::vector<Patient*> patients;
+};
+```
+
+Doctor **always knows** his patients → permanent link → association.
+
+### 🔶 **Dependency ("uses temporarily")**
+
+❌ No member variable storing the related object  
+❌ No long-term relationship  
+❌ Only uses the object during a function call
+
+Example:
+
+```cpp
+void print() {
+    std::cout << value;   // temporary use
+}
+```
+
+## 🔵 **Quick Comparison Table**
+
+|Relationship|Stores as Member?|Lifetime Tied?|Direction|Strength|
+|---|---|---|---|---|
+|**Composition**|Yes|Yes|Uni|Strongest|
+|**Aggregation**|Yes|No|Uni|Strong|
+|**Association**|Yes (direct/indirect)|No|Uni OR Bi|Medium|
+|**Dependency**|**No**|No|Uni|Weakest|
+
+## ⭐ **Easy Real-Life Analogy**
+
+### **Association**
+
+Like a friend in your contact list — their number stays saved.
+
+### **Dependency**
+
+Like borrowing scissors from someone to cut tape — you don’t keep them.
+
+## 🔵 Summary (Very Simple Version)
+
+- **Dependency** = “uses temporarily”
+    
+- It happens during a **function call**
+    
+- No pointer/reference/member inside the class
+    
+- Much weaker than association
+    
+- Always **unidirectional**
+    
+- Example: printing using `std::ostream`
+
+---
