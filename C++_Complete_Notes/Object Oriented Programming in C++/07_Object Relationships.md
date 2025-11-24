@@ -2226,3 +2226,483 @@ A few additional improvements that could/should be made:
 >One more thing: If a class in the standard library meets your needs, use that instead of creating your own. For example, instead of using IntArray, you’re better off using `std::vector<int>`. It’s battle tested, efficient, and plays nicely with the other classes in the standard library. But sometimes you need a specialized container class that doesn’t exist in the standard library, so it’s good to know how to create your own when you need to.
 
 ---
+# std::initializer_list
+
+In the previous lesson, we introduced the concept of container classes, and showed an example of an IntArray class that holds an array of integers:
+
+```cpp
+#include <cassert> // for assert()
+#include <iostream>
+
+class IntArray
+{
+private:
+    int m_length{};
+    int* m_data{};
+
+public:
+    IntArray() = default;
+
+    IntArray(int length)
+        : m_length{ length }
+	, m_data{ new int[static_cast<std::size_t>(length)] {} }
+    {
+    }
+
+    ~IntArray()
+    {
+        delete[] m_data;
+        // we don't need to set m_data to null or m_length to 0 here, since the object will be destroyed immediately after this function anyway
+    }
+
+    int& operator[](int index)
+    {
+        assert(index >= 0 && index < m_length);
+        return m_data[index];
+    }
+
+    int getLength() const { return m_length; }
+};
+
+int main()
+{
+	// What happens if we try to use an initializer list with this container class?
+	IntArray array { 5, 4, 3, 2, 1 }; // this line doesn't compile
+	for (int count{ 0 }; count < 5; ++count)
+		std::cout << array[count] << ' ';
+
+	return 0;
+}
+```
+
+This code won’t compile, because the IntArray class doesn’t have a constructor that knows what to do with an initializer list. As a result, we’re left initializing our array elements individually:
+
+```cpp
+int main()
+{
+	IntArray array(5);
+	array[0] = 5;
+	array[1] = 4;
+	array[2] = 3;
+	array[3] = 2;
+	array[4] = 1;
+
+	for (int count{ 0 }; count < 5; ++count)
+		std::cout << array[count] << ' ';
+
+	return 0;
+}
+```
+
+That’s not so great.
+
+## Class initialization using std::initializer_list
+
+When a compiler sees an initializer list, it automatically converts it into an object of type std::initializer_list. Therefore, if we create a constructor that takes a std::initializer_list parameter, we can create objects using the initializer list as an input.
+
+std::initializer_list lives in the `<initializer_list>` header.
+
+There are a few things to know about std::initializer_list. Much like std::array or std::vector, you have to tell std::initializer_list what type of data the list holds using angled brackets, unless you initialize the std::initializer_list right away. Therefore, you’ll almost never see a plain std::initializer_list. Instead, you’ll see something like `std::initializer_list<int>` or `std::initializer_list<std::string>`.
+
+Second, std::initializer_list has a (misnamed) size() function which returns the number of elements in the list. This is useful when we need to know the length of the list passed in.
+
+Third, std::initializer_list is often passed by value. Much like std::string_view, std::initializer_list is a view. Copying a std::initializer_list does not copy the elements in the list.
+
+![Ezoic](https://go.ezodn.com/utilcave_com/ezoicbwa.png "ezoic")
+
+Let’s take a look at updating our IntArray class with a constructor that takes a std::initializer_list.
+
+```cpp
+#include <algorithm> // for std::copy
+#include <cassert> // for assert()
+#include <initializer_list> // for std::initializer_list
+#include <iostream>
+
+class IntArray
+{
+private:
+	int m_length {};
+	int* m_data{};
+
+public:
+	IntArray() = default;
+
+	IntArray(int length)
+		: m_length{ length }
+		, m_data{ new int[static_cast<std::size_t>(length)] {} }
+	{
+
+	}
+
+	IntArray(std::initializer_list<int> list) // allow IntArray to be initialized via list initialization
+		: IntArray(static_cast<int>(list.size())) // use delegating constructor to set up initial array
+	{
+		// Now initialize our array from the list
+		std::copy(list.begin(), list.end(), m_data);
+	}
+
+	~IntArray()
+	{
+		delete[] m_data;
+		// we don't need to set m_data to null or m_length to 0 here, since the object will be destroyed immediately after this function anyway
+	}
+
+	IntArray(const IntArray&) = delete; // to avoid shallow copies
+	IntArray& operator=(const IntArray& list) = delete; // to avoid shallow copies
+
+	int& operator[](int index)
+	{
+		assert(index >= 0 && index < m_length);
+		return m_data[index];
+	}
+
+	int getLength() const { return m_length; }
+};
+
+int main()
+{
+	IntArray array{ 5, 4, 3, 2, 1 }; // initializer list
+	for (int count{ 0 }; count < array.getLength(); ++count)
+		std::cout << array[count] << ' ';
+
+	return 0;
+}
+```
+
+This produces the expected result:
+
+5 4 3 2 1
+
+It works! Now, let’s explore this in more detail.
+
+Here’s our IntArray constructor that takes a `std::initializer_list<int>`.
+
+```cpp
+IntArray(std::initializer_list<int> list) // allow IntArray to be initialized via list initialization
+	: IntArray(static_cast<int>(list.size())) // use delegating constructor to set up initial array
+{
+	// Now initialize our array from the list
+	std::copy(list.begin(), list.end(), m_data);
+}
+```
+
+On line 1: As noted above, we have to use angled brackets to denote what type of element we expect inside the list. In this case, because this is an IntArray, we’d expect the list to be filled with int. Note that we don’t pass the list by const reference. Much like std::string_view, std::initializer_list is very lightweight and copies tend to be cheaper than an indirection.
+
+On line 2: We delegate allocating memory for the IntArray to the other constructor via a delegating constructor (to reduce redundant code). This other constructor needs to know the length of the array, so we pass it list.size(), which contains the number of elements in the list. Note that list.size() returns a size_t (which is unsigned) so we need to cast to a signed int here.
+
+The body of the constructor is reserved for copying the elements from the list into our IntArray class. The easiest way to do this is to use `std::copy()`, which lives in the `<algorithm>` header.
+
+## Accessing elements of a std::initializer_list
+
+### 🚀 **Why `std::initializer_list` has no operator[]**
+
+`std::initializer_list` is a very lightweight container designed only to _provide read-only access_ to a list of elements used during initialization, like:
+
+```cpp
+IntArray arr { 1, 2, 3, 4 };
+```
+
+But for some strange historical/committee reason:
+
+#### ❌ It does NOT support:
+
+- `list[i]` (no `operator[]`)
+    
+- modifying elements (list is immutable)
+    
+
+#### ✔ It DOES support:
+
+- iterating (range-based for)
+    
+- getting pointers/iterators (`begin()`, `end()`)
+    
+- knowing its size (`size()`)
+
+### ✔ **How to access elements anyway**
+
+Although it lacks `operator[]`, it provides a **random-access iterator**, meaning:
+
+```cpp
+list.begin()[0]
+list.begin()[1]
+list.begin()[2]
+```
+
+all work — because the iterator returned by `begin()` points to a **contiguous array** under the hood.
+
+### 🧠 Understanding the code:
+
+```cpp
+IntArray(std::initializer_list<int> list)
+    : IntArray(static_cast<int>(list.size()))
+{
+    for (std::size_t count{}; count < list.size(); ++count)
+    {
+        m_data[count] = list.begin()[count];
+    }
+}
+```
+
+Let's break it down.
+
+### 🔹 Step 1: Delegating constructor sets up the array
+
+```cpp
+: IntArray(static_cast<int>(list.size()))
+```
+
+This calls another constructor:
+
+```cpp
+IntArray(int size)
+```
+
+So, memory for `m_data` is already allocated with the correct size.
+
+### 🔹 Step 2: Copy each element from the initializer_list
+
+We loop from `0` to `list.size() - 1`.
+
+```cpp
+m_data[count] = list.begin()[count];
+```
+
+#### What is `list.begin()`?
+
+A pointer/iterator to the first element.
+
+Example:
+
+```cpp
+ list = { 10, 20, 30 }
+
+ list.begin() → pointer to 10
+ list.begin()[0] → 10
+ list.begin()[1] → 20
+ list.begin()[2] → 30
+```
+
+So effectively this works exactly like normal array indexing, just through the iterator.
+
+### ✔ Why does this work?
+
+Because the initializer list stores its elements in a **contiguous array**, and the iterator returned is a **raw pointer** (or something equivalent). So indexing the iterator is allowed.
+
+### 🎯 Summary
+
+#### `std::initializer_list` limitations:
+
+- No `operator[]`
+    
+- Immutable
+    
+
+#### How to access elements:
+
+1. **Use range-based for loop**
+    
+2. **Use begin()[index]** — works because iterators are random-access
+    
+
+#### Code purpose:
+
+- Allocate array of required size
+    
+- Copy values from initializer list using iterator indexing
+
+## List initialization prefers list constructors over non-list constructors
+
+Non-empty initializer lists will always favor a matching initializer_list constructor over other potentially matching constructors. Consider:
+
+```cpp
+IntArray a1(5);   // uses IntArray(int), allocates an array of size 5
+IntArray a2{ 5 }; // uses IntArray<std::initializer_list<int>, allocates array of size 1
+```
+
+The `a1` case uses direct initialization (which doesn’t consider list constructors), so this definition will call `IntArray(int)`, allocating an array of size 5.
+
+The `a2` case uses list initialization (which favors list constructors). Both `IntArray(int)` and `IntArray(std::initializer_list<int>)` are possible matches here, but since list constructors are favored, `IntArray(std::initializer_list<int>)` will be called, allocating an array of size 1 (with that element having value 5)
+
+This is why our delegating constructor above uses direct initialization when delegating:
+
+```cpp
+IntArray(std::initializer_list<int> list)
+	: IntArray(static_cast<int>(list.size())) // uses direct init
+```
+
+That ensures we delegate to the `IntArray(int)` version. If we had delegated using list initialization instead, the constructor would try to delegate to itself, which will cause a compile error.
+
+The same happens to std::vector and other container classes that have both a list constructor and a constructor with a similar type of parameter
+
+```cpp
+std::vector<int> array(5); // Calls std::vector::vector(std::vector::size_type), 5 value-initialized elements: 0 0 0 0 0
+std::vector<int> array{ 5 }; // Calls std::vector::vector(std::initializer_list<int>), 1 element: 5
+```
+
+>[!Key Insight]
+>List initialization favors matching list constructors over matching non-list constructors.
+
+>[!Best Practice]
+>When initializing a container that has a list constructor:
+
+- Use brace initialization when intending to call the list constructor (e.g. because your initializers are element values)
+- Use direct initialization when intending to call a non-list constructor (e.g. because your initializers are not element values).
+
+>[!Warning]
+>Adding a list constructor to an existing class that did not have one may break existing programs.
+
+## Class assignment using std::initializer_list
+
+### ✅ **What’s being explained?**
+
+You have a class `IntArray` that:
+
+- Has a **constructor** taking `std::initializer_list`.
+    
+- But **does NOT** define:
+    
+    - a copy assignment operator,
+        
+    - OR a list-assignment operator (`operator=(std::initializer_list<int>)`),
+        
+    - OR delete them.
+        
+
+This leads to **shallow copying**, which causes **dangling pointers → undefined behavior**.
+
+Let’s go step by step.
+
+### 🔥 **Step 1 — List assignment is attempted**
+
+In `main()`:
+
+```cpp
+IntArray array{};
+array = { 1, 3, 5, 7, 9, 11 };
+```
+
+This looks like:
+
+```cpp
+array = initializer_list;
+```
+
+But here's the problem:
+
+#### ➤ There is **no** `operator=(std::initializer_list<int>)`.
+
+So the compiler looks for other assignment operators it _can_ use.
+
+### 🔥 **Step 2 — Compiler finds the implicit copy assignment operator**
+
+Since you did not define one, the compiler uses the default:
+
+```cpp
+IntArray& operator=(const IntArray&);
+```
+
+This operator performs a **shallow copy** of:
+
+- `m_length`
+    
+- `m_data` (a raw pointer!)
+    
+
+Shallow copy means:
+
+❌ It does NOT duplicate the array.  
+❌ It simply copies the pointer.
+
+### 🔥 **Step 3 — Can the compiler convert the initializer_list? Yes**
+
+The assignment operator requires an `IntArray`.
+
+You gave an `initializer_list`.
+
+So the compiler checks:
+
+👉 “Can I convert `{ 1, 3, 5, 7, 9, 11 }` into an `IntArray`?”
+
+Yes!
+
+You have a constructor:
+
+```cpp
+IntArray(std::initializer_list<int> list)
+```
+
+So the compiler does this:
+
+#### ✔ Create a **temporary** object:
+
+```cpp
+IntArray temp { 1,3,5,7,9,11 };
+```
+
+#### ✔ Then call **copy assignment**:
+
+```cpp
+array = temp;
+```
+
+### 🔥 **Step 4 — Copy assignment does a shallow copy**
+
+After assignment:
+
+```cpp
+array.m_data  → points to the same memory  
+temp.m_data   → points to the same memory
+```
+
+**Both point to the same array!**
+
+### 🔥 **Step 5 — temp is destroyed, and its destructor deletes m_data**
+
+After assignment ends, the temporary disappears:
+
+```cpp
+temp destroyed → ~IntArray() → delete[] m_data
+```
+
+Now:
+
+```cpp
+array.m_data → points to deleted memory (dangling pointer)
+```
+
+This is extremely dangerous.
+
+### 🔥 **Step 6 — Using array leads to undefined behavior**
+
+In:
+
+```cpp
+for (int i = 0; i < array.getLength(); ++i)
+    std::cout << array[i] << ' ';
+```
+
+You are reading from memory that has already been deleted.
+
+Later, when `array` goes out of scope, its destructor tries to delete that same pointer again → **double delete** → undefined behavior.
+
+### 🎯 **The root problem**
+
+You provided:
+
+✔ initializer_list constructor  
+❌ no list assignment operator  
+❌ no deep copying assignment operator  
+❌ no deleted copy assignment operator
+
+So the compiler uses the wrong one.
+
+This causes your array to accidentally share memory with a temporary object.
+
+### 🛡 **Best Practice Rule**
+
+> **If your class supports list initialization, it must also handle list assignment safely.**
+
+---
+
+
