@@ -2703,6 +2703,61 @@ This causes your array to accidentally share memory with a temporary object.
 
 > **If your class supports list initialization, it must also handle list assignment safely.**
 
+## Summary
+
+>Implementing a constructor that takes a std::initializer_list parameter allows us to use list initialization with our custom classes. We can also use std::initializer_list to implement other functions that need to use an initializer list, such as an assignment operator.
+
+## Quiz time
+
+Question #1
+
+Using the IntArray class above, implement an overloaded assignment operator that takes an initializer list.
+
+The following code should run:
+
+```cpp
+int main()
+{
+	IntArray array { 5, 4, 3, 2, 1 }; // initializer list
+	for (int count{ 0 }; count < array.getLength(); ++count)
+		std::cout << array[count] << ' ';
+
+	std::cout << '\n';
+
+	array = { 1, 3, 5, 7, 9, 11 };
+
+	for (int count{ 0 }; count < array.getLength(); ++count)
+		std::cout << array[count] << ' ';
+
+	std::cout << '\n';
+
+	return 0;
+}
+```
+
+Solution:
+
+```cpp
+	IntArray& operator=(std::initializer_list<int> list)
+	{
+		// If the new list is a different size, reallocate it
+		int length { static_cast<int>(list.size()) };
+		if (length != m_length)
+		{
+			delete[] m_data;
+			m_length = length;
+			m_data = new int[list.size()]{};
+		}
+
+		// Now initialize our array from the list
+		std::copy(list.begin(), list.end(), m_data);
+
+		return *this;
+	}
+```
+
 ---
 
+## [Chapter Summary](https://www.learncpp.com/cpp-tutorial/chapter-23-summary-and-quiz/)
 
+---
