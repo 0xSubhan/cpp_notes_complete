@@ -613,4 +613,389 @@ C++ constructs derived classes in phases, starting with the most-base class (at 
 You will note that our example classes in this section have all used base class default constructors (for simplicity). In the next lesson, we will take a closer look at the role of constructors in the process of constructing derived classes (including how to explicitly choose which base class constructor you want your derived class to use).
 
 ---
+# Constructors and initialization of derived classes
 
+In the past two lessons, we’ve explored some basics around inheritance in C++ and the order that derived classes are initialized. In this lesson, we’ll take a closer look at the role of constructors in the initialization of derived classes. To do so, we will continue to use the simple Base and Derived classes we developed in the previous lesson:
+
+```cpp
+class Base
+{
+public:
+    int m_id {};
+
+    Base(int id=0)
+        : m_id{ id }
+    {
+    }
+
+    int getId() const { return m_id; }
+};
+
+class Derived: public Base
+{
+public:
+    double m_cost {};
+
+    Derived(double cost=0.0)
+        : m_cost{ cost }
+    {
+    }
+
+    double getCost() const { return m_cost; }
+};
+```
+
+With non-derived classes, constructors only have to worry about their own members. For example, consider Base. We can create a Base object like this:
+
+```cpp
+int main()
+{
+    Base base{ 5 }; // use Base(int) constructor
+
+    return 0;
+}
+```
+
+Here’s what actually happens when base is instantiated:
+
+1. Memory for base is set aside
+2. The appropriate Base constructor is called
+3. The member initializer list initializes variables
+4. The body of the constructor executes
+5. Control is returned to the caller
+
+This is pretty straightforward. With derived classes, things are slightly more complex:
+
+```cpp
+int main()
+{
+    Derived derived{ 1.3 }; // use Derived(double) constructor
+
+    return 0;
+}
+```
+
+Here’s what actually happens when derived is instantiated:
+
+1. Memory for derived is set aside (enough for both the Base and Derived portions)
+2. The appropriate Derived constructor is called
+3. **The Base object is constructed first using the appropriate Base constructor**. If no base constructor is specified, the default constructor will be used.
+4. The member initializer list initializes variables
+5. The body of the constructor executes
+6. Control is returned to the caller
+
+The only real difference between this case and the non-inherited case is that before the Derived constructor can do anything substantial, the Base constructor is called first. The Base constructor sets up the Base portion of the object, control is returned to the Derived constructor, and the Derived constructor is allowed to finish up its job.
+
+## **Initializing base class members**
+
+### **1. The problem**
+
+You have two classes:
+
+```cpp
+class Base {
+protected:
+    int m_id {};
+};
+class Derived : public Base {
+    double m_cost {};
+};
+```
+
+When creating a **Derived** object, you want to set **both**:
+
+- `m_cost` → belongs to `Derived`
+    
+- `m_id` → belongs to `Base`
+    
+
+You write this:
+
+```cpp
+Derived(double cost, int id)
+    : m_cost{ cost }, m_id{ id } // ❌ error
+{
+}
+```
+
+But this **does not work**.
+
+### **2. Why can’t Derived initialize m_id directly?**
+
+#### **Rule:**
+
+A class constructor may **only initialize its own member variables** in its initializer list.
+
+Meaning:
+
+- `Base` constructor can initialize `m_id`
+    
+- `Derived` constructor can initialize `m_cost`
+    
+- **Derived cannot initialize m_id** because it _doesn’t own it_
+
+### **3. Why does C++ enforce this rule?**
+
+Because of **const** and **reference** members.
+
+Imagine `m_id` was:
+
+```cpp
+const int m_id;
+```
+
+Const values must be initialized **exactly once** at creation.
+
+If C++ allowed Derived to initialize `m_id`, this could happen:
+
+1. Base constructor initializes `m_id`
+    
+2. Derived constructor initializer also tries to initialize `m_id`
+    
+
+→ **Illegal: const initialized twice**  
+→ **Very confusing behavior**
+
+So C++ simply forbids it entirely.
+
+### **4. Why not assign it inside the constructor body?**
+
+Example:
+
+```cpp
+Derived(double cost, int id)
+    : m_cost{ cost }
+{
+    m_id = id;   // works only sometimes
+}
+```
+
+This works _only if_ `m_id` is **not const** and **not a reference**.
+
+But it’s still wrong because:
+
+#### **a) It assigns twice**
+
+- Base constructor already set `m_id`
+    
+- Now Derived reassigns it again → wasteful and potentially incorrect
+    
+
+#### **b) Base can’t use the value**
+
+During construction:
+
+1. Base constructor runs **first**
+    
+2. Derived’s assignment runs **later**
+    
+
+So Base never sees the correct `id` while it’s constructing.
+
+If Base needed to do something with `id` during construction → it can’t.
+
+### **5. The correct solution**
+
+You let the **Derived constructor call the correct Base constructor**, passing `id` to it.
+
+```cpp
+Derived(double cost, int id)
+    : Base{ id }   // ✅ call Base(int) constructor
+    , m_cost{ cost }
+{
+}
+```
+
+This tells C++:
+
+> “When constructing Derived, initialize the Base part using Base(id).”
+
+Now:
+
+- `m_id` is initialized correctly in Base’s initializer list
+    
+- `m_cost` is initialized correctly in Derived’s initializer list
+    
+- Construction order is correct and efficient
+
+### **6. What actually happens during construction**
+
+Step-by-step:
+
+1. Memory for `derived` is allocated.
+    
+2. `Derived(cost = 1.3, id = 5)` is called.
+    
+3. It sees `Base{id}`, so it calls `Base(5)`:
+    
+    - `m_id` is initialized to 5.
+        
+4. Base constructor finishes.
+    
+5. Now Derived’s initializer list sets:
+    
+    - `m_cost = 1.3`
+        
+6. Derived constructor finishes.
+    
+
+Output:
+
+```cpp
+Id: 5
+Cost: 1.3
+```
+
+### **7. Important rule**
+
+> **The Base constructor always runs before the Derived constructor**  
+> Even if Base appears second in the initializer list, it still executes first.
+
+Because the base “part” of the object must exist before the derived “part” is built on top of it.
+
+### **Short summary**
+
+- You **cannot** initialize inherited members (`m_id`) inside Derived’s initializer list.
+    
+- Only the **Base constructor** is allowed to initialize `m_id`.
+    
+- To pass values to Base, you must explicitly call a Base constructor in Derived’s initializer list.
+    
+- Assigning inherited members inside the constructor body is allowed but:
+    
+    - inefficient
+        
+    - breaks for const/reference members
+        
+    - makes Base unable to use the value during construction
+
+## **Now we can make our members private**
+
+Now that you know how to initialize base class members, there’s no need to keep our member variables public. We make our member variables private again, as they should be.
+
+As a quick refresher, public members can be accessed by anybody. Private members can only be accessed by member functions of the same class. Note that this means derived classes can not access private members of the base class directly! Derived classes will need to use access functions to access private members of the base class.
+
+Consider:
+
+```cpp
+#include <iostream>
+
+class Base
+{
+private: // our member is now private
+    int m_id {};
+
+public:
+    Base(int id=0)
+        : m_id{ id }
+    {
+    }
+
+    int getId() const { return m_id; }
+};
+
+class Derived: public Base
+{
+private: // our member is now private
+    double m_cost;
+
+public:
+    Derived(double cost=0.0, int id=0)
+        : Base{ id } // Call Base(int) constructor with value id!
+        , m_cost{ cost }
+    {
+    }
+
+    double getCost() const { return m_cost; }
+};
+
+int main()
+{
+    Derived derived{ 1.3, 5 }; // use Derived(double, int) constructor
+    std::cout << "Id: " << derived.getId() << '\n';
+    std::cout << "Cost: " << derived.getCost() << '\n';
+
+    return 0;
+}
+```
+
+In the above code, we made m_id and m_cost private. This is fine, since we use the relevant constructors to initialize them, and use a public accessor to get the values.
+
+This prints, as expected:
+
+Id: 5
+Cost: 1.3
+
+We’ll talk more about access specifiers in the next lesson.
+
+## **Inheritance chains**
+
+Classes in an inheritance chain work in exactly the same way.
+
+```cpp
+#include <iostream>
+
+class A
+{
+public:
+    A(int a)
+    {
+        std::cout << "A: " << a << '\n';
+    }
+};
+
+class B: public A
+{
+public:
+    B(int a, double b)
+    : A{ a }
+    {
+        std::cout << "B: " << b << '\n';
+    }
+};
+
+class C: public B
+{
+public:
+    C(int a, double b, char c)
+    : B{ a, b }
+    {
+        std::cout << "C: " << c << '\n';
+    }
+};
+
+int main()
+{
+    C c{ 5, 4.3, 'R' };
+
+    return 0;
+}
+```
+
+In this example, class C is derived from class B, which is derived from class A. So what happens when we instantiate an object of class C?
+
+First, main() calls C(int, double, char). The C constructor calls B(int, double). The B constructor calls A(int). Because A does not inherit from anybody, this is the first class we’ll construct. A is constructed, prints the value 5, and returns control to B. B is constructed, prints the value 4.3, and returns control to C. C is constructed, prints the value ‘R’, and returns control to main(). And we’re done!
+
+Thus, this program prints:
+
+A: 5
+B: 4.3
+C: R
+
+It is worth mentioning that constructors can only call constructors from their immediate parent/base class. Consequently, the C constructor could not call or pass parameters to the A constructor directly. The C constructor can only call the B constructor (which has the responsibility of calling the A constructor).
+
+## **Destructors**
+
+When a derived class is destroyed, each destructor is called in the _reverse_ order of construction. In the above example, when c is destroyed, the C destructor is called first, then the B destructor, then the A destructor.
+
+>Warning
+
+If your base class has virtual functions, your destructor should also be virtual, otherwise undefined behavior will result in certain cases.
+
+## **Summary**
+
+When constructing a derived class, the derived class constructor is responsible for determining which base class constructor is called. If no base class constructor is specified, the default base class constructor will be used. In that case, if no default base class constructor can be found (or created by default), the compiler will display an error. The classes are then constructed in order from most base to most derived.
+
+At this point, you now understand enough about C++ inheritance to create your own inherited classes!
+
+---
