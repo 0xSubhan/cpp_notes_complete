@@ -999,5 +999,5 @@ When constructing a derived class, the derived class constructor is responsible 
 At this point, you now understand enough about C++ inheritance to create your own inherited classes!
 
 ---
-# Inheritance and access specifiers
+
 
