@@ -1468,3 +1468,418 @@ We added a function (`getValue`) that **does not exist** in the base class.
 ### ✔ Base class does _not_ gain access to added functions.
 
 ---
+# Calling inherited functions and overriding behavior
+
+By default, derived classes inherit all of the behaviors defined in a base class. In this lesson, we’ll examine in more detail how member functions are selected, as well as how we can leverage this to change behaviors in a derived class.
+
+When a member function is called on a derived class object, the compiler first looks to see if any function with that name exists in the derived class. If so, all overloaded functions with that name are considered, and the function overload resolution process is used to determine whether there is a best match. If not, the compiler walks up the inheritance chain, checking each parent class in turn in the same way.
+
+Put another way, the compiler will select the best matching function from the most-derived class with at least one function with that name.
+
+## ✅ **1. When the derived class does NOT have the function**
+
+Consider:
+
+```cpp
+class Base {
+public:
+    void identify() const { std::cout << "Base::identify()\n"; }
+};
+
+class Derived : public Base { };
+```
+
+In main():
+
+```cpp
+Derived d;
+d.identify();
+```
+
+### What happens?
+
+1. The compiler looks in `Derived` first:
+    
+    - Does `Derived` have a function named `identify()`?
+        
+    - **No**, so it moves to the base class.
+        
+2. It checks `Base`:
+    
+    - `Base` _does_ have `identify()`, so it calls that.
+        
+
+So the output is:
+
+```cpp
+Base::identify()
+```
+
+### ✔ Key Point
+
+**If the derived class doesn’t have a matching function, it automatically uses the base class’s version.**
+
+This is inheritance in action.
+
+## 🟢 **2. When the derived class _redefines_ the function**
+
+Now suppose we do:
+
+```cpp
+class Derived : public Base {
+public:
+    void identify() const { std::cout << "Derived::identify()\n"; }
+};
+```
+
+Now in main():
+
+```cpp
+Derived d;
+d.identify();
+```
+
+### What happens?
+
+1. The compiler looks in `Derived` first:
+    
+    - Does `Derived` have `identify()`?
+        
+    - ✔ **Yes** → use this one.
+        
+2. Base’s version is **ignored**.
+    
+
+Output:
+
+```cpp
+Derived::identify()
+```
+
+### ✔ Key Point
+
+**If the derived class defines a function with the same name, it hides/replaces the base class version.**
+
+This is called **function hiding** (not overriding yet—overriding requires virtual functions, which comes later).
+
+## 🟣 **3. Access specifiers do NOT transfer across redefinitions**
+
+C++ allows something surprising:
+
+- A function may be **private** in the base class
+    
+- But in the derived class you can **redefine it as public**
+    
+
+Example:
+
+```cpp
+class Base {
+private:
+    void print() const {
+        std::cout << "Base";
+    }
+};
+
+class Derived : public Base {
+public:
+    void print() const {   // <-- Redeclared as public!
+        std::cout << "Derived";
+    }
+};
+```
+
+In `main()`:
+
+```cpp
+Derived d;
+d.print();   // Works! Calls the public Derived::print()
+```
+
+### ✔ Why does this work?
+
+- `Derived::print()` is a **new** function that just happens to have the same name.
+    
+- It is NOT the same function as `Base::print()`.
+    
+- Access specifiers apply to _each class’s own members_, not across inheritance.
+
+## 🔴 **4. Summary (easy to remember)**
+
+### ✔ If derived class doesn’t define the function → use base class’s version
+
+### ✔ If derived class defines the function → derived version hides base version
+
+### ✔ The derived function can have ANY access specifier
+
+- Base can have it private
+    
+- Derived can make it public
+    
+- They're separate members
+    
+
+### ✔ The compiler always checks in this order:
+
+1. Derived class
+    
+2. Base class
+    
+3. Base’s base… etc.
+
+## Adding to existing functionality
+
+### ✅ **1. Why do we add functionality instead of replacing it?**
+
+Sometimes you want a derived class to _reuse_ what the base class already does, but also _add its own extra behavior_.
+
+Example (real-world analogy):
+
+- **Base class (Printer)** prints a document.
+    
+- **Derived class (ColorPrinter)** prints the document _and_ adds a “color-printing mode".
+    
+
+You don’t want to rewrite the entire printing logic—you just want to add something extra.  
+So you call the base version _inside_ the derived version:
+
+```cpp
+void Derived::identify() const
+{
+    std::cout << "Derived::identify()\n";  // extra work
+    Base::identify();                      // reuse base work
+}
+```
+
+### ✅ **2. Why must you write `Base::identify()` instead of just `identify()`?**
+
+If you write:
+
+```cpp
+identify();
+```
+
+The compiler assumes:  
+➡️ **Call the function in the current class**  
+which is **Derived::identify()**.
+
+This makes Derived::identify() call **itself again**, causing:
+
+❌ infinite recursion  
+❌ program crash
+
+So you must specify:
+
+```cpp
+Base::identify();
+```
+
+This tells C++:
+
+> “I want the Base version specifically.”
+
+### ✅ **3. The friend function problem (operator<< example)**
+
+Friend functions like:
+
+```cpp
+friend std::ostream& operator<<(...)
+```
+
+are **not members of the class**, so you **cannot** write:
+
+```cpp
+Base::operator<<   // ❌ wrong, friend functions do not belong to Base
+```
+
+So what do we do instead?
+
+We make the Derived object temporarily “become” a Base object:
+
+```cpp
+out << static_cast<const Base&>(d);
+```
+
+Why does this work?
+
+Because:
+
+- A `Derived` **is-a** `Base`
+    
+- Casting tells the compiler:  
+    **Use the version of operator<< that takes a Base**
+    
+
+Thus the output becomes:
+
+```cpp
+In Derived
+In Base
+```
+
+
+Derived’s version runs first, then Base’s version.
+
+### ✅ SIMPLE REAL-WORLD SHORT ANALOGY
+
+#### ➤ Think of Base as a general "Employee"
+
+#### ➤ Think of Derived as a special "Manager"
+
+**Employee::work():**  
+✓ writes reports
+
+**Manager::work():**  
+✓ writes reports _(Employee work)_  
+✓ conducts meetings _(extra Manager work)_
+
+So:
+
+```cpp
+void Manager::work()
+{
+    std::cout << "Manager conducting meeting\n";
+    Employee::work(); // reuse employee work
+}
+```
+
+You don’t rewrite report-writing again—you reuse it.
+
+### ✅ Summary (Easy Points)
+
+- **Derived functions can call base functions** to extend behavior.
+    
+- Use **Base::function()** to avoid calling the derived version again.
+    
+- **Friend functions are not members**, so you cannot use scope resolution.
+    
+- Instead, you use **static_cast<Base&>(derivedObject)** to call the Base friend-function version.
+
+## Overload resolution in derived classes
+
+As noted at the top of the lesson, the compiler will select the best matching function from the most-derived class with at least one function with that name.
+
+First, let’s take a look at a simple case where we have overloaded member functions:
+
+```cpp
+#include <iostream>
+
+class Base
+{
+public:
+    void print(int)    { std::cout << "Base::print(int)\n"; }
+    void print(double) { std::cout << "Base::print(double)\n"; }
+};
+
+class Derived: public Base
+{
+public:
+};
+
+
+int main()
+{
+    Derived d{};
+    d.print(5); // calls Base::print(int)
+
+    return 0;
+}
+```
+
+For the call `d.print(5)`, the compiler doesn’t find a function named `print()` in `Derived`, so it checks `Base` where it finds two functions with that name. It uses the function overload resolution process to determine that `Base::print(int)` is a better match than `Base::print(double)`. Therefore, `Base::print(int)` gets called, just like we’d expect.
+
+Now let’s look at a case that doesn’t behave like we might expect:
+
+```cpp
+#include <iostream>
+
+class Base
+{
+public:
+    void print(int)    { std::cout << "Base::print(int)\n"; }
+    void print(double) { std::cout << "Base::print(double)\n"; }
+};
+
+class Derived: public Base
+{
+public:
+    void print(double) { std::cout << "Derived::print(double)"; } // this function added
+};
+
+
+int main()
+{
+    Derived d{};
+    d.print(5); // calls Derived::print(double), not Base::print(int)
+
+    return 0;
+}
+```
+
+For the call `d.print(5)`, the compiler finds one function named `print()` in `Derived`, therefore it will only consider functions in `Derived` when trying to determine what function to resolve to. This function is also the best matching function in `Derived` for this function call. Therefore, this calls `Derived::print(double)`.
+
+Since `Base::print(int)` has a parameter that is a better match for int argument `5` than `Derived::print(double)`, you may have been expecting this function call to resolve to `Base::print(int)`. But because `d` is a `Derived`, there is at least one `print()` function in `Derived`, and `Derived` is more derived than `Base`, the functions in `Base` are not even considered.
+
+So what if we actually want `d.print(5)` to resolve to `Base::print(int)`? One not-great way is to define a `Derived::print(int)`:
+
+```cpp
+#include <iostream>
+
+class Base
+{
+public:
+    void print(int)    { std::cout << "Base::print(int)\n"; }
+    void print(double) { std::cout << "Base::print(double)\n"; }
+};
+
+class Derived: public Base
+{
+public:
+    void print(int n) { Base::print(n); } // works but not great, as we have to define
+    void print(double) { std::cout << "Derived::print(double)"; }
+};
+
+int main()
+{
+    Derived d{};
+    d.print(5); // calls Derived::print(int), which calls Base::print(int)
+
+    return 0;
+}
+```
+
+While this works, it’s not great, as we have to add a function to `Derived` for every overload we want to fall through to `Base`. That could be a lot of extra functions that essentially just route calls to `Base`.
+
+A better option is to use a using-declaration in `Derived` to make all `Base` functions with a certain name visible from within `Derived`:
+
+```cpp
+#include <iostream>
+
+class Base
+{
+public:
+    void print(int)    { std::cout << "Base::print(int)\n"; }
+    void print(double) { std::cout << "Base::print(double)\n"; }
+};
+
+class Derived: public Base
+{
+public:
+    using Base::print; // make all Base::print() functions eligible for overload resolution
+    void print(double) { std::cout << "Derived::print(double)"; }
+};
+
+
+int main()
+{
+    Derived d{};
+    d.print(5); // calls Base::print(int), which is the best matching function visible in Derived
+
+    return 0;
+}
+```
+
+By putting the using-declaration `using Base::print;` inside `Derived`, we are telling the compiler that all `Base` functions named `print` should be visible in `Derived`, which will cause them to be eligible for overload resolution. As a result, `Base::print(int)` is selected over `Derived::print(double)`.
+
+---
+
