@@ -1329,4 +1329,142 @@ Here’s a table of all of the access specifier and inheritance types combinatio
 As a final note, although in the examples above, we’ve only shown examples using member variables, these access rules hold true for all members (e.g. member functions and types declared inside the class).
 
 ---
+# Adding new functionality to a derived class
 
+we mentioned that one of the biggest benefits of using derived classes is the ability to reuse already written code. You can inherit the base class functionality and then add new functionality, modify existing functionality, or hide functionality you don’t want. In this and the next few lessons, we’ll take a closer look at how each of these things is done.
+
+First, let’s start with a simple base class:
+
+```cpp
+#include <iostream>
+
+class Base
+{
+protected:
+    int m_value {};
+
+public:
+    Base(int value)
+        : m_value { value }
+    {
+    }
+
+    void identify() const { std::cout << "I am a Base\n"; }
+};
+```
+
+Now, let’s create a derived class that inherits from Base. Because we want the derived class to be able to set the value of m_value when derived objects are instantiated, we’ll make the Derived constructor call the Base constructor in the initialization list.
+
+```cpp
+class Derived: public Base
+{
+public:
+    Derived(int value)
+        : Base { value }
+    {
+    }
+};
+```
+
+## **Adding new functionality to a derived class**
+
+Sometimes you want a class to have **extra features**, but you **cannot** (or should not) modify the original base class.  
+This is where _inheritance_ becomes useful.
+
+### 🔵 **Why would you NOT modify the base class?**
+
+There are two common situations:
+
+#### **1. You don’t want to modify 3rd-party code**
+
+Example: you bought a library from a company.
+
+- If you edit their files, future updates may overwrite your changes.
+    
+- You would have to re-add your changes every time they update—painful and risky.
+    
+
+#### **2. You cannot modify the base class at all**
+
+Example:
+
+- Standard library classes (`std::vector`, `std::string`)
+    
+- Precompiled 3rd-party libraries (you only get headers)
+    
+
+In such cases, the safest option is:
+
+👉 **Create a derived class**  
+👉 **Add new functionality there**
+
+This way:
+
+- You keep original code untouched
+    
+- You add only what _you_ need
+    
+- Updates to the base class won’t break your changes
+
+### 🟢 **How to add new functionality to a derived class**
+
+If the base class sounds like:
+
+```cpp
+class Base {
+protected:
+    int m_value{};
+public:
+    Base(int value) : m_value{value} {}
+};
+```
+
+Notice:
+
+- `m_value` is **protected**, so derived classes can access it.
+    
+- But there is **no public function** to get the value.
+    
+
+#### ✔ We want to add a way to read `m_value`, but ONLY in the derived class.
+
+So:
+
+```cpp
+class Derived : public Base
+{
+public:
+    Derived(int value)
+        : Base{ value }
+    {
+    }
+
+    int getValue() const { return m_value; }   // new functionality
+};
+```
+
+We added a function (`getValue`) that **does not exist** in the base class.
+
+### 🔴 **Important rule: Base class does NOT gain access to derived functions**
+
+## 🟡 **Summary**
+
+### ✔ Use derived classes to add features when:
+
+- You don’t want to change the original class
+    
+- You cannot change the original class (e.g., STL, libraries)
+    
+
+### ✔ Derived classes can add:
+
+- New functions
+    
+- New variables
+    
+- New behaviors
+    
+
+### ✔ Base class does _not_ gain access to added functions.
+
+---
