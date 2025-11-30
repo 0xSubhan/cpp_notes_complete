@@ -999,5 +999,334 @@ When constructing a derived class, the derived class constructor is responsible 
 At this point, you now understand enough about C++ inheritance to create your own inherited classes!
 
 ---
+# Inheritance and access specifiers
 
+## The protected access specifier
+
+C++ has a third access specifier that we have yet to talk about because it’s only useful in an inheritance context. The **protected** access specifier allows the class the member belongs to, friends, and derived classes to access the member. However, protected members are not accessible from outside the class.
+
+```cpp
+class Base
+{
+public:
+    int m_public {}; // can be accessed by anybody
+protected:
+    int m_protected {}; // can be accessed by Base members, friends, and derived classes
+private:
+    int m_private {}; // can only be accessed by Base members and friends (but not derived classes)
+};
+
+class Derived: public Base
+{
+public:
+    Derived()
+    {
+        m_public = 1; // allowed: can access public base members from derived class
+        m_protected = 2; // allowed: can access protected base members from derived class
+        m_private = 3; // not allowed: can not access private base members from derived class
+    }
+};
+
+int main()
+{
+    Base base;
+    base.m_public = 1; // allowed: can access public members from outside class
+    base.m_protected = 2; // not allowed: can not access protected members from outside class
+    base.m_private = 3; // not allowed: can not access private members from outside class
+
+    return 0;
+}
+```
+
+In the above example, you can see that the protected base member m_protected is directly accessible by the derived class, but not by the public.
+
+## So when should I use the protected access specifier?
+
+### **1. What does `protected` do?**
+
+- A **protected member** is **not accessible** from outside the class.
+    
+- But it **is accessible** inside **derived classes**.
+    
+
+So derived classes can directly access it just like private members—except private members are hidden from derived classes, but protected members are not.
+
+### **2. Why not always use `protected`?**
+
+Because of **tight coupling**.
+
+If a base class exposes too many details to derived classes through protected members, then whenever you change something in the base class (type of a variable, its logic, meaning, etc.), you must also update **every derived class** that uses that member.
+
+This becomes harder as more derived classes are added.
+
+Example problem:
+
+```cpp
+class Base {
+protected:
+    int speed; // Derived classes rely directly on this
+};
+```
+
+If you later change `speed` to a `double` or rename it, multiple derived classes must be updated too.
+
+### **3. When should you actually use `protected`?**
+
+Use it when **you or your team**:
+
+- **control the classes**,
+    
+- **understand the inheritance hierarchy**,
+    
+- **know there will only be a manageable number of derived classes**,
+    
+- and **need derived classes to directly manipulate base class internals** (because providing getters/setters would be too much overhead).
+    
+
+This is common in frameworks or libraries you design for internal use.
+
+### **4. Why is `private` usually better?**
+
+When you make members **private**, neither outside code nor derived classes can touch them directly.
+
+This has benefits:
+
+#### ✔ Base class controls its data internally
+
+You cannot break invariants (rules of the class).
+
+#### ✔ Derived classes don’t break when internals change
+
+If you change the internal representation of data, derived classes don’t need updates—as long as the public/protected interface stays the same.
+
+#### ✔ Reduces coupling
+
+Derived classes depend only on the interface, not the implementation.
+
+But the tradeoff is:
+
+- You may need more functions (getters/setters or protected functions) to allow derived classes to work.
+    
+- This requires more design effort.
+
+### **5. Best Practice (from modern C++)**
+
+#### 🔵 **Prefer `private` members**
+
+Only use `protected` when:
+
+- you expect subclasses to need direct access, and
+    
+- maintaining an interface for them would be unnecessarily complicated.
+    
+
+### **In one sentence:**
+
+**Use `protected` only when derived classes _must_ access a member directly and you fully control the inheritance tree. Otherwise, keep members `private`.**
+
+## Different kinds of inheritance, and their impact on access
+
+C++ has **3 types of inheritance**:
+
+- **public inheritance**
+    
+- **protected inheritance**
+    
+- **private inheritance**
+    
+
+These affect **how the base class’s public/protected/private members appear** inside the derived class.
+
+### ✅ **1. Syntax: how to specify inheritance type**
+
+```cpp
+class Pub : public Base {};      // public inheritance
+class Pro : protected Base {};   // protected inheritance
+class Pri : private Base {};     // private inheritance
+
+class Def : Base {};             // defaults to private inheritance
+```
+
+If you don’t specify an inheritance type, C++ defaults to **private**.
+
+### 📌 **Why is this complicated?**
+
+Because there are:
+
+- 3 member types (public, protected, private)
+    
+- 3 inheritance types (public, protected, private)
+    
+
+→ This creates 9 combinations.
+
+The important thing is:
+
+#### ✔ **Inheritance can change the access level of inherited members — but only inside the derived class.**
+
+#### ✔ **It never changes access in the base class.**
+
+#### ✔ **Private members of a base class never become accessible.**
+
+
+### 🚀 **Key rules to remember**
+
+1. **A class can always access its own members** (public, protected, private).
+    
+2. **Outside code** can only access what is public **in the class it accesses**.
+    
+3. **A derived class** accesses inherited members based on **how they were inherited**.
+
+### 🟦 **2. Public Inheritance (most common)**
+
+#### ✔ Model: **“is-a” relationship**
+
+Dog **is a** Animal  
+Student **is a** Person
+
+#### ✔ How access levels change:
+
+|In Base|In Derived (via public inheritance)|
+|---|---|
+|public|public|
+|protected|protected|
+|private|inaccessible|
+
+#### ✔ Meaning
+
+Derived can access public + protected (as usual).  
+Outside code still sees the same privileges.
+
+#### Example:
+
+```cpp
+class Pub : public Base {
+public:
+    Pub() {
+        m_public = 1;     // ok
+        m_protected = 2;  // ok
+        m_private = 3;    // ❌ not allowed
+    }
+};
+```
+
+Outside:
+
+```cpp
+Pub p;
+p.m_public = 1;       // ok
+p.m_protected = 2;    // ❌ not allowed
+p.m_private = 3;      // ❌ not allowed
+```
+
+✔ **This is how inheritance is meant to be used.**
+
+### 🟩 **3. Protected Inheritance (rarely used)**
+
+✔ Model: **“is-a, but only internally”**
+
+Used rarely and mostly in frameworks.
+
+#### ✔ How access levels change:
+
+|In Base|In Derived (via protected inheritance)|
+|---|---|
+|public|protected|
+|protected|protected|
+|private|inaccessible|
+
+#### Meaning:
+
+- Outsiders cannot use base’s public functions through the derived object.
+    
+- Derived class treats everything as protected.
+    
+
+This is rarely useful, so examples are skipped.
+
+### 🟥 **4. Private Inheritance (also rare)**
+
+#### ✔ Model: **“is implemented-in-terms-of”**
+
+Used when you want to _use_ another class internally but not expose its interface.
+
+#### ✔ How access levels change:
+
+|In Base|In Derived (via private inheritance)|
+|---|---|
+|public|private|
+|protected|private|
+|private|inaccessible|
+
+#### Meaning:
+
+- Derived class can call base’s public/protected members,
+    
+- But **outsiders cannot access them through derived**.
+    
+
+Example:
+
+```cpp
+class Pri : private Base {
+public:
+    Pri() {
+        m_public = 1;     // ok (now private in Pri)
+        m_protected = 2;  // ok (now private in Pri)
+        m_private = 3;    // ❌ not allowed
+    }
+};
+```
+
+Outside:
+
+```cpp
+Pri p;
+p.m_public = 1;      // ❌ not allowed
+p.m_protected = 2;   // ❌ not allowed
+```
+
+Private inheritance is basically saying:
+
+> “I’m using Base internally, but I don’t want anyone to treat me like a Base.”
+
+### 🏆 **Best Practices**
+
+#### ✔ **Use public inheritance almost always.**
+
+This is the standard and most natural form.
+
+#### ✔ **Avoid protected inheritance**
+
+Used only in very special cases.
+
+#### ✔ **Use private inheritance**
+
+Only when you’re using a class internally but don’t want to expose its interface.
+
+- You want to reuse code
+    
+- But you **do NOT** want objects of your class to behave like the base class
+    
+- And you **do NOT** want users to access the base class interface
+
+## Summary
+
+The way that the access specifiers, inheritance types, and derived classes interact causes a lot of confusion. To try and clarify things as much as possible:
+
+First, a class (and friends) can always access its own non-inherited members. The access specifiers only affect whether outsiders and derived classes can access those members.
+
+Second, when derived classes inherit members, those members may change access specifiers in the derived class. This does not affect the derived classes’ own (non-inherited) members (which have their own access specifiers). It only affects whether outsiders and classes derived from the derived class can access those inherited members.
+
+Here’s a table of all of the access specifier and inheritance types combinations:
+
+|Access specifier in base class|Access specifier when inherited publicly|Access specifier when inherited privately|Access specifier when inherited protectedly|
+|---|---|---|---|
+|Public|Public|Private|Protected|
+|Protected|Protected|Private|Protected|
+|Private|Inaccessible|Inaccessible|Inaccessible|
+
+As a final note, although in the examples above, we’ve only shown examples using member variables, these access rules hold true for all members (e.g. member functions and types declared inside the class).
+
+---
 
