@@ -1882,4 +1882,235 @@ int main()
 By putting the using-declaration `using Base::print;` inside `Derived`, we are telling the compiler that all `Base` functions named `print` should be visible in `Derived`, which will cause them to be eligible for overload resolution. As a result, `Base::print(int)` is selected over `Derived::print(double)`.
 
 ---
+# Hiding inherited functionality
 
+## ✅ **Changing an inherited member’s access level in C++ (Explained Simply)**
+
+When a class is derived from a base class, it **inherits** the base class’s members _with their existing access levels_:
+
+- `public` → stays public
+    
+- `protected` → stays protected
+    
+- `private` → not accessible at all
+    
+- (unless access changes through `public`, `protected`, `private` inheritance)
+    
+
+But sometimes, you want to **change the access level of a specific inherited member** in the derived class.
+
+C++ allows this using:
+
+```cpp
+using Base::memberName;
+```
+
+placed under a new access specifier.
+
+### 🧠 **What’s actually happening?**
+
+You're not rewriting the function.
+
+You're not overriding it.
+
+You're simply **exposing** the inherited member under a different access level.
+
+Think of it as:
+
+> "I want to re-publish this inherited function, but make it public (or protected) now."
+
+### 🧩 The Base class
+
+```cpp
+class Base
+{
+private:
+    int m_value {};
+
+public:
+    Base(int value) : m_value{value} {}
+
+protected:
+    void printValue() const {
+        std::cout << m_value;
+    }
+};
+```
+
+- `printValue()` is **protected**
+    
+- Only Base and Derived can call it
+    
+- Normal users of Derived **cannot** call `derived.printValue()` yet
+
+### 🧩 The Derived class modifies access
+
+```cpp
+class Derived : public Base
+{
+public:
+    Derived(int value) : Base{value} {}
+
+    using Base::printValue;  // make printValue public now
+};
+```
+
+The key line:
+
+```cpp
+using Base::printValue;
+```
+
+is placed under `public:`, so:
+
+- It _re-exposes_ `printValue()` as **public**
+    
+- It does **not** override anything
+    
+- It simply changes access level
+    
+
+Now the user can do:
+
+```cpp
+Derived d{7};
+d.printValue();  // ✔ allowed now
+```
+
+### ❗ Important Rule
+
+You can only change access if the derived class **already has access**.
+
+Which means:
+
+#### ❌ You **cannot** make a `private` base member public/protected
+
+#### ✔ You **can** change a `protected` base member to `public`
+
+#### ✔ You can change a `public` base member to `protected` or `private`
+
+Why?  
+Because derived classes **cannot access** the private members of the base class—so they cannot “re-publish” them.
+
+### 🧃 In short:
+
+Using
+
+```cpp
+using Base::member;
+```
+
+inside the derived class allows you to _change how the derived class exposes_ that inherited member.
+
+It’s like saying:
+
+> “I inherited this member with access X… now I want the world (or only my future subclasses) to see it differently.”
+
+
+## **Hiding functionality**
+
+In C++, it is not possible to remove or restrict functionality from a base class other than by modifying the source code. However, in a derived class, it is possible to hide functionality that exists in the base class, so that it can not be accessed through the derived class. This can be done simply by changing the relevant access specifier.
+
+For example, we can make a public member private:
+
+```cpp
+#include <iostream>
+
+class Base
+{
+public:
+	int m_value{};
+};
+
+class Derived : public Base
+{
+private:
+	using Base::m_value;
+
+public:
+	Derived(int value) : Base { value }
+	{
+	}
+};
+
+int main()
+{
+	Derived derived{ 7 };
+	std::cout << derived.m_value; // error: m_value is private in Derived
+
+	Base& base{ derived };
+	std::cout << base.m_value; // okay: m_value is public in Base
+
+	return 0;
+}
+```
+
+
+This allowed us to take a poorly designed base class and encapsulate its data in our derived class. Alternatively, instead of inheriting Base’s members publicly and making m_value private by overriding its access specifier, we could have inherited Base privately, which would have caused all of Base’s member to be inherited privately in the first place.
+
+However, it is worth noting that while m_value is private in the Derived class, it is still public in the Base class. Therefore the encapsulation of m_value in Derived can still be subverted by casting to Base& and directly accessing the member.
+
+## Deleting functions in the derived class
+
+You can also mark member functions as deleted in the derived class, which ensures they can’t be called at all through a derived object:
+
+```cpp
+#include <iostream>
+class Base
+{
+private:
+	int m_value {};
+
+public:
+	Base(int value)
+		: m_value { value }
+	{
+	}
+
+	int getValue() const { return m_value; }
+};
+
+class Derived : public Base
+{
+public:
+	Derived(int value)
+		: Base { value }
+	{
+	}
+
+
+	int getValue() const = delete; // mark this function as inaccessible
+};
+
+int main()
+{
+	Derived derived { 7 };
+
+	// The following won't work because getValue() has been deleted!
+	std::cout << derived.getValue();
+
+	return 0;
+}
+```
+
+
+In the above example, we’ve marked the getValue() function as deleted. This means that the compiler will complain when we try to call the derived version of the function. Note that the Base version of getValue() is still accessible though. We can call Base::getValue() in one of two ways:
+
+```cpp
+int main()
+{
+	Derived derived { 7 };
+
+	// We can call the Base::getValue() function directly
+	std::cout << derived.Base::getValue();
+
+	// Or we can upcast Derived to a Base reference and getValue() will resolve to Base::getValue()
+	std::cout << static_cast<Base&>(derived).getValue();
+
+	return 0;
+}
+```
+
+If using the casting method, we cast to a Base& rather than a Base to avoid making a copy of the Base portion of `derived`.
+
+---
