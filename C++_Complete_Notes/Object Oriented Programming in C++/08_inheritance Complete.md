@@ -2114,3 +2114,490 @@ int main()
 If using the casting method, we cast to a Base& rather than a Base to avoid making a copy of the Base portion of `derived`.
 
 ---
+# Multiple inheritance
+
+>So far, all of the examples of inheritance we’ve presented have been single inheritance -- that is, each inherited class has one and only one parent. However, C++ provides the ability to do multiple inheritance. **Multiple inheritance** enables a derived class to inherit members from more than one parent.
+
+Let’s say we wanted to write a program to keep track of a bunch of teachers. A teacher is a person. However, a teacher is also an employee (they are their own employer if working for themselves). Multiple inheritance can be used to create a Teacher class that inherits properties from both Person and Employee. To use multiple inheritance, simply specify each base class (just like in single inheritance), separated by a comma.
+
+![[PersonTeacher.gif]]
+
+```cpp
+#include <string>
+#include <string_view>
+
+class Person
+{
+private:
+    std::string m_name{};
+    int m_age{};
+
+public:
+    Person(std::string_view name, int age)
+        : m_name{ name }, m_age{ age }
+    {
+    }
+
+    const std::string& getName() const { return m_name; }
+    int getAge() const { return m_age; }
+};
+
+class Employee
+{
+private:
+    std::string m_employer{};
+    double m_wage{};
+
+public:
+    Employee(std::string_view employer, double wage)
+        : m_employer{ employer }, m_wage{ wage }
+    {
+    }
+
+    const std::string& getEmployer() const { return m_employer; }
+    double getWage() const { return m_wage; }
+};
+
+// Teacher publicly inherits Person and Employee
+class Teacher : public Person, public Employee
+{
+private:
+    int m_teachesGrade{};
+
+public:
+    Teacher(std::string_view name, int age, std::string_view employer, double wage, int teachesGrade)
+        : Person{ name, age }, Employee{ employer, wage }, m_teachesGrade{ teachesGrade }
+    {
+    }
+};
+
+int main()
+{
+    Teacher t{ "Mary", 45, "Boo", 14.3, 8 };
+
+    return 0;
+}
+```
+
+## Mixins
+
+```cpp
+// h/t to reader Waldo for this example
+#include <string>
+
+struct Point2D
+{
+	int x{};
+	int y{};
+};
+
+class Box // mixin Box class
+{
+public:
+	void setTopLeft(Point2D point) { m_topLeft = point; }
+	void setBottomRight(Point2D point) { m_bottomRight = point; }
+private:
+	Point2D m_topLeft{};
+	Point2D m_bottomRight{};
+};
+
+class Label // mixin Label class
+{
+public:
+	void setText(const std::string_view str) { m_text = str; }
+	void setFontSize(int fontSize) { m_fontSize = fontSize; }
+private:
+	std::string m_text{};
+	int m_fontSize{};
+};
+
+class Tooltip // mixin Tooltip class
+{
+public:
+	void setText(const std::string_view str) { m_text = str; }
+private:
+	std::string m_text{};
+};
+
+class Button : public Box, public Label, public Tooltip {}; // Button using three mixins
+
+int main()
+{
+	Button button{};
+	button.Box::setTopLeft({ 1, 1 });
+	button.Box::setBottomRight({ 10, 10 });
+	button.Label::setText("Submit");
+	button.Label::setFontSize(6);
+	button.Tooltip::setText("Submit the form to the server");
+}
+```
+
+### ✅ **What is a Mixin (mix-in)?**
+
+A **mixin** is a small class designed to be _inherited from_ for the purpose of **adding specific features** to another class.  
+It is **not meant to be used on its own** and usually does **not** represent a full “thing” or entity.
+
+Think of mixins as:
+
+> "Feature packs" you attach to a class.
+
+Examples of mixin-like features:
+
+- Positioning
+    
+- Sizing
+    
+- Logging capability
+    
+- Serialization
+    
+- Tooltip behavior
+    
+- Colors
+    
+- Label/text handling
+
+### 🧩 **Understanding the Example**
+
+We have three mixins:
+
+#### 1. `Box` – adds positioning and size
+
+```cpp
+class Box
+{
+public:
+    void setTopLeft(Point2D point);
+    void setBottomRight(Point2D point);
+private:
+    Point2D m_topLeft{};
+    Point2D m_bottomRight{};
+};
+```
+
+This adds:
+
+- `setTopLeft()`
+    
+- `setBottomRight()`
+    
+- two Point2D members
+
+#### 2. `Label` – adds text + font size
+
+```cpp
+class Label
+{
+public:
+    void setText(...);
+    void setFontSize(...);
+private:
+    std::string m_text{};
+    int m_fontSize{};
+};
+```
+
+This adds:
+
+- text
+    
+- font size
+
+#### 3. `Tooltip` – adds tooltip text
+
+```cpp
+class Tooltip
+{
+public:
+    void setText(...);
+private:
+    std::string m_text{};
+};
+```
+
+#### ✔ Button inherits all 3 mixins
+
+```cpp
+class Button : public Box, public Label, public Tooltip {};
+```
+
+Now `Button` has:
+
+- Box behavior
+    
+- Label behavior
+    
+- Tooltip behavior
+    
+
+Button becomes a “combo object” with all the added features — without needing huge base classes.
+
+### ⚠ Why do we use `Box::`, `Label::`, `Tooltip::` prefixes?
+
+Because two mixins have the same function:
+
+```cpp
+Label::setText()
+Tooltip::setText()
+```
+
+if you write:
+
+```cpp
+button.setText("Submit");
+```
+
+The compiler asks:
+
+**Which setText()? Label’s or Tooltip’s?**
+
+→ **Ambiguous → compilation error**
+
+So, you must disambiguate:
+
+```cpp
+button.Label::setText("Submit");
+button.Tooltip::setText("Some tooltip text");
+```
+
+### 👍 Why use the explicit prefix even when not ambiguous?
+
+1. **Makes code more readable**  
+    You can instantly see which mixin the function comes from.
+    
+2. **Future-proofing**  
+    You might add another mixin later with the same function name, causing new ambiguity.
+    
+3. **Best practice for clarity**  
+    Mixins often have overlapping concepts, so clarity helps prevent confusion.
+    
+
+### 🧠 **Why Mixins Are Useful**
+
+Mixins allow you to build a class out of **independent feature blocks**.
+
+Instead of one huge base class like:
+
+```cpp
+Widget → Button
+```
+
+You can build smaller components:
+
+```cpp
+Widget = Box + Label + Tooltip + Draggable + Resizable ...
+```
+
+Mixins avoid:
+
+- deep inheritance trees
+    
+- cluttered "god classes"
+    
+- repetition of identical features
+
+## **Problems with multiple inheritance**
+
+While multiple inheritance seems like a simple extension of single inheritance, multiple inheritance introduces a lot of issues that can markedly increase the complexity of programs and make them a maintenance nightmare. Let’s take a look at some of these situations.
+
+First, ambiguity can result when multiple base classes contain a function with the same name. For example:
+
+```cpp
+#include <iostream>
+
+class USBDevice
+{
+private:
+    long m_id {};
+
+public:
+    USBDevice(long id)
+        : m_id { id }
+    {
+    }
+
+    long getID() const { return m_id; }
+};
+
+class NetworkDevice
+{
+private:
+    long m_id {};
+
+public:
+    NetworkDevice(long id)
+        : m_id { id }
+    {
+    }
+
+    long getID() const { return m_id; }
+};
+
+class WirelessAdapter: public USBDevice, public NetworkDevice
+{
+public:
+    WirelessAdapter(long usbId, long networkId)
+        : USBDevice { usbId }, NetworkDevice { networkId }
+    {
+    }
+};
+
+int main()
+{
+    WirelessAdapter c54G { 5442, 181742 };
+    std::cout << c54G.getID(); // Which getID() do we call?
+
+    return 0;
+}
+```
+
+
+When `c54G.getID()` is compiled, the compiler looks to see if WirelessAdapter contains a function named getID(). It doesn’t. The compiler then looks to see if any of the parent classes have a function named getID(). See the problem here? The problem is that c54G actually contains TWO getID() functions: one inherited from USBDevice, and one inherited from NetworkDevice. Consequently, this function call is ambiguous, and you will receive a compiler error if you try to compile it.
+
+However, there is a way to work around this problem: you can explicitly specify which version you meant to call:
+
+```cpp
+int main()
+{
+    WirelessAdapter c54G { 5442, 181742 };
+    std::cout << c54G.USBDevice::getID();
+
+    return 0;
+}
+```
+
+While this workaround is pretty simple, you can see how things can get complex when your class inherits from four or six base classes, which inherit from other classes themselves. The potential for naming conflicts increases exponentially as you inherit more classes, and each of these naming conflicts needs to be resolved explicitly.
+
+>Second, and more serious is the [diamond problem](https://en.wikipedia.org/wiki/Diamond_problem), which your author likes to call the “diamond of doom”. This occurs when a class multiply inherits from two classes which each inherit from a single base class. This leads to a diamond shaped inheritance pattern.
+
+For example, consider the following set of classes:
+
+```cpp
+class PoweredDevice
+{
+};
+
+class Scanner: public PoweredDevice
+{
+};
+
+class Printer: public PoweredDevice
+{
+};
+
+class Copier: public Scanner, public Printer
+{
+};
+```
+
+
+![](https://www.learncpp.com/images/CppTutorial/Section11/PoweredDevice.gif)
+
+Scanners and printers are both powered devices, so they derived from PoweredDevice. However, a copy machine incorporates the functionality of both Scanners and Printers.
+
+>There are many issues that arise in this context, including whether Copier should have one or two copies of PoweredDevice, and how to resolve certain types of ambiguous references. While most of these issues can be addressed through explicit scoping, the maintenance overhead added to your classes in order to deal with the added complexity can cause development time to skyrocket. We’ll talk more about ways to resolve the diamond problem in the next chapter
+
+## **Is multiple inheritance more trouble than it’s worth?**
+
+As it turns out, most of the problems that can be solved using multiple inheritance can be solved using single inheritance as well. Many object-oriented languages (eg. Smalltalk, PHP) do not even support multiple inheritance. Many relatively modern languages such as Java and C# restrict classes to single inheritance of normal classes, but allow multiple inheritance of interface classes (which we will talk about later). The driving idea behind disallowing multiple inheritance in these languages is that it simply makes the language too complex, and ultimately causes more problems than it fixes.
+
+Many authors and experienced programmers believe multiple inheritance in C++ should be avoided at all costs due to the many potential problems it brings. Your author does not agree with this approach, because there are times and situations when multiple inheritance is the best way to proceed. However, multiple inheritance should be used extremely judiciously.
+
+As an interesting aside, you have already been using classes written using multiple inheritance without knowing it: the iostream library objects std::cin and std::cout are both implemented using multiple inheritance!
+
+>Avoid multiple inheritance unless alternatives lead to more complexity.
+
+## What is Diamond Problem?
+
+The **diamond problem** occurs in **multiple inheritance** when a class inherits from two classes that both inherit from the _same base class_.  
+This forms a “diamond-shaped” inheritance graph.
+
+### Example structure (no solution, just the problem):
+
+```css
+      A
+     / \
+    B   C
+     \ /
+      D
+```
+
+- `B` inherits from `A`
+    
+- `C` inherits from `A`
+    
+- `D` inherits from **both** `B` and `C`
+
+### ❗ What goes wrong?
+
+#### **Problem 1: Ambiguity**
+
+`D` ends up with **two copies of A**, one from B and one from C.
+
+So if you try to access something from `A` using `D`, the compiler sees two possibilities:
+
+- `A` from path `D → B → A`
+    
+- `A` from path `D → C → A`
+    
+
+Example:
+
+```cpp
+D obj;
+obj.value;   // ❌ error: ambiguous
+```
+
+Compiler: “Which `value`? The one from A via B, or via C?”
+
+#### **Problem 2: Duplicate base class state**
+
+Since there are **two copies** of A:
+
+- A's variables exist twice
+    
+- A's constructor runs twice
+    
+- A’s data can be inconsistent between the two copies
+    
+
+Example:
+
+```cpp
+A:
+  int id;
+
+D object has:
+  A::id (via B)
+  A::id (via C)
+```
+
+This is usually undesirable and confusing.
+
+#### **Problem 3: Confusing object layout**
+
+When `D` contains two identical base subobjects (`A` twice), the memory layout becomes:
+
+```less
+D
+|- B
+|  |- A   (copy 1)
+|- C
+   |- A   (copy 2)
+```
+
+This leads to:
+
+- larger objects than expected
+    
+- surprising behavior
+    
+- harder-to-reason-about code
+
+### 🧠 **In Plain Words**
+
+The diamond problem is:
+
+> "A class inherits from two classes that share a common ancestor, causing two copies of the ancestor to appear in the final class, leading to ambiguity and duplication."
+
+---
