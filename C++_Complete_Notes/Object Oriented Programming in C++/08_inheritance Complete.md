@@ -2601,3 +2601,7 @@ The diamond problem is:
 > "A class inherits from two classes that share a common ancestor, causing two copies of the ancestor to appear in the final class, leading to ambiguity and duplication."
 
 ---
+
+# [Summary](https://www.learncpp.com/cpp-tutorial/chapter-24-summary-and-quiz/)
+
+---
