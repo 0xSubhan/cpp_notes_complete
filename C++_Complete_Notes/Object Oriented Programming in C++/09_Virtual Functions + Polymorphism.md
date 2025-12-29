@@ -1434,3 +1434,262 @@ This allows:
 > **Covariant return types allow an overriding virtual function in a derived class to return a pointer or reference to a derived type instead of the base type.**
 
 ---
+# Virtual destructors, virtual assignment, and overriding virtualization
+
+# Virtual Destructors
+
+### ❓ The problem
+
+When you use **inheritance** and delete an object through a **base class pointer**, C++ must know which destructor to call.
+
+If the **base class destructor is NOT virtual**, then:
+
+```cpp
+Base* base = new Derived();
+delete base;
+```
+
+C++ sees the pointer type (`Base*`) and **only calls `~Base()`**, skipping `~Derived()`.
+
+Result:
+
+- `Derived` resources (like `m_array`) **are not freed**
+    
+- Causes **memory leaks**
+    
+- Dangerous if Derived allocated memory or opened files, etc.
+
+### ✔ The fix
+
+Make the **Base destructor virtual**:
+
+```cpp
+class Base {
+public:
+    virtual ~Base() {
+        cout << "Calling ~Base()\n";
+    }
+};
+```
+
+Now C++ performs **dynamic dispatch** (runtime lookup) and calls:
+
+1. `~Derived()` ← cleans Derived resources
+    
+2. `~Base()` ← cleans Base part
+    
+
+Output becomes:
+
+```cpp
+Calling ~Derived()
+Calling ~Base()
+```
+
+This is what we _actually want_.
+
+### 🧠 Why does it work?
+
+Because `virtual` tells C++:
+
+> "Decide at runtime which destructor belongs to the real object type, not the pointer type."
+
+So even though the pointer is `Base*`, C++ checks the actual object (`Derived`) and runs its destructor first.
+
+### 📌 Key Rule
+
+**Always make destructors virtual in a base class if inheritance is involved and you plan to delete objects using a base pointer.**
+
+### 🔎 Extra notes
+
+- If Base has `virtual ~Base()`, you **don’t need** to write `virtual` again in Derived (it's already virtual implicitly).
+    
+- You **don’t need** an empty destructor in Derived just to make it virtual.
+    
+- If you want an empty virtual destructor in Base, write:
+
+```cpp
+virtual ~Base() = default;
+```
+
+This generates a normal destructor but still virtual.
+
+### 🚩 Your first code was leaking memory
+
+Because Base destructor was not virtual, this line:
+
+```cpp
+delete base;
+```
+
+Only ran `~Base()` → `~Derived()` never executed → `delete[] m_array` never happened.
+
+## Ignoring virtualization
+
+Very rarely you may want to ignore the virtualization of a function. For example, consider the following code:
+
+```cpp
+#include <string_view>
+class Base
+{
+public:
+    virtual ~Base() = default;
+    virtual std::string_view getName() const { return "Base"; }
+};
+
+class Derived: public Base
+{
+public:
+    virtual std::string_view getName() const { return "Derived"; }
+};
+```
+
+There may be cases where you want a Base pointer to a Derived object to call Base::getName() instead of Derived::getName(). To do so, simply use the scope resolution operator:
+
+```cpp
+#include <iostream>
+int main()
+{
+    Derived derived {};
+    const Base& base { derived };
+
+    // Calls Base::getName() instead of the virtualized Derived::getName()
+    std::cout << base.Base::getName() << '\n';
+
+    return 0;
+}
+```
+
+You probably won’t use this very often, but it’s good to know it’s at least possible.
+
+## Should we make all destructors virtual?
+
+### ❓ Should we make **all destructors virtual**?
+
+**No. Not always.**
+
+### ⚖ Why not?
+
+Because when you mark a destructor `virtual`, C++ adds a **vptr (virtual pointer)** to every object instance.
+
+**Cost of vptr:**
+
+- Extra memory per object (usually 8 bytes on 64-bit systems)
+    
+- Slight runtime overhead
+    
+- Not needed if the class will never be a base class
+    
+
+So doing it blindly = unnecessary performance/memory penalty.
+
+### ✅ When you **should** make the destructor virtual
+
+Make it `virtual` **only if** the class is meant to support inheritance **or already has virtual functions**.
+
+Example:
+
+```cpp
+class Animal {  // Designed for inheritance
+public:
+    virtual ~Animal() = default;  // Must be virtual
+    virtual void sound() = 0;
+};
+```
+
+Reason: You might delete derived objects using `Animal*`, so you need proper destructor dispatch.
+
+### ❌ When you **should not**
+
+If the class is **not designed to be a base class**, keep it simple:
+
+```cpp
+class MathHelper { // Not intended for inheritance
+public:
+    ~MathHelper() = default; // Not virtual
+};
+```
+
+You can still reuse this class using **composition (has-a)** instead of inheritance.
+
+### 🛑 How to enforce "No one can inherit this class"?
+
+Use `final`:
+
+```cpp
+class DatabaseConnection final {
+public:
+    ~DatabaseConnection() = default;
+};
+```
+
+Now:
+
+- No class can inherit from it
+    
+- No vptr is added (better performance)
+    
+- Class remains fully usable
+
+### 📌 Best Practice Summary
+
+|Intent of class|What to do|
+|---|---|
+|Class **will be inherited**|`public virtual ~Class()`|
+|Class **has virtual functions**|Destructor must also be `virtual`|
+|Class **should NOT be inherited**|Mark class `final` and keep destructor non-virtual|
+
+### 🧠 What about the old advice?
+
+> “Destructor should be **public + virtual** OR **protected + non-virtual**”
+
+Protected non-virtual destructor prevents this unsafe delete:
+
+```cpp
+Base* b = new Derived();
+delete b;  // ❌ not allowed if ~Base is protected
+```
+
+But it also creates big usability issues:
+
+- You **can’t** do:
+
+```cpp
+Base b;  // ❌ destructor not accessible when going out of scope
+```
+
+You **can’t** safely delete base objects allocated with `new`
+
+```cpp
+Base* b = new Base();
+delete b; // ❌ destructor not accessible
+```
+
+So the class becomes almost unusable by itself.  
+That’s why this method is **not recommended anymore**.
+
+### 🎯 Modern solution is better
+
+Instead of making destructors virtual everywhere or hiding them:
+
+```cpp
+class MyClass final {  // Explicitly blocks inheritance
+public:
+    ~MyClass() = default;
+};
+```
+
+This gives:
+
+- Safety (no inheritance misuse)
+    
+- Performance (no vptr)
+    
+- Usability (object can be created and destroyed normally)
+
+### Final takeaway
+
+> **Only make destructors virtual when inheritance is intended. Otherwise mark the class final and avoid virtual overhead.**
+
+
+---
