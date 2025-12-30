@@ -1691,5 +1691,217 @@ This gives:
 
 > **Only make destructors virtual when inheritance is intended. Otherwise mark the class final and avoid virtual overhead.**
 
+---
+# Early binding and late binding (Optional Read)
+
+>In this lesson and the next, we are going to take a closer look at how virtual functions are implemented. While this information is not strictly necessary to effectively use virtual functions, it is interesting. Nevertheless, you can consider both sections optional reading.
+
+==When a program is compiled, the compiler converts each statement in your C++ program into one or more lines of machine language. Each line of machine language is given its own unique sequential address. This is no different for functions -- when a function is encountered, it is converted into machine language and given the next available address. Thus, each function ends up with a unique address.
+
+### **How function calls work at CPU level**
+
+- A C++ program runs **line by line** starting from `main()`.
+    
+- When you call a function like `add()`, the CPU needs to **jump to that function’s code**.
+    
+- The CPU knows where to jump because:
+    
+    - During compilation, every line of code is converted into **machine instructions**.
+        
+    - Each instruction gets a **unique memory address**.
+        
+    - Each function also gets a **starting address** where its machine code lives.
+        
+    - So every function ends up having its own **fixed address** in the compiled program.
+
+### **Binding vs Dispatching**
+
+- **Binding** = Deciding _which function belongs to a function call_.
+    
+    - Example: when you write `int x`, name `x` gets bound to type `int`.
+        
+    - For functions, binding means: _matching the function call to the actual function definition_.
+        
+- **Dispatching** = _Actually calling/invoking the function at runtime_ (jumping to its address and executing it).
+
+### **Early Binding (Static Binding)**
+
+- Happens at **compile-time**.
+    
+- Used when calling:
+    
+    - Normal functions
+        
+    - Non-virtual class member functions
+        
+    - Overloaded functions
+        
+    - Templates
+
+
+```cpp
+#include <iostream>
+
+struct Foo
+{
+    void printValue(int value)
+    {
+        std::cout << value;
+    }
+};
+
+void printValue(int value)
+{
+    std::cout << value;
+}
+
+int main()
+{
+    printValue(5);   // direct function call to printValue(int)
+
+    Foo f{};
+    f.printValue(5); // direct function call to Foo::printValue(int)
+    return 0;
+}
+```
+
+```cpp
+printValue(5);
+f.printValue(5);
+```
+
+- The compiler already knows **exactly which function to call**, so it generates instructions like:
+    
+    > _Jump directly to address 0x1234 (example address)_
+    
+- **Important Note**:  
+    Even if a `switch` decides between `add`, `subtract`, or `multiply` at runtime, the compiler still knows the address of each function beforehand — so binding is still early.
+    
+
+**Efficiency**:
+
+- Fast, because CPU jumps **directly** to the function address.
+
+Let’s take a look at a simple calculator program that uses early binding:
+
+```cpp
+#include <iostream>
+
+int add(int x, int y)
+{
+    return x + y;
+}
+
+int subtract(int x, int y)
+{
+    return x - y;
+}
+
+int multiply(int x, int y)
+{
+    return x * y;
+}
+
+int main()
+{
+    int x{};
+    std::cout << "Enter a number: ";
+    std::cin >> x;
+
+    int y{};
+    std::cout << "Enter another number: ";
+    std::cin >> y;
+
+    int op{};
+    std::cout << "Enter an operation (0=add, 1=subtract, 2=multiply): ";
+    std::cin >> op;
+
+    int result {};
+    switch (op)
+    {
+        // call the target function directly using early binding
+        case 0: result = add(x, y); break;
+        case 1: result = subtract(x, y); break;
+        case 2: result = multiply(x, y); break;
+        default:
+            std::cout << "Invalid operator\n";
+            return 1;
+    }
+
+    std::cout << "The answer is: " << result << '\n';
+
+    return 0;
+}
+```
+
+Because `add()`, `subtract()`, and `multiply()` are all direct function calls to non-member functions, the compiler will match these function calls to their respective function definitions at compile-time.
+
+Note that because of the switch statement, which function is actually called is not determined until runtime. However, that is a path of execution issue, not a binding issue.
+
+### **Late Binding (Dynamic Dispatch)**
+
+- Happens at **runtime**.
+    
+- Compiler **cannot know** which function will be called at compile time.
+    
+- One way this happens: **function pointers**
+
+```cpp
+#include <iostream>
+
+void printValue(int value)
+{
+    std::cout << value << '\n';
+}
+
+int main()
+{
+    auto fcn { printValue }; // create a function pointer and make it point to function printValue
+    fcn(5);                  // invoke printValue indirectly through the function pointer
+
+    return 0;
+}
+```
+
+- Here the compiler does _not_ know what `fcn()` will call — it only knows that `fcn` holds an address.
+    
+- At runtime, the program:
+    
+    1. Reads the address stored inside the pointer
+        
+    2. Then jumps to that address
+        
+
+So instead of:
+
+> Jump to 0x5678
+
+It becomes:
+
+> Read pointer → get 0x5678 → Jump there
+
+**Efficiency**:
+
+- Slightly slower than early binding because of **one extra step (indirection)**.
+    
+- But **more flexible**, because the function can be chosen while the program is running.
+    
+
+### **Final Summary**
+
+|Concept|When it happens|Used for|Speed|Flexibility|
+|---|---|---|---|---|
+|**Early Binding**|Compile-time|Normal + non-virtual + overloads + templates|Faster (direct jump)|Less flexible|
+|**Late Binding**|Runtime|Function pointers, virtual functions (via vtable)|Slightly slower (indirect jump)|More flexible|
+
+### **Key Takeaways**
+
+- Function addresses are **fixed during compilation**.
+    
+- **Binding** = matching call to function, **Dispatching** = executing it.
+    
+- **Early binding is faster**, **late binding is more flexible**.
+    
+- Virtual functions use **late binding via vtable**, function pointers use **late binding via stored addresses**.
 
 ---
