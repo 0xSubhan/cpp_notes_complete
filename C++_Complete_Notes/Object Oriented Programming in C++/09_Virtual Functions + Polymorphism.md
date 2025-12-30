@@ -1905,3 +1905,257 @@ It becomes:
 - Virtual functions use **late binding via vtable**, function pointers use **late binding via stored addresses**.
 
 ---
+# The virtual table
+
+## **What problem virtual functions solve**
+
+When you use a **base reference or base pointer** to refer to a derived object, C++ needs a way to call the **derived version of a function** instead of the base one.
+
+## **Static vs Dynamic Type (in your code)**
+
+```cpp
+Derived derived {};
+Base& base = derived;
+```
+
+- `base` is a reference, but its **static (compile-time) type is `Base&`**
+    
+- The **actual object in memory is `Derived`** → this is the **dynamic (runtime) type**
+
+## Early Binding (Non-Virtual Call)
+
+```cpp
+base.getName();
+```
+
+- `getName()` is **not virtual**
+    
+- The compiler binds it using the **static type (`Base`)**
+    
+- So the call is locked to:
+
+```cpp
+Base::getName()
+```
+
+- CPU can **jump directly** to the function’s address → very fast
+
+## **Late Binding / Dynamic Dispatch (Virtual Call)**
+
+```cpp
+base.getNameVirtual();
+```
+
+- `getNameVirtual()` is **virtual**
+    
+- The compiler **cannot decide at compile-time** which version to call
+    
+- Instead, at **runtime**, C++ does:
+    
+    1. Look at the actual object (`Derived`)
+        
+    2. Go to its **VTable using `vptr`**
+        
+    3. Find the function address stored there
+        
+    4. Jump to that function
+        
+
+So it resolves to:
+
+```cpp
+Derived::getNameVirtual()
+```
+
+This prints:
+
+base has dynamic type Derived
+
+## **What is a Virtual Table (VTable)**
+
+- Every class that has **virtual functions** gets its own VTable
+    
+- VTable = an internal **array of function addresses (pointers)**
+    
+- Each slot stores the **most-derived override that the class can call**
+    
+
+### VTables in this example:
+
+|Class|VTable Slot 1|VTable Slot 2|
+|---|---|---|
+|`Base`|`Base::getNameVirtual`|_(none more derived)_|
+|`Derived`|`Derived::getNameVirtual`|_(none more derived)_|
+
+(Only 1 virtual function exists in your main code, so 1 relevant slot is used)
+
+## **What is `vptr`**
+
+- Compiler adds a hidden pointer inside objects of classes with virtual functions:
+    
+    `vptr → points to the class’s VTable`
+    
+- `vptr` is a **real member stored inside the object**
+    
+- `vptr` is **inherited** by derived classes
+    
+- This increases object size by **one pointer (4 or 8 bytes depending on system)**
+    
+
+So in memory:
+
+```css
+Derived Object:
++------------------+
+| Base part       |
+| vptr ----------→ Derived VTable
+| (inherited)     |
++------------------+
+| Derived part    |
+| own members     |
++------------------+
+```
+
+### How virtual call works via base pointer
+
+```cpp
+Derived d1{};
+Base* dPtr = &d1;
+dPtr->function1(); // if it was virtual
+```
+
+Runtime steps:
+
+1. See call is virtual
+    
+2. Read `dPtr->__vptr` → go to Derived VTable
+    
+3. Index the slot for `function1`
+    
+4. Call the function it points to
+    
+
+So Base pointer still calls Derived override because `vptr` leads to Derived VTable.
+
+## **Why Base pointer does NOT call Derived when object is actually Base**
+
+```cpp
+Base b{};
+Base* bPtr = &b;
+bPtr->function1();
+```
+
+vptr inside b points to Base VTable
+
+Base VTable stores function1 → Base::function1
+
+So the call correctly resolves to Base version, not derived.
+
+## **Performance Cost**
+
+Virtual call requires:
+
+1. Read `vptr` (1)
+    
+2. Index VTable (2)
+    
+3. Jump to function (3)
+    
+
+= **3 operations**
+
+Compared to:
+
+- Function pointer call → **2 operations**
+    
+- Direct function call → **1 jump**
+    
+
+So virtual is **slightly slower**, but gives **maximum flexibility**.
+
+## Clear Example
+
+By now, you’re probably confused as to how these things all fit together, so let’s take a look at a simple example:
+
+```cpp
+class Base
+{
+public:
+    virtual void function1() {};
+    virtual void function2() {};
+};
+
+class D1: public Base
+{
+public:
+    void function1() override {};
+};
+
+class D2: public Base
+{
+public:
+    void function2() override {};
+};
+```
+
+Because there are 3 classes here, the compiler will set up 3 virtual tables: one for Base, one for D1, and one for D2.
+
+The compiler also adds a hidden pointer member to the most base class that uses virtual functions. Although the compiler does this automatically, we’ll put it in the next example just to show where it’s added:
+
+```cpp
+class Base
+{
+public:
+    VirtualTable* __vptr;
+    virtual void function1() {};
+    virtual void function2() {};
+};
+
+class D1: public Base
+{
+public:
+    void function1() override {};
+};
+
+class D2: public Base
+{
+public:
+    void function2() override {};
+};
+```
+
+When a class object is created, `*__vptr` is set to point to the virtual table for that class. For example, when an object of type Base is created, `*__vptr` is set to point to the virtual table for Base. When objects of type D1 or D2 are constructed, `*__vptr` is set to point to the virtual table for D1 or D2 respectively.
+
+Now, let’s talk about how these virtual tables are filled out. Because there are only two virtual functions here, each virtual table will have two entries (one for function1() and one for function2()). Remember that when these virtual tables are filled out, each entry is filled out with the most-derived function an object of that class type can call.
+
+The virtual table for Base objects is simple. An object of type Base can only access the members of Base. Base has no access to D1 or D2 functions. Consequently, the entry for function1 points to Base::function1() and the entry for function2 points to Base::function2().
+
+The virtual table for D1 is slightly more complex. An object of type D1 can access members of both D1 and Base. However, D1 has overridden function1(), making D1::function1() more derived than Base::function1(). Consequently, the entry for function1 points to D1::function1(). D1 hasn’t overridden function2(), so the entry for function2 will point to Base::function2().
+
+The virtual table for D2 is similar to D1, except the entry for function1 points to Base::function1(), and the entry for function2 points to D2::function2().
+
+Here’s a picture of this graphically:
+
+![[Pasted image 20251230182629.png]]
+
+## **Final Summary**
+
+|Call Type|Binding Time|How it resolves|Cost|Benefit|
+|---|---|---|---|---|
+|Normal function / non-virtual|Compile-time|Fixed address|1 jump|Fast|
+|Function pointer|Runtime|Reads stored address|2 steps|Flexible|
+|Virtual function|Runtime|`vptr → VTable → override`|3 steps|Most Flexible|
+
+### **Key Takeaways**
+
+- Non-virtual = **early binding** → decided by static type → fast
+    
+- Virtual = **late binding (dynamic dispatch)** → decided by actual object using VTable
+    
+- `vptr` connects each object to the correct VTable
+    
+- VTable stores **most-derived function overrides**
+    
+- Virtual calls cost a tiny bit more time and memory, but allow **polymorphism**
+
+---
