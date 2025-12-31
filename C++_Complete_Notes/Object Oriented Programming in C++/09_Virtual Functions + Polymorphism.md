@@ -2159,3 +2159,625 @@ Here’s a picture of this graphically:
 - Virtual calls cost a tiny bit more time and memory, but allow **polymorphism**
 
 ---
+# Pure virtual functions, abstract base classes, and interface classes
+
+## **Pure Virtual Functions (Abstract Functions)**
+
+- A **pure virtual function** is a virtual function **that has no body/definition in the base class**.
+    
+- It acts as a **placeholder**, forcing derived classes to implement it.
+    
+- It is created by assigning `= 0` at the end of the declaration.
+    
+
+### **Key Rule**
+
+```cpp
+virtual returnType functionName() const = 0;
+```
+
+### **Important**
+
+- `= 0` is **not allowed** for non-virtual functions.
+
+```cpp
+int doSomething() = 0; // ❌ Compile error (must be virtual to use = 0)
+```
+
+### Example
+
+```cpp
+class Base {
+public:
+    virtual int getValue() const = 0; // pure virtual
+};
+```
+
+## **Abstract Base Class**
+
+- If a class contains **at least one pure virtual function**, it becomes an **abstract class**.
+    
+- **Abstract classes can NOT be instantiated (no objects can be created from them).**
+    
+
+### Why?
+
+Because the pure virtual function has **no definition**, so calling it on a base object makes no sense.
+
+```cpp
+Base base {}; 
+base.getValue(); // What should happen? There is no function body!
+```
+
+## **Effect on Derived Classes**
+
+- Any **derived class must provide a definition (body)** for all inherited pure virtual functions.
+    
+- If it **does not**, then the derived class also becomes abstract and **can’t be instantiated either**.
+
+## **Animal Example (Before Pure Virtual)**
+
+```cpp
+class Animal {
+protected:
+    std::string m_name {};
+    Animal(std::string_view name) : m_name{name} {}
+public:
+    const std::string& getName() const { return m_name; }
+    virtual std::string_view speak() const { return "???"; }
+    virtual ~Animal() = default;
+};
+
+class Cow : public Animal {
+public:
+    Cow(std::string_view name) : Animal{name} {}
+    // Forgot to override speak()
+};
+
+int main() {
+    Cow cow{"Betsy"};
+    std::cout << cow.getName() << " says " << cow.speak();
+}
+```
+
+Output
+
+```cpp
+Betsy says ???
+```
+
+### Problem
+
+`speak()` was **not overridden**, so it called `Animal::speak()` instead — not desired.
+
+## **Animal Example (Using Pure Virtual — Better Design)**
+
+```cpp
+class Animal {
+protected:
+    std::string m_name {};
+public:
+    Animal(std::string_view name) : m_name{name} {}
+    const std::string& getName() const { return m_name; }
+    virtual std::string_view speak() const = 0; // pure virtual
+    virtual ~Animal() = default;
+};
+```
+
+### Consequences Now
+
+- `Animal` becomes **abstract** → can’t create `Animal` objects.
+    
+- `Cow` is derived from `Animal`, but **does not implement speak()** → `Cow` is also **abstract**.
+
+## **Derived Class Must Implement the Pure Virtual Function**
+
+```cpp
+class Cow : public Animal {
+public:
+    Cow(std::string_view name) : Animal{name} {}
+    std::string_view speak() const override { return "Moo"; } // ✔ now concrete
+};
+```
+
+## **Compiler Error When Pure Virtual Is Not Implemented**
+
+```cpp
+class Cow : public Animal {
+public:
+    Cow(std::string_view name) : Animal{name} {}
+    // Forgot speak() again
+};
+
+int main() {
+    Cow cow{"Betsy"}; // ❌ ERROR: Cow is abstract
+}
+```
+
+### Compiler Message Meaning
+
+```cpp
+error: Cow is an abstract class
+note: unimplemented pure virtual method 'speak' in 'Cow'
+```
+
+- The compiler stops us from creating the object because **C++ guarantees all pure virtual functions must have an implementation before instantiation**.
+
+## **Summary (Super Clean)**
+
+|Concept|Meaning|
+|---|---|
+|**Pure Virtual Function**|Declared with `= 0`, no body in base, must be overridden|
+|**Abstract Base Class**|Any class with a pure virtual function, can’t make objects|
+|**Derived Class Rule**|Must implement all pure virtual functions or it stays abstract|
+|**Benefit**|Prevents accidental object creation & ensures proper overriding|
+
+==
+# Concrete Practical Example
+
+Imagine you're building a **Payment System**.  
+There are many payment methods (JazzCash, Bank, Credit Card), but **“Payment” itself is not a real method**, so we should not allow:
+
+```cpp
+Payment p; // ❌ doesn't make sense
+```
+
+But we want all payment types to follow a rule:
+
+```cpp
+processPayment()
+```
+
+So we make it pure virtual:
+
+```cpp
+#include <iostream>
+#include <string>
+using namespace std;
+
+class Payment {
+public:
+    virtual void processPayment(double amount) const = 0; // Pure virtual function (rule)
+    virtual ~Payment() = default;
+};
+
+class JazzCash : public Payment {
+public:
+    void processPayment(double amount) const override {
+        cout << "Paid " << amount << " via JazzCash" << endl;
+    }
+};
+
+class CreditCard : public Payment {
+public:
+    void processPayment(double amount) const override {
+        cout << "Paid " << amount << " using Credit Card" << endl;
+    }
+};
+
+int main() {
+    Payment* p1 = new JazzCash();
+    Payment* p2 = new CreditCard();
+
+    p1->processPayment(5000); // Calls JazzCash version at runtime
+    p2->processPayment(12000); // Calls CreditCard version at runtime
+
+    delete p1;
+    delete p2;
+    return 0;
+}
+```
+
+| Requirement                                                 | Achieved?                              |
+| ----------------------------------------------------------- | -------------------------------------- |
+| Ensure every payment method has `processPayment()`          | ✔ enforced by pure virtual             |
+| Prevent creating meaningless `Payment` object               | ✔ abstract class can't be instantiated |
+| Call correct payment behavior at runtime using base pointer | ✔ polymorphism works                   |
+| Make code scalable for future payment types                 | ✔ easy to extend                       |
+
+### **In Simple Words**
+
+> Pure virtual function = **A rule that every child must follow**, and parent is **not allowed to exist on its own**.
+
+- `p1` is **NOT an object**
+    
+- `p1` does **NOT instantiate Payment**
+    
+- The real object created is **JazzCash**
+    
+- `Payment` only provides the interface so polymorphism can work
+
+- Abstraction = **achieved by the base class having pure virtual functions**
+    
+- Implementation hiding = **done in derived classes**
+    
+- Pointer allows you to **use abstract behavior at runtime (polymorphism)**
+    
+
+==
+
+This tells us that we will only be able to instantiate Cow if Cow provides a body for speak().
+
+Let’s go ahead and do that:
+
+```cpp
+#include <iostream>
+#include <string>
+#include <string_view>
+
+class Animal // This Animal is an abstract base class
+{
+protected:
+    std::string m_name {};
+
+public:
+    Animal(std::string_view name)
+        : m_name{ name }
+    {
+    }
+
+    const std::string& getName() const { return m_name; }
+    virtual std::string_view speak() const = 0; // note that speak is now a pure virtual function
+
+    virtual ~Animal() = default;
+};
+
+class Cow: public Animal
+{
+public:
+    Cow(std::string_view name)
+        : Animal(name)
+    {
+    }
+
+    std::string_view speak() const override { return "Moo"; }
+};
+
+int main()
+{
+    Cow cow{ "Betsy" };
+    std::cout << cow.getName() << " says " << cow.speak() << '\n';
+
+    return 0;
+}
+```
+
+Now this program will compile and print:
+
+Betsy says Moo
+
+A pure virtual function is useful when we have a function that we want to put in the base class, but only the derived classes know what it should return. A pure virtual function makes it so the base class can not be instantiated, and the derived classes are forced to define these functions before they can be instantiated. This helps ensure the derived classes do not forget to redefine functions that the base class was expecting them to.
+
+Just like with normal virtual functions, pure virtual functions can be called using a reference (or pointer) to a base class:
+
+```cpp
+int main()
+{
+    Cow cow{ "Betsy" };
+    Animal& a{ cow };
+
+    std::cout << a.speak(); // resolves to Cow::speak(), prints "Moo"
+
+    return 0;
+}
+```
+
+In the above example, `a.speak()` resolves to `Cow::speak()` via virtual function resolution.
+
+A reminder
+
+>Any class with pure virtual functions should also have a virtual destructor.
+
+## **Pure virtual functions with definitions**
+
+## 1. Can a pure virtual function have a definition?
+
+**Yes.**  
+A function can be **pure virtual** _and still have a definition_.
+
+What makes a function _pure virtual_ is **only** this part:`
+
+```cpp
+=0
+```
+
+Example
+
+```cpp
+class Animal
+{
+public:
+    virtual std::string_view speak() const = 0; // pure virtual
+};
+```
+
+Even if we later write:
+
+```cpp
+std::string_view Animal::speak() const
+{
+    return "buzz";
+}
+```
+
+speak() is still pure virtual
+
+Animal is still an abstract base class
+
+Animal still cannot be instantiated
+
+## 2. Why is `Animal` still abstract?
+
+Because **pure virtual-ness is determined at the declaration**, not by whether a definition exists.
+
+```cpp
+virtual std::string_view speak() const = 0;
+```
+
+- `= 0` → forces derived classes to implement it
+    
+- Definition is **optional**, but abstraction remains
+
+## 3. Important rule: Definition must be separate
+
+In **standard C++**, a pure virtual function **cannot be defined inline**.
+
+✅ Correct:
+
+```cpp
+virtual std::string_view speak() const = 0;
+```
+
+```cpp
+std::string_view Animal::speak() const
+{
+    return "buzz";
+}
+```
+
+❌ Not standard-compliant:
+
+```cpp
+virtual std::string_view speak() const = 0
+{
+    return "buzz";
+}
+```
+
+> ⚠ Visual Studio allows this, but it is **non-standard** and should be avoided.
+
+## 4. Why would we give a pure virtual function a definition?
+
+### Purpose:
+
+> **Provide a default implementation, but still force derived classes to override the function.**
+
+This achieves **two goals at once**:
+
+1. Enforce an interface
+    
+2. Avoid duplicating common behavior
+
+## 5. How derived classes use the default implementation
+
+A derived class **must override** the function to become concrete.
+
+Inside the override, it may **explicitly call the base version**.
+
+### Example
+
+```cpp
+class Dragonfly : public Animal
+{
+public:
+    std::string_view speak() const override
+    {
+        return Animal::speak(); // reuse default behavior
+    }
+};
+```
+
+### Result
+
+```cpp
+Dragonfly dfly{"Sally"};
+dfly.speak(); // "buzz"
+```
+
+📌 **Key point**  
+Even though the derived class is calling the base implementation, it **must still override** the function — otherwise it remains abstract.
+
+## 6. Why this pattern is rare
+
+This pattern is:
+
+- Useful in **frameworks**
+    
+- Useful when providing **shared fallback behavior**
+    
+
+But it’s **not commonly used** because:
+
+- It adds conceptual complexity
+    
+- Most designs prefer either:
+    
+    - Fully abstract interfaces, or
+        
+    - Virtual functions with default implementations
+
+## 7. Pure virtual destructors
+
+A destructor **can be pure virtual**, but:
+
+> ❗ It **must have a definition**
+
+### Why?
+
+When a derived object is destroyed, the **base destructor must still run**.
+
+```cpp
+class Base
+{
+public:
+    virtual ~Base() = 0;
+};
+
+Base::~Base() {} // REQUIRED
+```
+
+Without this, destruction would be undefined.
+
+# **Interface Classes**
+
+## 8. What is an interface class?
+
+An **interface class**:
+
+- Has **no data members**
+    
+- Has **only pure virtual functions**
+    
+- Defines **what** must be done, not **how**
+    
+
+### Example
+
+```cpp
+class IErrorLog
+{
+public:
+    virtual bool openLog(std::string_view filename) = 0;
+    virtual bool closeLog() = 0;
+    virtual bool writeError(std::string_view errorMessage) = 0;
+    virtual ~IErrorLog() {}
+};
+```
+
+## 9. Why interfaces are powerful
+
+They allow **decoupling**.
+
+### Bad design (tight coupling)
+
+```cpp
+double mySqrt(double value, FileErrorLog& log);
+```
+
+- Forces everyone to use `FileErrorLog`
+    
+- Hard to change behavior later
+    
+
+### Good design (loose coupling)
+
+```cpp
+double mySqrt(double value, IErrorLog& log);
+```
+
+- Accepts _any_ logging strategy
+    
+- File, screen, email, network, etc.
+    
+- No changes required to `mySqrt`
+
+## 10. Benefits of interfaces
+
+|Benefit|Explanation|
+|---|---|
+|Flexibility|Easily swap implementations|
+|Extensibility|Add new behaviors without modifying old code|
+|Maintainability|Reduced dependencies|
+|Testability|Mock implementations become easy|
+
+## 11. Why interfaces need virtual destructors
+
+If you delete through an interface pointer:
+
+```cpp
+IErrorLog* log = new FileErrorLog();
+delete log;
+```
+
+Without a **virtual destructor**:
+
+- Derived destructor may not run
+    
+- Resources may leak
+    
+
+So always include:
+
+```cpp
+virtual ~IErrorLog() {}
+```
+
+## 12. Interfaces and multiple inheritance
+
+Interfaces:
+
+- Have **no data**
+    
+- Have **no implementation**
+    
+
+Because of this, they:
+
+- Avoid most multiple-inheritance problems
+    
+- Can be inherited **many times safely**
+    
+
+That’s why:
+
+- Java & C# have explicit `interface` keywords
+    
+- C++ uses pure virtual classes instead
+    
+
+## 13. Pure virtual functions and the virtual table (vtable)
+
+Even abstract classes:
+
+- Have a **virtual table**
+    
+- Need it for:
+    
+    - Constructors
+        
+    - Destructors
+        
+    - Base-class virtual calls
+        
+
+### For pure virtual functions:
+
+- Vtable entry may be:
+    
+    - `nullptr`, or
+        
+    - A runtime error handler (often `__purecall`)
+        
+
+Calling a pure virtual function **without a valid override** leads to:
+
+- Undefined behavior
+    
+- Usually a runtime crash
+    
+
+# **Final Mental Model**
+
+- `= 0` → **enforces implementation**
+    
+- Definition → **optional helper**
+    
+- Abstract class → **cannot exist alone**
+    
+- Interface → **pure behavior contract**
+    
+- Pointer/reference → **uses abstraction**
+    
+- Derived class → **provides reality**
+
+---
