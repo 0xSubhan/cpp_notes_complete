@@ -3060,3 +3060,8 @@ Instead it tells the compiler:
 So when D inherits from both, the compiler merges the base.
 
 ---
+# Object slicing
+
+https://www.learncpp.com/cpp-tutorial/object-slicing/
+
+---
