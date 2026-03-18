@@ -3065,3 +3065,237 @@ So when D inherits from both, the compiler merges the base.
 https://www.learncpp.com/cpp-tutorial/object-slicing/
 
 ---
+# Dynamic casting
+
+Way back in lesson [10.6 -- Explicit type conversion (casting) and static_cast](https://www.learncpp.com/cpp-tutorial/explicit-type-conversion-casting-and-static-cast/), we examined the concept of casting, and the use of static_cast to convert variables from one type to another.
+
+In this lesson, we’ll continue by examining another type of cast: dynamic_cast.
+
+**The need for dynamic_cast**
+
+When dealing with polymorphism, you’ll often encounter cases where you have a pointer to a base class, but you want to access some information that exists only in a derived class.
+
+Consider the following (slightly contrived) program:
+
+```cpp
+#include <iostream>
+#include <string>
+#include <string_view>
+
+class Base
+{
+protected:
+	int m_value{};
+
+public:
+	Base(int value)
+		: m_value{value}
+	{
+	}
+
+	virtual ~Base() = default;
+};
+
+class Derived : public Base
+{
+protected:
+	std::string m_name{};
+
+public:
+	Derived(int value, std::string_view name)
+		: Base{value}, m_name{name}
+	{
+	}
+
+	const std::string& getName() const { return m_name; }
+};
+
+Base* getObject(bool returnDerived)
+{
+	if (returnDerived)
+		return new Derived{1, "Apple"};
+	else
+		return new Base{2};
+}
+
+int main()
+{
+	Base* b{ getObject(true) };
+
+	// how do we print the Derived object's name here, having only a Base pointer?
+
+	delete b;
+
+	return 0;
+}
+```
+
+## 🔹 The Core Problem
+
+You have this:
+
+```cpp
+Base* b{ getObject(true) };
+```
+
+Now:
+
+- `b` is a **Base pointer**
+    
+- But it _might actually point to a Derived object_
+    
+
+So internally, it could be:
+
+```
+b → Derived object
+```
+
+b → Derived object
+
+```
+Base*
+```
+
+### 🔹 What’s the Issue?
+
+From a `Base*`, you can only access:
+
+- Base members
+    
+- Base functions
+    
+
+So this **won’t work**:
+
+```cpp
+b->getName(); // ❌ ERROR
+```
+
+Because:
+
+- `getName()` does NOT exist in `Base`
+
+### 🔹 Why Not Just Add `getName()` to Base?
+
+You _could_ do this:
+
+```cpp
+virtual std::string getName();
+```
+
+But that creates problems:
+
+What should Base return? 🤔
+→ It has no m_name
+
+It breaks design: Base shouldn’t know about Derived-specific data
+
+You’re forcing unrelated classes to implement meaningless behavior
+
+==👉 This is called polluting the base class
+
+### 🔹 Upcasting (Already Happening)
+
+This line:
+
+```cpp
+return new Derived{1, "Apple"};
+```
+
+is automatically converted to:
+
+```
+Derived* → Base*
+```
+
+This is called **upcasting**:
+
+- Safe
+    
+- Automatic
+    
+- No data loss (just restricted access)
+
+### 🔹 What We Need: Downcasting
+
+We want to go the other way:
+
+```
+Base* → Derived*
+```
+
+This is called **downcasting**
+
+But here’s the problem:
+
+⚠️ Not every `Base*` actually points to a `Derived`
+
+Example:
+
+```cpp
+Base* b = new Base{2};
+```
+
+If you blindly convert this to `Derived*`, you get **undefined behavior** 💥
+
+## **dynamic_cast**
+
+C++ provides a casting operator named **dynamic_cast** that can be used for just this purpose. Although dynamic casts have a few different capabilities, by far the most common use for dynamic casting is for converting base-class pointers into derived-class pointers. This process is called **downcasting**.
+
+Using dynamic_cast works just like static_cast. Here’s our example main() from above, using a dynamic_cast to convert our Base pointer back into a Derived pointer:
+
+```cpp
+int main()
+{
+	Base* b{ getObject(true) };
+
+	Derived* d{ dynamic_cast<Derived*>(b) }; // use dynamic cast to convert Base pointer into Derived pointer
+
+	std::cout << "The name of the Derived is: " << d->getName() << '\n';
+
+	delete b;
+
+	return 0;
+}
+```
+
+This prints:
+
+The name of the Derived is: Apple
+
+>The `dynamic_cast` operator in C++ is ==used to safely convert pointers and references to objects within an inheritance hierarchy at **runtime**==.
+
+## **dynamic_cast failure**
+
+The above example works because b is actually pointing to a Derived object, so converting b into a Derived pointer is successful.
+
+However, we’ve made quite a dangerous assumption: that b is pointing to a Derived object. What if b wasn’t pointing to a Derived object? This is easily tested by changing the argument to getObject() from true to false. In that case, getObject() will return a Base pointer to a Base object. When we try to dynamic_cast that to a Derived, it will fail, because the conversion can’t be made.
+
+If a dynamic_cast fails, the result of the conversion will be a null pointer.
+
+Because we haven’t checked for a null pointer result, we access d->getName(), which will try to dereference a null pointer, leading to undefined behavior (probably a crash).
+
+In order to make this program safe, we need to ensure the result of the dynamic_cast actually succeeded:
+
+```cpp
+int main()
+{
+	Base* b{ getObject(true) };
+
+	Derived* d{ dynamic_cast<Derived*>(b) }; // use dynamic cast to convert Base pointer into Derived pointer
+
+	if (d) // make sure d is non-null
+		std::cout << "The name of the Derived is: " << d->getName() << '\n';
+
+	delete b;
+
+	return 0;
+}
+```
+
+>Rule: Always ensure your dynamic casts actually succeeded by checking for a null pointer result.
+
+Note that because dynamic_cast does some consistency checking at runtime (to ensure the conversion can be made), use of dynamic_cast does incur a performance penalty.
+
+---
