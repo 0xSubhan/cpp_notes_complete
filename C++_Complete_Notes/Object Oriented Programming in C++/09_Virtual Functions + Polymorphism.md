@@ -2985,6 +2985,7 @@ This tells the compiler:
 
 A is a shared base class.
 
+
 ### 3. What Happens When D is Created
 
 When the compiler builds D, it sees:
