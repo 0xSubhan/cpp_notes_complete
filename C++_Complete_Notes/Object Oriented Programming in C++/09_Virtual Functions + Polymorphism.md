@@ -1,7 +1,8 @@
 # Pointers and references to the base class of derived objects
 
 >In the previous chapter, you learned all about how to use inheritance to derive new classes from existing classes. In this chapter, we are going to focus on one of the most important and powerful aspects of inheritance -- virtual functions.
->
+
+
 
 But before we discuss what virtual functions are, let’s first set the table for why we need them.
 
