@@ -93,6 +93,7 @@ So:
 
 Because Base can’t see anything in Derived.
 
+
 ### ✅ **Why Derived functions disappear when viewed through Base**
 
 Look at this function:
